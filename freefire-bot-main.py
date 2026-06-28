@@ -3742,51 +3742,64 @@ async def on_member_join(member):
 # 🆕 منع المحظورين من مغادرة فويس التفتيش
 @bot.event
 async def on_voice_state_update(member, before, after):
-    """🆕 يمنع اللاعبين المحظورين من مغادرة فويس التفتيش.
-    لو حاولوا الانتقال لأي فويس ثاني → يُردون لفويس التفتيش المخصص.
-    لو حاولوا مغادرة كل الفويسات → يُردون لفويس التفتيش.
-    """
+    """🆕 يمنع المحظورين (ban) والمسجونين (JAIL) من مغادرة القنوات المخصصة."""
     if member.bot:
         return
-    # فحص لو اللاعب محظور
+
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # 1) فحص المحظورين (BAN system)
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     ban_info = db.is_player_banned(member.guild.id, member.id)
-    if not ban_info:
-        return  # غير محظور — اتركه
-    assigned_voice_id = ban_info.get("assigned_voice_id")
-    # الحالة 1: اللاعب دخل فويس جديد
-    if after.channel is not None:
-        # لو الفويس اللي دخله ليس فويس التفتيش المخصص → ارده
-        if not assigned_voice_id or after.channel.id != assigned_voice_id:
-            # تأكد إن الفويس المخصص ما زال موجود
+    if ban_info:
+        assigned_voice_id = ban_info.get("assigned_voice_id")
+        # الحالة 1: اللاعب دخل فويس جديد
+        if after.channel is not None:
+            if not assigned_voice_id or after.channel.id != assigned_voice_id:
+                assigned_ch = member.guild.get_channel(assigned_voice_id) if assigned_voice_id else None
+                if assigned_ch and isinstance(assigned_ch, discord.VoiceChannel):
+                    try:
+                        await member.move_to(assigned_ch)
+                        logger.info(f"🔒 Banned {member.id} tried #{after.channel.name} → back to investigation")
+                        return
+                    except (discord.HTTPException, discord.Forbidden):
+                        pass
+                new_ch = await move_to_banned_channels(member.guild, member, assign_permanent=True)
+                if new_ch:
+                    logger.info(f"🔒 Banned {member.id} → new investigation voice")
+                    return
+        # الحالة 2: اللاعب غادر فويس
+        elif before.channel is not None and after.channel is None:
             assigned_ch = member.guild.get_channel(assigned_voice_id) if assigned_voice_id else None
             if assigned_ch and isinstance(assigned_ch, discord.VoiceChannel):
                 try:
                     await member.move_to(assigned_ch)
-                    # أرسل رسالة تنبيه (ephemeral ما يشتغل في voice، فنرسل في الشات العام للماتش لو موجود)
-                    logger.info(f"🔒 Banned player {member.id} tried to join #{after.channel.name}, moved back to investigation voice")
+                    logger.info(f"🔒 Banned {member.id} tried to leave → back to investigation")
                     return
                 except (discord.HTTPException, discord.Forbidden):
                     pass
-            # لو الفويس المخصص محذوف، حاول تجد فويس تفتيش آخر
             new_ch = await move_to_banned_channels(member.guild, member, assign_permanent=True)
             if new_ch:
-                logger.info(f"🔒 Banned player {member.id} moved to new investigation voice #{new_ch.name}")
-                return
-    # الحالة 2: اللاعب غادر فويس (after.channel is None)
-    elif before.channel is not None and after.channel is None:
-        # 🆕 المحظور لا يمكنه مغادرة فويس التفتيش — ارد فوراً
-        assigned_ch = member.guild.get_channel(assigned_voice_id) if assigned_voice_id else None
-        if assigned_ch and isinstance(assigned_ch, discord.VoiceChannel):
-            try:
-                await member.move_to(assigned_ch)
-                logger.info(f"🔒 Banned player {member.id} tried to leave voice, moved back to investigation voice")
-                return
-            except (discord.HTTPException, discord.Forbidden):
-                pass
-        # fallback: حاول تجد فويس تفتيش آخر
-        new_ch = await move_to_banned_channels(member.guild, member, assign_permanent=True)
-        if new_ch:
-            logger.info(f"🔒 Banned player {member.id} moved to new investigation voice after leaving")
+                logger.info(f"🔒 Banned {member.id} → investigation after leaving")
+        return  # المحظور تم التعامل معه
+
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # 2) 🆕 فحص المسجونين (JAIL system)
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    jail_role = discord.utils.get(member.guild.roles, name=JAIL_ROLE_NAME)
+    if not jail_role or jail_role not in member.roles:
+        return  # ليس مسجوناً
+
+    # اللاعب مسجون — منعه من مغادرة فويسات السجن
+    jail_voice_channels = []
+    # لو فيه فويسات مخصصة للسجن (يمكن إضافتها لاحقاً)
+    # حالياً المسجون ممنوع من كل الفويسات (في setup_jail_system)
+    # لو حاول دخول أي فويس → اطرده فوراً
+    if after.channel is not None:
+        try:
+            await member.move_to(None)  # اطرده من الفويس
+            logger.info(f"🔒 JAIL player {member.id} tried to join #{after.channel.name} → disconnected")
+        except (discord.HTTPException, discord.Forbidden):
+            pass
 
 
 @bot.event
@@ -3798,6 +3811,22 @@ async def on_message(message):
         return
     if not message.guild:
         return
+
+    # 🆕 فحص المسجونين (JAIL) — منع الكتابة في غير شاتات السجن
+    jail_role = discord.utils.get(message.guild.roles, name=JAIL_ROLE_NAME)
+    if jail_role and message.author.id != message.guild.owner_id:
+        member = message.guild.get_member(message.author.id)
+        if member and jail_role in member.roles:
+            # المسجون يقدر يكتب فقط في jail-chat و jail-prouves
+            allowed_jail_channels = [JAIL_CHAT_NAME, JAIL_PROUVES_NAME]
+            if message.channel.name not in allowed_jail_channels:
+                # احذف الرسالة لو البوت يقدر
+                try:
+                    await message.delete()
+                except (discord.HTTPException, discord.Forbidden):
+                    pass
+                return  # لا يعالج أوامر
+
     if not db.is_bot_allowed_channel(message.guild.id, message.channel.id):
         is_admin = False
         member = message.guild.get_member(message.author.id)
