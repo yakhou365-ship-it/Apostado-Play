@@ -7493,6 +7493,227 @@ async def help_cmd(ctx):
 
 
 # ============================================================
+# 🆕 KEEP ALIVE SYSTEM - يمنع البوت من النوم على المنصات المجانية
+# ============================================================
+KEEP_ALIVE_CHANNEL_ID = None  # ID الشات الذي سيرسل فيه البوت رسائل (يُحدد بـ !!setchannel)
+KEEP_ALIVE_MESSAGE = "🔄 ping..."  # الرسالة التي ترسل
+KEEP_ALIVE_INTERVAL = 240  # الفترة بالثواني (240 ثانية = 4 دقائق)
+KEEP_ALIVE_ENABLED = False  # هل النظام مفعّل؟
+
+async def keep_alive_task(bot_client):
+    """🆕 مهمة خلفية: ترسل رسالة كل X ثانية لمنع البوت من النوم.
+    
+    تعمل كالتالي:
+    1. تنتظر حتى يكون البوت جاهزاً
+    2. تدخل في حلقة لا نهائية
+    3. كل X ثانية: ترسل رسالة → تحذفها (تبقى الشات نظيفة)
+    """
+    await bot_client.wait_until_ready()
+    global KEEP_ALIVE_CHANNEL_ID, KEEP_ALIVE_ENABLED
+    
+    logger.info(f"🔄 Keep Alive System: {'مفعّل' if KEEP_ALIVE_ENABLED else 'معطّل'} | Interval: {KEEP_ALIVE_INTERVAL}s")
+    
+    while not bot_client.is_closed():
+        try:
+            if KEEP_ALIVE_ENABLED and KEEP_ALIVE_CHANNEL_ID:
+                channel = bot_client.get_channel(KEEP_ALIVE_CHANNEL_ID)
+                if channel:
+                    # إرسال الرسالة
+                    msg = await channel.send(KEEP_ALIVE_MESSAGE)
+                    logger.info(f"✅ Keep Alive - {datetime.now().strftime('%H:%M:%S')} - Channel: {channel.name}")
+                    
+                    # انتظار قصير ثم حذف الرسالة (تبقى الشات نظيفة)
+                    await asyncio.sleep(2)
+                    try:
+                        await msg.delete()
+                    except:
+                        pass  # قد تكون الرسالة محذوفة مسبقاً
+                else:
+                    logger.warning(f"⚠️ Keep Alive: Channel {KEEP_ALIVE_CHANNEL_ID} not found!")
+            elif KEEP_ALIVE_ENABLED:
+                logger.warning("⚠️ Keep Active: enabled but no channel set! Use !!setchannel")
+        except Exception as e:
+            logger.error(f"❌ Keep Alive Error: {e}")
+        
+        # انتظر الفترة المحددة قبل الإرسال التالي
+        await asyncio.sleep(KEEP_ALIVE_INTERVAL)
+
+
+@bot.command(name="setchannel", aliases=["setalive", "keepalive"])
+async def set_keep_alive_channel(ctx, channel: discord.TextChannel = None):
+    """🆕 تحديد أو تغيير شات الـ Keep Alive.
+    
+    الاستخدام:
+        !!setchannel #اسم-الشات      ← تحديد شات
+        !!setchannel                  ← عرض الإعدادات الحالية
+        !!setchannel off              ← إيقاف النظام
+    
+    ملاحظة: فقط مالك البوت يمكنه استخدام هذا الأمر.
+    """
+    # فحص الصلاحيات: فقط مالك البوت أو الأدمن
+    if ctx.author.id != BOT_OWNER_ID and not ctx.author.guild_permissions.administrator:
+        embed = discord.Embed(
+            title="🚫 صلاحية غير كافية",
+            description="> هذا الأمر متاح فقط لمالك البوت أو الأدمنز!",
+            color=COLORS["error"]
+        )
+        embed = apply_branding(embed, ctx.guild)
+        await ctx.send(embed=embed)
+        return
+    
+    global KEEP_ALIVE_CHANNEL_ID, KEEP_ALIVE_ENABLED
+    
+    # الحالة 1: إيقاف النظام
+    if channel is None and ctx.message.content.lower().endswith(" off"):
+        KEEP_ALIVE_ENABLED = False
+        KEEP_ALIVE_CHANNEL_ID = None
+        embed = discord.Embed(
+            title="✅ تم إيقاف نظام Keep Alive",
+            description=(
+                "> لن يرسل البوت أي رسائل تلقائية الآن.\n"
+                f"> استخدم `!!setchannel #شات` لإعادة تفعيله."
+            ),
+            color=COLORS["success"]
+        )
+        embed = apply_branding(embed, ctx.guild)
+        await ctx.send(embed=embed)
+        logger.info(f"🛑 Keep Alive disabled by {ctx.author} in {ctx.guild.name}")
+        return
+    
+    # الحالة 2: عرض الإعدادات الحالية
+    if channel is None:
+        status = "🟢 **مفعّل**" if KEEP_ALIVE_ENABLED else "🔴 **معطّل**"
+        ch_info = ""
+        if KEEP_ALIVE_CHANNEL_ID:
+            ch = bot.get_channel(KEEP_ALIVE_CHANNEL_ID)
+            if ch:
+                ch_info = f"> **الشات:** <#{KEEP_ALIVE_CHANNEL_ID}> (`{ch.name}`)\n"
+            else:
+                ch_info = f"> **الشات:** `{KEEP_ALIVE_CHANNEL_ID}` (غير موجود!)\n"
+        else:
+            ch_info = "> **الشات:** لم يتم التحديد\n"
+        
+        embed = discord.Embed(
+            title="⚙️ إعدادات Keep Alive",
+            description=(
+                f"{status}\n"
+                f"{ch_info}"
+                f"> **الفترة:** كل {KEEP_ALIVE_INTERVAL // 60} دقيقة\n\n"
+                f"**الاستخدام:**\n"
+                f"> `!!setchannel #اسم-الشات` ← تفعيل\n"
+                f"> `!!setchannel off` ← إيقاف"
+            ),
+            color=COLORS["info"]
+        )
+        embed = apply_branding(embed, ctx.guild)
+        await ctx.send(embed=embed)
+        return
+    
+    # الحالة 3: تحديد شات جديد
+    # فحص إذا كان البوت لديه صلاحية الإرسال في الشات
+    permissions = channel.permissions_for(ctx.guild.me)
+    if not permissions.send_messages:
+        embed = discord.Embed(
+            title="❌ خطأ في الصلاحيات",
+            description=(
+                f"> ليس لدي صلاحية الإرسال في {channel.mention}!\n"
+                f"> أعطني صلاحية **Send Messages** في ذلك الشات."
+            ),
+            color=COLORS["error"]
+        )
+        embed = apply_branding(embed, ctx.guild)
+        await ctx.send(embed=embed)
+        return
+    
+    if not permissions.manage_messages:
+        embed = discord.Embed(
+            title="⚠️ تحذير",
+            description=(
+                f"> ليس لدي صلاحية **Manage Messages** في {channel.mention}!\n"
+                f"> لن أتمكن من حذف رسائل الـ ping (ستتراكم)."
+            ),
+            color=COLORS["warning"]
+        )
+        embed = apply_branding(embed, ctx.guild)
+        await ctx.send(embed=embed)
+        # لكن نكمل رغم التحذير
+    
+    # حفظ الإعدادات الجديدة
+    KEEP_ALIVE_CHANNEL_ID = channel.id
+    KEEP_ALIVE_ENABLED = True
+    
+    embed = discord.Embed(
+        title="✅ تم تفعيل نظام Keep Alive",
+        description=(
+            f"> **الشات:** {channel.mention}\n"
+            f"> **الفورة:** كل {KEEP_ALIVE_INTERVAL // 60} دقائق\n"
+            f"> **الحالة:** 🟢 مفعّل\n\n"
+            f"> سيتم إرسال وحذف رسالة تلقائياً كل {KEEP_ALIVE_INTERVAL // 60} دقائق.\n"
+            f"> الشات سيبقى نظيفاً (الرسالة تُحذف بعد ثانيتين).\n\n"
+            f"> `!!setchannel` ← عرض الإعدادات\n"
+            f"> `!!setchannel off` ← إيقاف"
+        ),
+        color=COLORS["success"]
+    )
+    embed = apply_branding(embed, ctx.guild)
+    await ctx.send(embed=embed)
+    logger.info(f"✅ Keep Alive set to #{channel.name} ({channel.id}) by {ctx.author} in {ctx.guild.name}")
+
+
+@bot.command(name="pingalive", aliases=["alive", "testalive"])
+async def test_keep_alive(ctx):
+    """🆕 اختبار نظام Keep Alive - يرسل ping فوري."""
+    if ctx.author.id != BOT_OWNER_ID and not ctx.author.guild_permissions.administrator:
+        return
+    
+    global KEEP_ALIVE_CHANNEL_ID, KEEP_ALIVE_ENABLED
+    
+    if not KEEP_ALIVE_ENABLED or not KEEP_ALIVE_CHANNEL_ID:
+        embed = discord.Embed(
+            title="⏸️ Keep Alive معطّل",
+            description="> فعّله أولاً بـ `!!setchannel #شات`",
+            color=COLORS["warning"]
+        )
+        embed = apply_branding(embed, ctx.guild)
+        await ctx.send(embed=embed)
+        return
+    
+    channel = bot.get_channel(KEEP_ALIVE_CHANNEL_ID)
+    if not channel:
+        embed = discord.Embed(
+            title="❌ خطأ",
+            description=f"> الشات `{KEEP_ALIVE_CHANNEL_ID}` غير موجود!",
+            color=COLORS["error"]
+        )
+        embed = apply_branding(embed, ctx.guild)
+        await ctx.send(embed=embed)
+        return
+    
+    # إرسال اختبار
+    start_time = datetime.now()
+    msg = await channel.send(f"🔔 Test Ping! <t:{int(start_time.timestamp())}:R>")
+    
+    embed = discord.Embed(
+        title="✅ اختبار Keep Alive",
+        description=(
+            f"> **الشات:** {channel.mention}\n"
+            f"> **وقت الإرسال:** {start_time.strftime('%H:%M:%S')}\n"
+            f"> **الحالة:** 🟢 يعمل!"
+        ),
+        color=COLORS["success"]
+    )
+    embed = apply_branding(embed, ctx.guild)
+    await ctx.send(embed=embed)
+    
+    # حذف رسالة الاختبار بعد 5 ثواني
+    await asyncio.sleep(5)
+    try:
+        await msg.delete()
+    except:
+        pass
+
+
+# ============================================================
 # RUN
 # ============================================================
 if __name__ == "__main__":
@@ -7503,4 +7724,10 @@ if __name__ == "__main__":
     if not TOKEN:
         raise RuntimeError("DISCORD_TOKEN required")
     logger.info("🚀 Starting Free Fire Bot v4.0 CLEAN...")
+    
+    # 🆕 تشغيل نظام Keep Alive في الخلفية
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.create_task(keep_alive_task(bot))
+    
     bot.run(TOKEN)
