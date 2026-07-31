@@ -597,6 +597,18 @@ class Database:
             bot_dir = os.path.dirname(os.path.abspath(__file__))
             self.db_path = os.path.join(bot_dir, "freefire_bot.db")
         
+        # 🆕✅ إصلاح Railway/Render: أنشئ المجلد إذا لم يكن موجوداً!
+        db_dir = os.path.dirname(self.db_path)
+        if db_dir and not os.path.exists(db_dir):
+            try:
+                os.makedirs(db_dir, exist_ok=True)
+                logger.info(f"📁 Created database directory: {db_dir}")
+            except Exception as e:
+                logger.warning(f"⚠️ Could not create directory {db_dir}: {e}")
+                # Fallback: استخدم المجلد الحالي
+                self.db_path = os.path.join(os.getcwd(), "freefire_bot.db")
+                logger.info(f"💾 Falling back to: {self.db_path}")
+        
         # ✅ إصلاح: لو الـ DB غير موجودة، ابحث عن DB قديمة في مواقع شائعة
         if not os.path.exists(self.db_path):
             # ابحث في المجلد الحالي
