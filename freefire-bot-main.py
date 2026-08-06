@@ -166,6 +166,8 @@ RULES_IMAGE_URL = "https://iili.io/CRepLH7.png"
 SERVER_GIFS = {
     1504736689610821711: "https://iili.io/CRNXNM7.gif",  # السيرفر الأول
     1516566061820936242: "https://iili.io/CRObS8F.gif",  # السيرفر الثاني
+    1521654113761235186: "https://iili.io/CrIS3ZX.gif",  # apos vortex
+    1403482656556978196: "https://iili.io/CrISKnn.gif",  # elit hzx
 }
 
 # 🆕 MAX: مطابقة بالاسم — تُطبّع Unicode (NFKD) لمطابقة الأسماء الخاصة
