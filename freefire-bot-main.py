@@ -154,7 +154,8 @@ COLORS = {
 
 # شعار البوت الرسمي (يستخدم في كل الembeds)
 BOT_LOGO_URL = "https://i.imgur.com/8RYMfAE.png"
-BOT_FOOTER = "Free Fire Bot v4.0  •  Matchmaking System"
+BOT_FOOTER_TEMPLATE = "✨ {server_name} • Dev By Aizen"
+BOT_FOOTER = "✨ Apostado • Dev By Aizen"  # fallback للاستخدام المباشر
 
 # 🆕 صورة ثابتة تظهر في كل ردود البوت (في كل السيرفرات)
 BOT_BANNER_URL = "https://iili.io/CRNXkFe.png"
@@ -201,25 +202,28 @@ def get_server_gif(guild):
                 return gif_url
     return None
 
-def apply_branding(embed, guild):
-    """🆕 يضيف شعار السيرفر أو الـ GIF المخصص في كل ردود البوت."""
+def get_bot_footer(guild):
+    """يرجع الفوتر الديناميكي حسب اسم السيرفر."""
+    if guild:
+        return BOT_FOOTER_TEMPLATE.format(server_name=guild.name)
+    return BOT_FOOTER_TEMPLATE.format(server_name="Apostado")
+
+def apply_branding(embed, guild, is_leaderboard=False):
+    """🆕 يضيف الهوية البصرية — فوتر ديناميكي + صور فقط في اللوADERبورد."""
     if not guild:
         return embed
-    # 🆕 MAX: استخدم get_server_gif (يدعم ID + الاسم)
-    server_gif = get_server_gif(guild)
-    if server_gif:
-        embed.set_image(url=server_gif)
+    # فوتر ديناميكي
+    embed.set_footer(text=get_bot_footer(guild))
+    embed.timestamp = discord.utils.utcnow()
+    # صور فقط في اللوADERبورد
+    if is_leaderboard:
         if guild.icon:
             embed.set_thumbnail(url=guild.icon.url)
-    else:
-        # 🆕 استخدم شعار السيرفر كصورة أسفل كل رد
         if BOT_BANNER_URL:
             embed.set_image(url=BOT_BANNER_URL)
-        elif guild.icon:
-            embed.set_image(url=guild.icon.url)
-        # استخدم شعار السيرفر كـ thumbnail أيضاً
-        if guild.icon:
-            embed.set_thumbnail(url=guild.icon.url)
+    else:
+        embed.set_thumbnail(url=None)
+        embed.set_image(url=None)
     return embed
 
 # روابط أيقونات احترافية (تستخدم في thumbnails) — لم تعد مستخدمة (apply_branding يستخدم شعار السيرفر)
@@ -1781,92 +1785,56 @@ def build_nickname_with_level(original_name, level):
 
 
 def create_lobby_embed(lobby, guild):
-    """🔥 Lobby Embed — تصميم احترافي بمعايير عالمية."""
+    """🔥 Lobby Embed — تصميم احترافي مطابق لـ Apostado."""
     mode = lobby.get("game_mode", DEFAULT_MODE)
     mode_info = GAME_MODES.get(mode, GAME_MODES[DEFAULT_MODE])
     team_size = mode_info["team_size"]
     lobby_size = mode_info["lobby_size"]
-    mode_emoji = mode_info["emoji"]
-    mode_color = mode_info["color"]
 
-    t1c = len(lobby["team1_players"])
-    t2c = len(lobby["team2_players"])
+    t1 = lobby["team1_players"]
+    t2 = lobby["team2_players"]
+    t1c = len(t1)
+    t2c = len(t2)
     total = t1c + t2c
-    progress_pct = int((total / lobby_size) * 100) if lobby_size else 0
-    progress_bar = make_progress_bar(total, lobby_size, length=12)
-
-    # بطاقات اللاعبين
-    def make_team_card(players, team_color_emoji, team_size_limit):
-        if not players:
-            slots = []
-            for _ in range(team_size_limit):
-                slots.append(f"{team_color_emoji}  *مكان شاغر*")
-            return "\n".join(slots)
-        lines = []
-        for pid in players[:team_size_limit]:
-            lines.append(f"{team_color_emoji}  <@{pid}>")
-        # أكمل الفراغات
-        empty = team_size_limit - len(lines)
-        for _ in range(empty):
-            lines.append(f"⚫  *مكان شاغر*")
-        return "\n".join(lines)
-
-    t1_text = make_team_card(lobby["team1_players"], "🔴", team_size)
-    t2_text = make_team_card(lobby["team2_players"], "🟢", team_size)
-
-    # بناء الـ embed
-    embed = discord.Embed(
-        title=f"{mode_emoji}  Free Fire  —  {mode.upper()}  Lobby",
-        description=(
-            f"> **Lobby ID:**  `#{lobby['id']}`\n"
-            f"> **Host:**  <@{lobby['creator_id']}>\n"
-            f"> **Mode:**  `{mode.upper()}`  ({team_size}v{team_size})\n"
-            f"{separator()}\n"
-            f"**Progress:**  `{total}/{lobby_size}`  (`{progress_pct}%`)\n"
-            f"`{progress_bar}`"
-        ),
-        color=mode_color,
-        timestamp=discord.utils.utcnow()
-    )
-
-    embed.add_field(
-        name=f"🔴  Team 1  —  `{t1c}/{team_size}`",
-        value=t1_text,
-        inline=True
-    )
-    embed.add_field(
-        name=f"🟢  Team 2  —  `{t2c}/{team_size}`",
-        value=t2_text,
-        inline=True
-    )
-
-    # معلومات الغرفة الخاصة
-    pk = db.get_lobby_private_key(lobby['id'])
+    lobby_id = lobby['id']
+    creator_id = lobby['creator_id']
+    pk = db.get_lobby_private_key(lobby_id)
     room_id = lobby.get('room_id')
-    if pk and not room_id:
-        embed.add_field(
-            name="🔐  Private Match",
-            value=(
-                f"> هذا الماتش محمي بمفتاح خاص.\n"
-                f"> اطلب المفتاح من <@{lobby['creator_id']}> للدخول."
-            ),
-            inline=False
-        )
 
     # حالة اللوبي
     if total == 0:
-        status_text = "⏳  في انتظار اللاعبين..."
+        status_text = "*No players yet*"
     elif total < lobby_size:
-        status_text = f"⏳  يحتاج `{lobby_size - total}` لاعب آخر للبدء"
+        status_text = f"⏳ Needs `{lobby_size - total}` more players"
     else:
-        status_text = "🎮  الماتش جاهز للبدء!"
-    embed.add_field(name="📋  Status", value=f"> {status_text}", inline=False)
+        status_text = "🎮 Match ready to start!"
 
-    embed.set_author(
-        name=f"Host: {guild.get_member(lobby['creator_id']).display_name if guild.get_member(lobby['creator_id']) else 'Unknown'}",
-        icon_url=guild.get_member(lobby['creator_id']).display_avatar.url if guild.get_member(lobby['creator_id']) else None
+    # بناء الفرق
+    def make_team_list(players, team_label, team_color, limit):
+        lines = [f"{team_color} {team_label} ({len(players)}/{limit})"]
+        if players:
+            for idx, pid in enumerate(players[:limit], 1):
+                lines.append(f"| {idx}. <@{pid}> 🔴")
+        else:
+            lines.append("*No players yet*")
+        return "\n".join(lines)
+
+    desc = f"🏠 Creator: <@{creator_id}> 🔴\n"
+    if pk and not room_id:
+        desc += "🔒 Status: Private Match\n"
+    else:
+        desc += "🔒 Status: Public Match\n"
+    desc += f"📋 Mode: `{mode.upper()}` ({team_size}v{team_size})\n"
+    desc += f"📊 Status: {status_text}\n\n"
+    desc += make_team_list(t1, "Team 1", "🔴", team_size)
+    desc += "\n"
+    desc += make_team_list(t2, "Team 2", "🟢", team_size)
+
+    embed = discord.Embed(
+        title=f"☁️ Match Lobby • {mode.upper()} (ID: #{lobby_id})",
+        description=desc,
+        color=0xF1C40F,
     )
-    embed.set_footer(text=f"{BOT_FOOTER}  •  Lobby #{lobby['id']}")
     embed = apply_branding(embed, guild)
 
     return embed
@@ -1919,19 +1887,16 @@ def create_profile_embed(player, member=None, gid=None):
         display_title += f"  {mvp_badge}"
 
     embed = discord.Embed(
-        title=display_title,
+        title=f"☁️ Player Profile • STATS (ID: #{player.get('discord_id', 0) % 10000:04d})",
         description=(
             f"> 🏅  **Rank:**  `{rank_title}`  —  `#{level}`\n"
             f"> 💰  **Points:**  `{points:,}`  pts{streak_display}\n"
             f"> 👑  **MVPs:**  `{mvps}`  —  `{mvp_title}`{f'  {mvp_badge}' if mvp_badge else ''}\n"
             f"{separator()}"
         ),
-        color=rank_color,
+        color=0xF1C40F,
         timestamp=discord.utils.utcnow()
     )
-
-    if avatar_url:
-        embed.set_thumbnail(url=avatar_url)
 
     # 🆕 التقدم نحو المركز الأول
     if pts_to_next > 0:
@@ -1989,7 +1954,6 @@ def create_profile_embed(player, member=None, gid=None):
     embed.set_footer(text=f"{BOT_FOOTER}  •  {rank_title} #{level}  •  {mvp_title}")
     if member and member.guild:
         embed = apply_branding(embed, member.guild)
-    embed.set_author(name="Player Profile")
 
     return embed
 
@@ -2032,50 +1996,24 @@ async def update_leaderboard_channel(guild):
             return
         lb = db.get_leaderboard(guild.id, 10)
         embed = discord.Embed(
-            title="🏆  Free Fire  —  Top 10 Players",
-            description=(
-                f"> 📊  ترتيب اللاعبين حسب النقاط\n"
-                f"> 🔄  يتحدث تلقائياً بعد كل مباراة\n"
-                f"> 📈  كل `50` نقطة = `+1` رانك\n"
-                f"{separator()}"
-            ),
-            color=COLORS["leaderboard"],
-            timestamp=discord.utils.utcnow()
+            title="☁️ Top Players • LEADERBOARD",
+            color=0xF1C40F,
         )
         if not lb:
-            embed.description = (
-                f"> 📭  لا يوجد لاعبون بعد!\n"
-                f"> استخدم  `{PREFIX}play 4v4`  لبدء أول ماتش.\n"
-                f"{separator()}"
-            )
+            embed.description = "> 📭 No players yet!\n> Start a match with `!!play 4v4`"
         else:
-            medals = ["🥇", "🥈", "🥉", "🏅", "🎖️", "🏵️", "🏷️", "8️⃣", "9️⃣", "🔟"]
+            medals = ["🥇", "🥈", "🥉"]
             desc = ""
             for i, p in enumerate(lb):
-                m = medals[i] if i < len(medals) else f"`#{i+1}`"
+                prefix = medals[i] if i < 3 else f"| {i+1}."
                 mem = guild.get_member(p["user_id"])
-                name = mem.display_name if mem else p["username"]
+                mention = mem.mention if mem else f"@{p['username']}"
                 level = p.get("level", STARTING_LEVEL)
                 rank_emoji = get_rank_emoji(level)
-                rank_title = get_rank_title(level)
                 wr = round((p["wins"] / max(p["matches_played"], 1)) * 100, 1)
-                wr_status = "🔥" if wr >= 70 else ("⭐" if wr >= 50 else "🌱")
-                pts_to_next = points_to_next_rank(p["points"], db, guild.id)
-                # خط فاصل بين كل لاعب
-                if i > 0:
-                    desc += "─" * 28 + "\n"
-                next_rank_hint = f"  •  ⏭️ `{pts_to_next}` للقمة" if pts_to_next > 0 else "  •  👑 في القمة!"
-                desc += (
-                    f"{m}  **{rank_emoji} {name}**\n"
-                    f"└ 💰 `{p['points']:,}` pts  •  🏅 `RANK #{level}` ({rank_title})\n"
-                    f"└ 🎮 `{p['matches_played']}` M  •  ✅ `{p['wins']}` W  ❌ `{p['losses']}` L  •  📊 `{wr}%` {wr_status}\n"
-                    f"└ 👑 `{p['mvps']}` MVPs{next_rank_hint}\n"
-                )
+                desc += f"{prefix} {mention} 🔴 — {rank_emoji} `#{level}` — `{p['points']:,}` PTS — 📊 `{wr}%`\n"
             embed.description = desc
-        embed.set_footer(text=f"{BOT_FOOTER}  •  Live Leaderboard  •  {len(lb)} players")
-        # ✅ إصلاح: المتغير الصحيح هو guild (تم تعريفه في الـ scope الأعلى)، وليس member
-        embed = apply_branding(embed, guild)
-        embed.set_author(name=f"{guild.name} Leaderboard", icon_url=None)
+        embed = apply_branding(embed, guild, is_leaderboard=True)
         if settings.get("leaderboard_message_id"):
             try:
                 msg = await channel.fetch_message(settings["leaderboard_message_id"])
@@ -2443,7 +2381,7 @@ async def auto_lobby_timeout(lobby_id, guild):
         ch = guild.get_channel(lobby["channel_id"])
         if ch:
             timeout_embed = discord.Embed(
-                title="⏰  Lobby Timed Out",
+                title="☁️ Lobby Expired • SYSTEM",
                 description=(
                     f"> اللوبي `#{lobby_id}` تم إلغاؤه بسبب عدم النشاط.\n"
                     f"> استخدم `{PREFIX}play 4v4` لبدء ماتش جديد."
@@ -2902,17 +2840,17 @@ class LobbyButtonsView(discord.ui.View):
                 self.guild_id = lobby["guild_id"]
         return self.creator_id
 
-    @discord.ui.button(label="Join Team 1", style=discord.ButtonStyle.danger, custom_id="join_team1_btn")
+    @discord.ui.button(label="Join Team 1", style=discord.ButtonStyle.primary, emoji="🔴", custom_id="join_team1_btn")
     async def join_team1_btn(self, interaction, button):
         await self._ensure_lobby_id(interaction)
         await self._handle_join(interaction, "team1")
 
-    @discord.ui.button(label="Join Team 2", style=discord.ButtonStyle.success, custom_id="join_team2_btn")
+    @discord.ui.button(label="Join Team 2", style=discord.ButtonStyle.success, emoji="🟢", custom_id="join_team2_btn")
     async def join_team2_btn(self, interaction, button):
         await self._ensure_lobby_id(interaction)
         await self._handle_join(interaction, "team2")
 
-    @discord.ui.button(label="Leave", style=discord.ButtonStyle.secondary, custom_id="leave_lobby_btn")
+    @discord.ui.button(label="Leave", style=discord.ButtonStyle.secondary, emoji="🚶", custom_id="leave_lobby_btn")
     async def leave_lobby_btn(self, interaction, button):
         await self._ensure_lobby_id(interaction)
         uid = interaction.user.id
@@ -2928,7 +2866,7 @@ class LobbyButtonsView(discord.ui.View):
         else:
             await interaction.response.send_message("❌ Not in this lobby!", ephemeral=True)
 
-    @discord.ui.button(label="Cancel Game", style=discord.ButtonStyle.danger, custom_id="cancel_game_btn")
+    @discord.ui.button(label="Cancel Game", style=discord.ButtonStyle.secondary, emoji="❌", custom_id="cancel_game_btn")
     async def cancel_game_btn(self, interaction, button):
         await self._ensure_lobby_id(interaction)
         await self._refresh_creator_id(interaction)
@@ -5165,7 +5103,7 @@ async def create_mode_lobby(ctx, mode):
     existing = db.get_player_active_lobby(user.id, guild.id)
     if existing:
         await ctx.send(embed=discord.Embed(
-            title="❌  Already in Lobby",
+            title="☁️ Lobby Error • SYSTEM",
             description=(
                 f"> You're already in a lobby. Leave it first.\n"
                 f"> Use  `{PREFIX}leave`  to leave."
@@ -5460,7 +5398,7 @@ async def leave_cmd(ctx):
     lobby = db.get_player_active_lobby(ctx.author.id, ctx.guild.id)
     if not lobby:
         await ctx.send(embed=discord.Embed(
-            title="❌  Not in Lobby",
+            title="☁️ Lobby Error • SYSTEM",
             description=(
                 f"> You're not currently in any lobby.\n"
                 f"> Use `{PREFIX}play` to create one."
@@ -5474,7 +5412,7 @@ async def leave_cmd(ctx):
             db.update_lobby_status(lobby["id"], "cancelled")
             cleanup_lobby_memory(lobby["id"])
             await ctx.send(embed=discord.Embed(
-                title="🗑️  Lobby Cancelled",
+                title="☁️ Lobby Cancelled • SYSTEM",
                 description=(
                     f"> Lobby `#{lobby['id']}` was cancelled."
                 ),
@@ -5486,7 +5424,7 @@ async def leave_cmd(ctx):
             db.reassign_creator(lobby["id"], remaining[0])
     db.remove_player_from_lobby(lobby["id"], ctx.author.id)
     await ctx.send(embed=discord.Embed(
-        title="✅  Left Lobby",
+        title="☁️ Left Lobby • SYSTEM",
         description=(
             f"> You left lobby `#{lobby['id']}`."
         ),
