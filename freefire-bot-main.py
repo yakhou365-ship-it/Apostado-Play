@@ -40,6 +40,19 @@ import math
 from datetime import datetime
 from typing import Optional, List, Dict, Any, Union
 
+# ☁️ Cloud Backup — MongoDB Atlas Sync
+try:
+    from cloud_backup import (
+        is_cloud_enabled, auto_restore_database, sync_guild_players_to_cloud,
+        sync_player_to_cloud, sync_bans_to_cloud, sync_guild_settings_to_cloud,
+        full_backup_to_cloud, full_restore_from_cloud
+    )
+    _CLOUD_AVAILABLE = True
+except ImportError:
+    _CLOUD_AVAILABLE = False
+    logger_temp = logging.getLogger("freefire")
+    logger_temp.info("☁️ cloud_backup.py not found — cloud sync disabled")
+
 # ============================================================
 # LOGGING
 # ============================================================
@@ -1440,6 +1453,7 @@ class Database:
         - اللاعبون بنقاط > 0 → رانكهم حسب الترتيب (1, 2, 3...)
         - اللاعبون بنقاط ≤ 0 → رانك = 1000 + ترتيبهم في المجموعة السالبة (1001, 1002...)
         ✅ كل لاعب له رانك فريد (ROW_NUMBER مع tie-breaker: points → wins → matches)
+        ☁️ بعد الحساب: يزامن البيانات للسحابة
         """
         conn = self.conn()
         try:
@@ -1467,6 +1481,15 @@ class Database:
                 conn.commit()
         finally:
             pass  # thread-local connection
+        
+        # ☁️ مزامنة للسحابة بعد كل recalculate_ranks
+        if _CLOUD_AVAILABLE and is_cloud_enabled():
+            try:
+                players = self.get_leaderboard(gid, limit=None)
+                if players:
+                    sync_guild_players_to_cloud(gid, players)
+            except Exception as e:
+                logger.warning(f"☁️ Cloud sync failed in recalculate_ranks: {e}")
 
     def get_player_rank_position(self, uid, gid):
         """🆕 V3 MAX: يرجع ترتيب اللاعب في السيرفر (1 = الأعلى نقاط).
@@ -1747,6 +1770,14 @@ class Database:
 
 
 db = Database()
+
+# ☁️ Cloud Restore — استرجاع البيانات من السحابة عند بدء التشغيل
+if _CLOUD_AVAILABLE and is_cloud_enabled():
+    logger.info("☁️ Cloud backup enabled — checking for data to restore...")
+    auto_restore_database(db)
+else:
+    logger.info("☁️ Cloud backup not configured — using local database only")
+
 active_lobby_messages = {}
 lobby_timeout_timers = {}
 vote_timeout_timers = {}
@@ -7511,6 +7542,109 @@ async def help_cmd(ctx):
     embed2.set_footer(text=f"صفحة 2/2  •  Free Fire Bot v4.0  •  51 أمر إجمالي")
     embed2 = apply_branding(embed2, ctx.guild)
     await ctx.send(embed=embed2)
+
+
+@bot.command(name="cloudbackup")
+@commands.is_owner()
+async def cloudbackup_cmd(ctx):
+    """☁️ نسخ احتياطي كامل للسحابة."""
+    if not _CLOUD_AVAILABLE or not is_cloud_enabled():
+        embed = discord.Embed(
+            title="☁️ Cloud Backup",
+            description="❌ Cloud backup not enabled!\n\nSet `MONGODB_URI` environment variable.",
+            color=COLORS["error"]
+        )
+        embed = apply_branding(embed, ctx.guild)
+        await ctx.send(embed=embed)
+        return
+    
+    await ctx.send("☁️ Starting full cloud backup...")
+    success, msg = await full_backup_to_cloud(db)
+    color = COLORS["success"] if success else COLORS["error"]
+    embed = discord.Embed(
+        title="☁️ Cloud Backup",
+        description=f"{'✅' if success else '❌'} {msg}",
+        color=color
+    )
+    embed = apply_branding(embed, ctx.guild)
+    await ctx.send(embed=embed)
+
+
+@bot.command(name="cloudrestore")
+@commands.is_owner()
+async def cloudrestore_cmd(ctx):
+    """☁️ استرجاع كامل من السحابة (يحذف البيانات المحلية)."""
+    if not _CLOUD_AVAILABLE or not is_cloud_enabled():
+        embed = discord.Embed(
+            title="☁️ Cloud Restore",
+            description="❌ Cloud backup not enabled!\n\nSet `MONGODB_URI` environment variable.",
+            color=COLORS["error"]
+        )
+        embed = apply_branding(embed, ctx.guild)
+        await ctx.send(embed=embed)
+        return
+    
+    embed = discord.Embed(
+        title="⚠️ Cloud Restore",
+        description="This will **DELETE all local data** and replace it with cloud data.\n\nReact with ✅ to confirm.",
+        color=COLORS["warning"]
+    )
+    embed = apply_branding(embed, ctx.guild)
+    msg = await ctx.send(embed=embed)
+    await msg.add_reaction("✅")
+    await msg.add_reaction("❌")
+    
+    def check(reaction, user):
+        return user == ctx.author and str(reaction.emoji) in ("✅", "❌") and reaction.message_id == msg.id
+    
+    try:
+        reaction, user = await bot.wait_for("reaction_add", timeout=30.0, check=check)
+        if str(reaction.emoji) == "❌":
+            await ctx.send("❌ Cancelled.")
+            return
+    except asyncio.TimeoutError:
+        await ctx.send("⏰ Timed out.")
+        return
+    
+    await ctx.send("☁️ Restoring from cloud...")
+    success, msg = await full_restore_from_cloud(db)
+    color = COLORS["success"] if success else COLORS["error"]
+    embed = discord.Embed(
+        title="☁️ Cloud Restore",
+        description=f"{'✅' if success else '❌'} {msg}",
+        color=color
+    )
+    embed = apply_branding(embed, ctx.guild)
+    await ctx.send(embed=embed)
+
+
+@bot.command(name="cloudstatus")
+async def cloudstatus_cmd(ctx):
+    """☁️ حالة الاتصال بالسحابة."""
+    if not _CLOUD_AVAILABLE:
+        status = "❌ cloud_backup.py not found"
+    elif not is_cloud_enabled():
+        status = "⚠️ MONGODB_URI not set"
+    else:
+        try:
+            from cloud_backup import _get_client
+            client, database = _get_client()
+            if database is not None:
+                from cloud_backup import get_all_cloud_guilds
+                guilds = get_all_cloud_guilds()
+                status = f"✅ Connected! {len(guilds)} guild(s) in cloud"
+            else:
+                status = "❌ Connection failed"
+        except Exception as e:
+            status = f"❌ Error: {e}"
+    
+    embed = discord.Embed(
+        title="☁️ Cloud Status",
+        description=status,
+        color=COLORS["info"]
+    )
+    embed = apply_branding(embed, ctx.guild)
+    await ctx.send(embed=embed)
 
 
 @bot.command(name="serverleave")
