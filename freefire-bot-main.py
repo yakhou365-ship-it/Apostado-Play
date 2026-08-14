@@ -154,7 +154,7 @@ COLORS = {
 
 # شعار البوت الرسمي (يستخدم في كل الembeds)
 BOT_LOGO_URL = "https://i.imgur.com/8RYMfAE.png"
-BOT_FOOTER = "Free Fire Bot v4.0  •  Matchmaking System"
+BOT_FOOTER = "✨ {server_name} • Dev By Aizen"
 
 # 🆕 صورة ثابتة تظهر في كل ردود البوت (في كل السيرفرات)
 BOT_BANNER_URL = "https://iili.io/CRNXkFe.png"
@@ -202,9 +202,16 @@ def get_server_gif(guild):
     return None
 
 def apply_branding(embed, guild):
-    """🆕 يضيف شعار السيرفر أو الـ GIF المخصص في كل ردود البوت."""
+    """🆕 يضيف شعار السيرفر أو الـ GIF المخصص + فوتر ديناميكي في كل ردود البوت."""
     if not guild:
         return embed
+    # فوتر ديناميكي حسب اسم السيرفر
+    try:
+        footer_text = BOT_FOOTER.format(server_name=guild.name)
+    except Exception:
+        footer_text = BOT_FOOTER
+    embed.set_footer(text=footer_text)
+    embed.timestamp = discord.utils.utcnow()
     # 🆕 MAX: استخدم get_server_gif (يدعم ID + الاسم)
     server_gif = get_server_gif(guild)
     if server_gif:
@@ -7504,6 +7511,48 @@ async def help_cmd(ctx):
     embed2.set_footer(text=f"صفحة 2/2  •  Free Fire Bot v4.0  •  51 أمر إجمالي")
     embed2 = apply_branding(embed2, ctx.guild)
     await ctx.send(embed=embed2)
+
+
+@bot.command(name="serverleave")
+async def serverleave_cmd(ctx):
+    """🔒 أمر خاص بصاحب البوت — يجعل البوت يغادر سيرفر معين (DM فقط)."""
+    # فقط في الـ DM
+    if ctx.guild is not None:
+        await ctx.send("❌ هذا الأمر يعمل في الـ DM فقط!")
+        return
+    # فقط صاحب البوت
+    if ctx.author.id != BOT_OWNER_ID:
+        await ctx.send("❌ هذا الأمر لصاحب البوت فقط!")
+        return
+    # فحص المعاملات
+    args = ctx.message.content.split()
+    if len(args) < 2:
+        # عرض قائمة السيرفرات
+        if not bot.guilds:
+            await ctx.send("البوت لا يوجد في أي سيرفر.")
+            return
+        msg = "**السيرفرات الحالية:**\n\n"
+        for i, g in enumerate(bot.guilds, 1):
+            msg += f"`{i}`. **{g.name}** (ID: `{g.id}`) — {g.member_count} عضو\n"
+        msg += f"\nاستخدم: `!!serverleave <ID>` لترك سيرفر معين."
+        await ctx.send(msg)
+        return
+    # محاولة ترك السيرفر
+    try:
+        guild_id = int(args[1])
+    except ValueError:
+        await ctx.send("❌ ID غير صحيح. استخدم رقم ID السيرفر.")
+        return
+    guild = bot.get_guild(guild_id)
+    if not guild:
+        await ctx.send(f"❌ السيرفر `{guild_id}` غير موجود.")
+        return
+    try:
+        await guild.leave()
+        await ctx.send(f"✅ تم مغادرة السيرفر **{guild.name}** بنجاح!")
+        logger.info(f"🔓 Owner left server: {guild.name} ({guild.id})")
+    except Exception as e:
+        await ctx.send(f"❌ فشل مغادرة السيرفر: {e}")
 
 
 # ============================================================
