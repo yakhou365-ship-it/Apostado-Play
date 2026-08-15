@@ -143,14 +143,17 @@ RANK_TITLES = {
 # 🆕 أسماء كاتيجوري غرف الانتظار الخاصة (للتحقق منها عند إعطاء الصلاحية)
 WAITING_PRV_CATEGORY_HINT = "Waiting Prv"
 
+# ══════════════════════════════════════════════
+# V0 DESIGN SYSTEM — Color Palette
+# ══════════════════════════════════════════════
 COLORS = {
     # الأساسية
     "success": 0x2ECC71,   # أخضر زمردي
     "error":   0xE74C3C,   # أحمر فاتح
     "warning": 0xF1C40F,   # أصفر ذهبي
     "info":    0x3498DB,   # أزرق سماوي
-    # الخاصة بالبوت
-    "play":        0xE67E22,  # برتقالي ناري
+    # الخاصة بالبوت (V0 redesigned)
+    "play":        0xFFD700,  # ذهبي ناري (كان برتقالي)
     "profile":     0x9B59B6,  # بنفسجي ملكي
     "leaderboard": 0xF1C40F,  # ذهبي
     "match":       0x3498DB,  # أزرق محيطي
@@ -307,8 +310,8 @@ def make_winrate_bar(winrate, length=10):
 
 
 def separator():
-    """فاصل بصري احترافي."""
-    return "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    """فاصل بصري — V0 تصميم جديد."""
+    return "──────────────────────"
 
 
 def compute_rank_from_points(points):
@@ -1819,13 +1822,11 @@ def build_nickname_with_level(original_name, level):
 
 
 def create_lobby_embed(lobby, guild):
-    """🔥 Lobby Embed — تصميم احترافي بمعايير عالمية."""
+    """✦ Lobby Embed — V0 Redesign."""
     mode = lobby.get("game_mode", DEFAULT_MODE)
     mode_info = GAME_MODES.get(mode, GAME_MODES[DEFAULT_MODE])
     team_size = mode_info["team_size"]
     lobby_size = mode_info["lobby_size"]
-    mode_emoji = mode_info["emoji"]
-    mode_color = mode_info["color"]
 
     t1c = len(lobby["team1_players"])
     t2c = len(lobby["team2_players"])
@@ -1833,47 +1834,51 @@ def create_lobby_embed(lobby, guild):
     progress_pct = int((total / lobby_size) * 100) if lobby_size else 0
     progress_bar = make_progress_bar(total, lobby_size, length=12)
 
-    # بطاقات اللاعبين
-    def make_team_card(players, team_color_emoji, team_size_limit):
+    # V0: بطاقات اللاعبين (نمط نظيف)
+    def make_team_card(players, team_emoji, team_size_limit):
         if not players:
-            slots = []
-            for _ in range(team_size_limit):
-                slots.append(f"{team_color_emoji}  *مكان شاغر*")
+            slots = [f"⚫ *empty slot*" for _ in range(team_size_limit)]
             return "\n".join(slots)
-        lines = []
-        for pid in players[:team_size_limit]:
-            lines.append(f"{team_color_emoji}  <@{pid}>")
-        # أكمل الفراغات
+        lines = [f"{team_emoji} <@{pid}>" for pid in players[:team_size_limit]]
         empty = team_size_limit - len(lines)
         for _ in range(empty):
-            lines.append(f"⚫  *مكان شاغر*")
+            lines.append(f"⚫ *empty slot*")
         return "\n".join(lines)
 
     t1_text = make_team_card(lobby["team1_players"], "🔴", team_size)
     t2_text = make_team_card(lobby["team2_players"], "🟢", team_size)
 
-    # بناء الـ embed
+    # حالة اللوبي (V0 style)
+    if total == 0:
+        status_text = "⏳ Waiting for players..."
+    elif total < lobby_size:
+        status_text = f"⏳ Needs **{lobby_size - total} more players** to start"
+    else:
+        status_text = "🎮 Match ready to start!"
+
+    # بناء الـ embed (V0 design)
+    host_member = guild.get_member(lobby['creator_id'])
+    host_name = host_member.display_name if host_member else 'Unknown'
+
     embed = discord.Embed(
-        title=f"{mode_emoji}  Free Fire  —  {mode.upper()}  Lobby",
+        title=f"✦ Free Fire — {mode.upper()} Lobby",
         description=(
-            f"> **Lobby ID:**  `#{lobby['id']}`\n"
-            f"> **Host:**  <@{lobby['creator_id']}>\n"
-            f"> **Mode:**  `{mode.upper()}`  ({team_size}v{team_size})\n"
-            f"{separator()}\n"
-            f"**Progress:**  `{total}/{lobby_size}`  (`{progress_pct}%`)\n"
+            f"> Lobby ID: `{lobby['id']}`\n"
+            f"> Host: <@{lobby['creator_id']}>\n"
+            f"> Mode: `{mode.upper()}` · Progress: `{total}/{lobby_size}` `{progress_pct}%`\n"
             f"`{progress_bar}`"
         ),
-        color=mode_color,
+        color=0xFFD700,
         timestamp=discord.utils.utcnow()
     )
 
     embed.add_field(
-        name=f"🔴  Team 1  —  `{t1c}/{team_size}`",
+        name=f"🔴 Team 1 — `{t1c}/{team_size}`",
         value=t1_text,
         inline=True
     )
     embed.add_field(
-        name=f"🟢  Team 2  —  `{t2c}/{team_size}`",
+        name=f"🟢 Team 2 — `{t2c}/{team_size}`",
         value=t2_text,
         inline=True
     )
@@ -1883,26 +1888,19 @@ def create_lobby_embed(lobby, guild):
     room_id = lobby.get('room_id')
     if pk and not room_id:
         embed.add_field(
-            name="🔐  Private Match",
+            name="🔐 Private Match",
             value=(
-                f"> هذا الماتش محمي بمفتاح خاص.\n"
-                f"> اطلب المفتاح من <@{lobby['creator_id']}> للدخول."
+                f"> This match is protected with a private key.\n"
+                f"> Ask <@{lobby['creator_id']}> for the key to join."
             ),
             inline=False
         )
 
-    # حالة اللوبي
-    if total == 0:
-        status_text = "⏳  في انتظار اللاعبين..."
-    elif total < lobby_size:
-        status_text = f"⏳  يحتاج `{lobby_size - total}` لاعب آخر للبدء"
-    else:
-        status_text = "🎮  الماتش جاهز للبدء!"
-    embed.add_field(name="📋  Status", value=f"> {status_text}", inline=False)
+    embed.add_field(name="📋 Status", value=f"> {status_text}", inline=False)
 
     embed.set_author(
-        name=f"Host: {guild.get_member(lobby['creator_id']).display_name if guild.get_member(lobby['creator_id']) else 'Unknown'}",
-        icon_url=guild.get_member(lobby['creator_id']).display_avatar.url if guild.get_member(lobby['creator_id']) else None
+        name=f"Host: {host_name} · Match Lobby",
+        icon_url=host_member.display_avatar.url if host_member else None
     )
     embed.set_footer(text=f"{BOT_FOOTER}  •  Lobby #{lobby['id']}")
     embed = apply_branding(embed, guild)
@@ -1911,15 +1909,13 @@ def create_lobby_embed(lobby, guild):
 
 
 def create_profile_embed(player, member=None, gid=None):
-    """🎮 Profile Embed — بطاقة لاعب احترافية بتصميم فاخر مع شارات MVPs."""
+    """♛ Profile Embed — V0 Redesign."""
     level = player.get("level", STARTING_LEVEL)
     rank_color = get_rank_color(level)
     rank_title = get_rank_title(level)
-    rank_emoji = get_rank_emoji(level)
     points = player.get("points", 0)
     mvps = player.get("mvps", 0)
 
-    # 🆕 شارات MVPs
     mvp_badge = get_mvp_badge(mvps)
     mvp_title = get_mvp_title(mvps)
 
@@ -1931,10 +1927,8 @@ def create_profile_embed(player, member=None, gid=None):
     kd_diff = player["wins"] - player["losses"]
     kd_sign = "+" if kd_diff >= 0 else ""
 
-    # 🆕 التقدم نحو المركز الأول
     top_pts = db.get_top_points(gid) if gid else 0
     pts_to_next = max(0, top_pts - points) if top_pts > points else 0
-    next_rank = 1
     progress_pct = int((points / max(top_pts, 1)) * 100) if top_pts else 0
     progress_pct = max(0, min(100, progress_pct))
     rank_progress_bar = make_progress_bar(points, max(top_pts, 1), length=15)
@@ -1942,27 +1936,25 @@ def create_profile_embed(player, member=None, gid=None):
     name = member.display_name if member else player["username"]
     avatar_url = member.display_avatar.url if member else None
 
-    # وصف الـ embed
-    streak_display = ""
+    # V0: streak line
     if win_streak > 0:
-        streak_display = f"\n> 🔥  **Win Streak:**  `{win_streak}`  (best: `{max_streak}`)"
+        streak_display = f"> 🔥 Win streak: `{win_streak}` (best: `{max_streak}`)"
     elif lose_streak > 0:
-        streak_display = f"\n> ☠️  **Lose Streak:**  `{lose_streak}`  (best: `{max_streak}`)"
+        streak_display = f"> ☠️ Lose streak: `{lose_streak}` (best: `{max_streak}`)"
     else:
-        streak_display = f"\n> 📊  **Best Streak:**  `{max_streak}`"
+        streak_display = f"> 📊 Best streak: `{max_streak}`"
 
-    # 🆕 عنوان مع شارة MVP لو موجودة
-    display_title = f"{rank_emoji}  {name}"
+    # V0: عنوان مع شارة
+    display_title = f"♛ {name}"
     if mvp_badge:
-        display_title += f"  {mvp_badge}"
+        display_title += f" {mvp_badge}"
 
     embed = discord.Embed(
         title=display_title,
         description=(
-            f"> 🏅  **Rank:**  `{rank_title}`  —  `#{level}`\n"
-            f"> 💰  **Points:**  `{points:,}`  pts{streak_display}\n"
-            f"> 🔱  **MVPs:**  `{mvps}`  —  `{mvp_title}`{f'  {mvp_badge}' if mvp_badge else ''}\n"
-            f"{separator()}"
+            f"> 🏅 Rank: `{rank_title}` — `#{level}`\n"
+            f"> 💰 Points: `{points:,}` pts{streak_display.replace('> ', '\n> ')}\n"
+            f"> 🔱 MVPs: `{mvps}` — `{mvp_title}`{f' {mvp_badge}' if mvp_badge else ''}"
         ),
         color=rank_color,
         timestamp=discord.utils.utcnow()
@@ -1971,56 +1963,51 @@ def create_profile_embed(player, member=None, gid=None):
     if avatar_url:
         embed.set_thumbnail(url=avatar_url)
 
-    # 🆕 التقدم نحو المركز الأول
+    # V0: التقدم نحو #1
     if pts_to_next > 0:
         embed.add_field(
-            name=f"📈  Progress Toward  `#1`",
+            name="📈 Progress Toward `#1`",
             value=(
-                f"`{rank_progress_bar}`  `{progress_pct}%`\n"
-                f"> ⏭️  **يتبقى:**  `{pts_to_next:,}`  نقطة للوصول للقمة"
+                f"`{rank_progress_bar}` `{progress_pct}%`\n"
+                f"> Your pts: `{points:,}` · Top: `{top_pts:,}` · Remaining: `{pts_to_next:,}`"
             ),
             inline=False
         )
     else:
         embed.add_field(
-            name="🔱  You're the Leader!",
-            value=f"> 🎉 أنت في القمة بـ `{points:,}` نقطة! حافظ على مركزك!",
+            name="🔱 You're the Leader!",
+            value=f"> 🎉 You're at the top with `{points:,}` points! Keep it up!",
             inline=False
         )
 
-    # 🆕 شارات MVPs (شريط منفصل)
+    # V0: MVP achievement
     if mvps > 0:
         badge_display = ""
-        if mvps >= 100:
-            badge_display = "🔱 🔱 🔱  LEGEND"
-        elif mvps >= 50:
-            badge_display = "💎 💎  DIAMOND"
-        elif mvps >= 20:
-            badge_display = "🏅  GOLD"
-        elif mvps >= 5:
-            badge_display = "🥈  SILVER"
-        else:
-            badge_display = "🥉  BRONZE"
+        if mvps >= 100:   badge_display = "🔱 🔱 🔱 LEGEND"
+        elif mvps >= 50:  badge_display = "💎 💎 DIAMOND"
+        elif mvps >= 20:  badge_display = "🏅 GOLD"
+        elif mvps >= 5:   badge_display = "🥈 SILVER"
+        else:              badge_display = "🥉 BRONZE"
         embed.add_field(
-            name=f"🔱  MVP Achievement  —  `{mvps}` total",
-            value=f"> `{badge_display}`\n> 📈  `{mvp_title}`  —  استمر في الفوز للمزيد من الشارات!",
+            name=f"🔱 MVP Achievement — `{mvps}` total",
+            value=f"> `{badge_display}` — `{mvp_title}`",
             inline=False
         )
 
-    # الإحصائيات الأساسية (3 × 2 grid)
-    embed.add_field(name="🏆  Wins",    value=f"```fix\n{player['wins']}\n```", inline=True)
-    embed.add_field(name="☠️  Losses",  value=f"```fix\n{player['losses']}\n```", inline=True)
-    embed.add_field(name="⚖️  W/L Diff", value=f"```fix\n{kd_sign}{kd_diff}\n```", inline=True)
+    # V0: 3×2 stats grid
+    embed.add_field(name="🏆 Wins",   value=f"`{player['wins']}`", inline=True)
+    embed.add_field(name="☠️ Losses",  value=f"`{player['losses']}`", inline=True)
+    embed.add_field(name="⚖️ W/L",     value=f"`{kd_sign}{kd_diff}`", inline=True)
 
-    embed.add_field(name="🎮  Matches",  value=f"```fix\n{player['matches_played']}\n```", inline=True)
-    embed.add_field(name="🔱  MVPs",     value=f"```fix\n{mvps}\n```", inline=True)
-    embed.add_field(name="🔪  Kills",    value=f"```fix\n{player['kills']}\n```", inline=True)
+    embed.add_field(name="🎮 Matches", value=f"`{player['matches_played']}`", inline=True)
+    embed.add_field(name="🔱 MVPs",    value=f"`{mvps}`", inline=True)
+    embed.add_field(name="🔪 Kills",   value=f"`{player['kills']}`", inline=True)
 
-    # شريط Win Rate
+    # V0: Win rate bar
     wr_status = "🔥 God Tier" if wr >= 70 else ("⭐ Pro" if wr >= 50 else ("🌱 Rising" if wr >= 30 else "☠️ Struggling"))
     embed.add_field(
-        name=f"📊  Win Rate  —  `{wr}%`  {wr_status}",
-        value=f"`{wr_bar}`  `{player['wins']}/{player['matches_played']}`",
+        name=f"📊 Win Rate — `{wr}%` {wr_status}",
+        value=f"{wr_bar} `{player['wins']}/{player['matches_played']}`",
         inline=False
     )
 
@@ -2060,7 +2047,7 @@ async def update_member_nickname(member, level):
 
 
 async def update_leaderboard_channel(guild):
-    """🆕 Leaderboard محدّث — يعرض النقاط والرانك معاً + يتحدث تلقائياً بعد كل ماتش."""
+    """◆ Leaderboard — V0 Redesign. يعرض النقاط والرانك معاً + يتحدث تلقائياً بعد كل ماتش."""
     try:
         settings = db.get_guild_settings(guild.id)
         if not settings or not settings.get("leaderboard_channel_id"):
@@ -2070,21 +2057,17 @@ async def update_leaderboard_channel(guild):
             return
         lb = db.get_leaderboard(guild.id, 10)
         embed = discord.Embed(
-            title="🏆  Free Fire  —  Top 10 Players",
+            title="◆ Free Fire — Top 10 Players",
             description=(
-                f"> 📊  ترتيب اللاعبين حسب النقاط\n"
-                f"> 🔄  يتحدث تلقائياً بعد كل مباراة\n"
-                f"> 📈  كل `50` نقطة = `+1` رانك\n"
-                f"{separator()}"
+                f"📊 Ranking by points · 🔄 Auto-updates after every match · 📈 Every `50` pts = `+1` rank"
             ),
             color=COLORS["leaderboard"],
             timestamp=discord.utils.utcnow()
         )
         if not lb:
             embed.description = (
-                f"> 📭  لا يوجد لاعبون بعد!\n"
-                f"> استخدم  `{PREFIX}play 4v4`  لبدء أول ماتش.\n"
-                f"{separator()}"
+                f"> 📭 No players yet!\n"
+                f"> Use `{PREFIX}play 4v4` to start your first match."
             )
         else:
             medals = ["💎", "🥈", "🥉", "🏅", "🎖️", "🏵️", "🏷️", "8️⃣", "9️⃣", "🔟"]
@@ -2099,21 +2082,19 @@ async def update_leaderboard_channel(guild):
                 wr = round((p["wins"] / max(p["matches_played"], 1)) * 100, 1)
                 wr_status = "🔥" if wr >= 70 else ("⭐" if wr >= 50 else "🌱")
                 pts_to_next = points_to_next_rank(p["points"], db, guild.id)
-                # خط فاصل بين كل لاعب
+                # V0: فاصل رفيع بين كل لاعب
                 if i > 0:
-                    desc += "─" * 28 + "\n"
-                next_rank_hint = f"  •  ⏭️ `{pts_to_next}` للقمة" if pts_to_next > 0 else "  •  🔱 في القمة!"
+                    desc += "──────────────────────\n"
+                next_rank_hint = f" · ⏭️ `{pts_to_next}` to #1" if pts_to_next > 0 else " · 🔱 At the top!"
                 desc += (
-                    f"{m}  **{rank_emoji} {name}**\n"
-                    f"└ 💰 `{p['points']:,}` pts  •  🏅 `RANK #{level}` ({rank_title})\n"
-                    f"└ 🎮 `{p['matches_played']}` M  •  ✅ `{p['wins']}` W  ❌ `{p['losses']}` L  •  📊 `{wr}%` {wr_status}\n"
+                    f"{m} **{rank_emoji} {name}** `#{level}`\n"
+                    f"└ 💰 `{p['points']:,}` pts · 🎮 `{p['matches_played']}` M · ✅ `{p['wins']}` W · ❌ `{p['losses']}` L · 📊 `{wr}%` {wr_status}\n"
                     f"└ 🔱 `{p['mvps']}` MVPs{next_rank_hint}\n"
                 )
             embed.description = desc
-        embed.set_footer(text=f"{BOT_FOOTER}  •  Live Leaderboard  •  {len(lb)} players")
-        # ✅ إصلاح: المتغير الصحيح هو guild (تم تعريفه في الـ scope الأعلى)، وليس member
+        embed.set_footer(text=f"{BOT_FOOTER}  •  Live Leaderboard  •  {len(lb)} players ranked")
         embed = apply_branding(embed, guild)
-        embed.set_author(name=f"{guild.name} Leaderboard", icon_url=None)
+        embed.set_author(name=f"🏆 {guild.name} Leaderboard", icon_url=None)
         if settings.get("leaderboard_message_id"):
             try:
                 msg = await channel.fetch_message(settings["leaderboard_message_id"])
@@ -2318,7 +2299,7 @@ async def check_and_apply_auto_ban(guild, reported_id, total_reports, reported_b
         f"> 👤  **اللاعب:**  <@{reported_id}>\n"
         f"> 📊  **عدد البلاغات:**  `{total_reports}`\n"
         f"> 🔍  **الإجراء:**  تم نقله لفويس التفتيش + تقييده{voice_info}\n"
-        f"> 💡  استخدم  `!!unbanplayer @user`  لفك الحظر بعد التفتيش",
+        f"> 💡 Use  `!!unbanplayer @user`  لفك الحظر بعد التفتيش",
         color=COLORS["error"]
     )
     return True
@@ -2415,34 +2396,30 @@ async def auto_trigger_vote(lobby_id, guild):
         t1m = " ".join([f"<@{p}>" for p in lobby["team1_players"]])
         t2m = " ".join([f"<@{p}>" for p in lobby["team2_players"]])
         mvp_embed = discord.Embed(
-            title=f"🎯  MVP Selection  —  Match `#{lobby_id}`",
+            title=f"⚡ MVP Selection — Match `#{lobby_id}`",
             description=(
-                f"> انتهت المباراة! اختر MVP لكل فريق.\n"
-                f"> ⏱️  لديك  **{VOTE_TIMEOUT_SECONDS // 60} دقيقة**  للاختيار.\n"
-                f"> 🏆  **MVP WINNER:**  يختاره منشئ الروم  (<@{creator_id}>)\n"
-                f"> ✦  **MVP LOSER:**  يختاره أول داخل  (<@{first_joiner_id}>)\n"
-                f"> ⚡  يتم تطبيق النقاط تلقائياً بعد اختيار الاثنين\n"
-                f"{separator()}"
+                f"Match ended. Pick one MVP for each team.\n"
+                f"⏱️ You have **{VOTE_TIMEOUT_SECONDS // 60} minute** to choose."
             ),
             color=COLORS["vote"],
             timestamp=discord.utils.utcnow()
         )
         mvp_embed.add_field(
-            name=f"🔴  Team 1  —  `{len(lobby['team1_players'])}` players",
-            value=t1m or "*لا يوجد لاعبون*",
+            name=f"🔴 Team 1 — `{len(lobby['team1_players'])}` players",
+            value=t1m or "*No players*",
             inline=True
         )
         mvp_embed.add_field(
-            name=f"🟢  Team 2  —  `{len(lobby['team2_players'])}` players",
-            value=t2m or "*لا يوجد لاعبون*",
+            name=f"🟢 Team 2 — `{len(lobby['team2_players'])}` players",
+            value=t2m or "*No players*",
             inline=True
         )
         mvp_embed.add_field(
-            name="📋  كيف يعمل النظام؟",
+            name="📋 How does it work?",
             value=(
-                f"> 🏆  **MVP WINNER:**  يختاره منشئ الروم — هذا اللاعب يحدد الفريق الفائز\n"
-                f"> ✦  **MVP LOSER:**  يختاره أول داخل — هذا اللاعب يحدد الفريق الخاسر\n"
-                f"> ⚡  معاً يحددان النتيجة تلقائياً"
+                f"> 🏅 Winner MVP is chosen by the host.\n"
+                f"> ✦ Loser MVP is chosen by the first joiner.\n"
+                f"> ⚡ Points apply automatically."
             ),
             inline=False
         )
@@ -2614,48 +2591,37 @@ async def process_match_result(guild, lobby_id, winner_team, channel=None):
         )
 
         # 🆕 بناء رسالة النتيجة الاحترافية
-        wd = "🔴  Team 1" if winner_team == "team1" else "🟢  Team 2"
+        wd = "🔴 Team 1" if winner_team == "team1" else "🟢 Team 2"
         wt_mentions = "\n".join([
-            f"{'🔱' if is_mvp else '✅'}  <@{pid}>  →  `{'+' if pts > 0 else ''}{pts}` pts  (RANK #{old}→#{new})"
+            f"{'🔱' if is_mvp else '✅'}  <@{pid}> → `{'+' if pts > 0 else ''}{pts}` pts  (RANK #{old}→#{new})"
             for pid, pts, is_mvp, old, new in winner_details
         ]) or "*لا يوجد لاعبون*"
         lt_mentions = "\n".join([
-            f"{'✦' if is_mvp else '☠️'}  <@{pid}>  →  `{'+' if pts > 0 else ''}{pts}` pts  (RANK #{old}→#{new})"
+            f"{'✦' if is_mvp else '☠️'}  <@{pid}> → `{'+' if pts > 0 else ''}{pts}` pts  (RANK #{old}→#{new})"
             for pid, pts, is_mvp, old, new in loser_details
         ]) or "*لا يوجد لاعبون*"
 
         embed = discord.Embed(
-            title=f"🏆  Match Result  —  `#{lobby_id}`",
+            title=f"🏅 Match Result — `#{lobby_id}`",
             description=(
                 f"## 🎉  {wd}  Wins!\n"
                 f"{separator()}\n"
-                f"> 🎮  **Mode:**  `{game_mode.upper()}`\n"
-                f"> 🏆  **Winner MVP:**  {f'<@{winner_mvp_id}>' if winner_mvp_id else '*N/A*'}  →  `+{WINNER_MVP_POINTS}` pts\n"
-                f"> ✦  **Loser MVP:**  {f'<@{loser_mvp_id}>' if loser_mvp_id else '*N/A*'}  →  `+{LOSER_MVP_POINTS}` pts"
+                f"> 🎮 Mode:  `{game_mode.upper()}`\n"
+                f"> 🏆 Winner MVP:  {f'<@{winner_mvp_id}>' if winner_mvp_id else '*N/A*'} → `+{WINNER_MVP_POINTS}` pts\n"
+                f"> ✦ Loser MVP:  {f'<@{loser_mvp_id}>' if loser_mvp_id else '*N/A*'} → `+{LOSER_MVP_POINTS}` pts"
             ),
             color=COLORS["success"],
             timestamp=discord.utils.utcnow()
         )
         embed.add_field(
-            name=f"🏆  Winners  —  `{len(winner_details)}` players",
+            name=f"🏆 Winners —  `{len(winner_details)}` players",
             value=wt_mentions,
             inline=True
         )
         embed.add_field(
-            name=f"☠️  Losers  —  `{len(loser_details)}` players",
+            name=f"☠️ Losers —  `{len(loser_details)}` players",
             value=lt_mentions,
             inline=True
-        )
-        embed.add_field(
-            name="📊  Points System",
-            value=(
-                f"> 🔱  **Winner MVP:**  `+{WINNER_MVP_POINTS}` pts\n"
-                f"> ✅  **Winners:**  `+{WINNER_POINTS}` pts\n"
-                f"> ✦  **Loser MVP:**  `+{LOSER_MVP_POINTS}` pts\n"
-                f"> ☠️  **Losers:**  `{LOSER_POINTS}` pts\n"
-                f"> 📈  **Rank:**  كل `50` نقطة = `+1` رانك"
-            ),
-            inline=False
         )
         embed.set_author(name="Match Finished", icon_url=None)
         embed.set_footer(text=f"{BOT_FOOTER}  •  GG WP!  •  Match #{lobby_id}")
@@ -2719,7 +2685,7 @@ class RoomInfoModal(discord.ui.Modal, title="📋 Enter Room Information"):
                     description=(
                         f"> Room details stored successfully.\n"
                         f"──────────────────────\n"
-                        f"🆔  **Room ID:**\n"
+                        f"🆔 Room ID:\n"
                         f"```\n{room_id}\n```\n"
                         f"🔑  **Code:**\n"
                         f"```\n{password or 'N/A'}\n```"
@@ -2987,7 +2953,7 @@ class LobbyButtonsView(discord.ui.View):
         # 🆕 FIX: رد على التفاعل أولاً قبل حذف القنوات (تجنب فشل الاستجابة)
         mode = lobby.get("game_mode", DEFAULT_MODE).upper()
         await interaction.response.send_message(embed=discord.Embed(
-            title="❌  Match Cancelled",
+            title="🛡️ Match Cancelled",
             description=(
                 f"> Match `#{self.lobby_id}` — `{mode}`  was cancelled by <@{uid}>.\n"
                 f"> Use `{PREFIX}play` to start a new match."
@@ -3001,7 +2967,7 @@ class LobbyButtonsView(discord.ui.View):
 
         # عدّل رسالة اللوبي الأصلية (في قناة play — لم تُحذف)
         try: await interaction.message.edit(embed=discord.Embed(
-            title="❌  Match Cancelled",
+            title="🛡️ Match Cancelled",
             description=(
                 f"> This `{mode}` match was cancelled by the host.\n"
                 f"> Use `{PREFIX}play` to start a new match."
@@ -3142,19 +3108,15 @@ class LobbyButtonsView(discord.ui.View):
 
         if lobby.get("room_id"):
             room_embed = discord.Embed(
-                title="📡  Room Info",
+                title="ℹ️ Room Info",
                 description=(
-                    f"> Join the room with these credentials:\n"
-                    f"──────────────────────\n"
-                    f"🆔  **Room ID:**\n"
-                    f"```\n{lobby['room_id']}\n```\n"
-                    f"🔑  **Password:**\n"
-                    f"```\n{lobby.get('room_code') or 'N/A'}\n```\n"
-                    f"──────────────────────\n"
-                    f"🔥  Join now and good luck!"
+                    f"Join the room with these credentials:"
                 ),
                 color=COLORS["auto"]
             )
+            room_embed.add_field(name="🆔 Room ID", value=f"`{lobby['room_id']}`", inline=True)
+            room_embed.add_field(name="🔑 Password", value=f"`{lobby.get('room_code') or 'N/A'}`", inline=True)
+            room_embed.add_field(name="", value="🔥 Join now and good luck!", inline=False)
             await interaction.followup.send(embed=room_embed, ephemeral=True)
 
         # ✅ MAX: لا تنقل اللاعب لـ waiting room بعد الانضمام للوبي
@@ -3246,33 +3208,22 @@ class LobbyButtonsView(discord.ui.View):
                     all_players = lobby["team1_players"] + lobby["team2_players"]
                     mentions = " ".join([f"<@{pid}>" for pid in all_players])
                     room_embed = discord.Embed(
-                        title="📡  Room Info",
-                        description=(
-                            f"> Join the room with these credentials:\n"
-                            f"──────────────────────\n"
-                            f"🆔  **Room ID:**\n"
-                            f"```\n{lobby['room_id']}\n```\n"
-                            f"🔑  **Password:**\n"
-                            f"```\n{lobby.get('room_code') or 'N/A'}\n```\n"
-                            f"──────────────────────\n"
-                            f"🔥  Join now and good luck!"
-                        ),
+                        title="ℹ️ Room Info",
+                        description="Join the room with these credentials:",
                         color=COLORS["auto"]
                     )
+                    room_embed.add_field(name="🆔 Room ID", value=f"`{lobby['room_id']}`", inline=True)
+                    room_embed.add_field(name="🔑 Password", value=f"`{lobby.get('room_code') or 'N/A'}`", inline=True)
+                    room_embed.add_field(name="", value="🔥 Join now and good luck!", inline=False)
                     try: await channels["team1_text"].send(mentions, embed=room_embed)
                     except: pass
 
                 start_vote_view = StartVoteView(self.lobby_id, interaction.guild.id, lobby["creator_id"])
                 start_embed = discord.Embed(
-                    title="🎮  Match Started!",
+                    title="📻 Match Started!",
                     description=(
-                        f"> **Lobby:**  `#{self.lobby_id}`\n"
-                        f"> **Mode:**  `{mode.upper()}`  ({mode_info['team_size']}v{mode_info['team_size']})\n"
-                        f"> **Host:**  <@{lobby['creator_id']}>\n"
-                        f"{separator()}\n"
-                        f"> 🎮  الماتش بدأ! ادخلوا الغرفة في اللعبة الآن.\n"
-                        f"> 🔱  **Host:**  اضغط  **Start Vote**  عند انتهاء الماتش.\n"
-                        f"> ❌  **Host:**  اضغط  **Cancel Match**  للإلغاء وإعادة اللاعبين."
+                        f"> Lobby: `#{self.lobby_id}`\n"
+                        f"> Mode: `{mode.upper()}` · Host: <@{lobby['creator_id']}>\n"
                     ),
                     color=COLORS["auto"],
                     timestamp=discord.utils.utcnow()
@@ -3280,15 +3231,22 @@ class LobbyButtonsView(discord.ui.View):
                 # أضف معلومات الغرفة إذا موجودة
                 if lobby.get('room_id'):
                     start_embed.add_field(
-                        name="📡  Room Info",
+                        name="📡 Room Info",
                         value=(
-                            f"🆔  **Room ID:**\n"
-                            f"```\n{lobby['room_id']}\n```\n"
-                            f"🔑  **Password:**\n"
-                            f"```\n{lobby.get('room_code') or 'N/A'}\n```"
+                            f"🆔 Room ID: `{lobby['room_id']}`\n"
+                            f"🔑 Password: `{lobby.get('room_code') or 'N/A'}`"
                         ),
                         inline=False
                     )
+                start_embed.add_field(
+                    name="",
+                    value=(
+                        f"🎮 Match started. Join the room now.\n"
+                        f"🔱 Host: press **Start Vote** when finished.\n"
+                        f"❌ Host: press **Cancel Match** to abort."
+                    ),
+                    inline=False
+                )
                 start_embed.set_author(name="Match Live", icon_url=None)
                 start_embed.set_footer(text=f"{BOT_FOOTER}  •  Match #{self.lobby_id}")
                 start_embed = apply_branding(start_embed, interaction.guild)
@@ -3441,12 +3399,12 @@ class StartVoteView(discord.ui.View):
         """🆕 ينفذ إلغاء الماتش فعلياً."""
         mode = lobby.get("game_mode", DEFAULT_MODE).upper()
         cancelled_embed = discord.Embed(
-            title="❌  Match Cancelled",
+            title="🛡️ Match Cancelled",
             description=(
                 f"> **Lobby:**  `#{self.lobby_id}`\n> **Mode:**  `{mode}`\n"
                 f"> **Cancelled by:**  <@{uid}> ({reason})\n{separator()}\n"
                 f"> 🔄  جارٍ إعادة اللاعبين...\n> 🗑️  جارٍ حذف القنوات...\n"
-                f"> 💡  استخدم  `{PREFIX}play`  لبدء ماتش جديد."
+                f"> 💡 Use  `{PREFIX}play`  لبدء ماتش جديد."
             ),
             color=COLORS["error"], timestamp=discord.utils.utcnow()
         )
@@ -3752,9 +3710,9 @@ class MvpVoteView(discord.ui.View):
             self.guild,
             f"⚠️ مشكلة في التصويت — ماتش #{self.lobby_id}",
             f"> 👤  **المبلّغ:**  {interaction.user.mention}\n"
-            f"> 🏆  **Winner MVP:**  {f'<@{self.winner_mvp_id}>' if self.winner_mvp_id else '*لم يُختار*'}\n"
-            f"> ✦  **Loser MVP:**  {f'<@{self.loser_mvp_id}>' if self.loser_mvp_id else '*لم يُختار*'}\n"
-            f"> 💡  استخدم  `!!w {self.lobby_id} @user`  و  `!!l {self.lobby_id} @user`  لحل المشكلة يدوياً"
+            f"> 🏆 Winner MVP:  {f'<@{self.winner_mvp_id}>' if self.winner_mvp_id else '*لم يُختار*'}\n"
+            f"> ✦ Loser MVP:  {f'<@{self.loser_mvp_id}>' if self.loser_mvp_id else '*لم يُختار*'}\n"
+            f"> 💡 Use  `!!w {self.lobby_id} @user`  و  `!!l {self.lobby_id} @user`  لحل المشكلة يدوياً"
         )
 
     async def _get_team(self, pid):
@@ -3838,8 +3796,8 @@ class MvpVoteView(discord.ui.View):
                 embed=discord.Embed(
                     title="✅  تم تطبيق النقاط!",
                     description=(
-                        f"> 🏆  **MVP WINNER:**  <@{self.winner_mvp_id}>  →  `+80` pts\n"
-                        f"> ✦  **MVP LOSER:**  <@{self.loser_mvp_id}>  →  `+30` pts\n"
+                        f"> 🏆  **MVP WINNER:**  <@{self.winner_mvp_id}> → `+80` pts\n"
+                        f"> ✦  **MVP LOSER:**  <@{self.loser_mvp_id}> → `+30` pts\n"
                         f"> ⚡  جارٍ تطبيق النقاط وتحديث الرانك..."
                     ),
                     color=COLORS["success"]
@@ -3866,9 +3824,9 @@ class MvpVoteView(discord.ui.View):
                     guild,
                     f"❌ فشل تطبيق نقاط الماتش #{self.lobby_id}",
                     f"> 🐛  **الخطأ:**  `{str(e)[:200]}`\n"
-                    f"> 🏆  **Winner MVP:**  <@{self.winner_mvp_id}>\n"
-                    f"> ✦  **Loser MVP:**  <@{self.loser_mvp_id}>\n"
-                    f"> 💡  استخدم  `!!w {self.lobby_id} @user`  و  `!!l {self.lobby_id} @user`  يدوياً"
+                    f"> 🏆 Winner MVP:  <@{self.winner_mvp_id}>\n"
+                    f"> ✦ Loser MVP:  <@{self.loser_mvp_id}>\n"
+                    f"> 💡 Use  `!!w {self.lobby_id} @user`  و  `!!l {self.lobby_id} @user`  يدوياً"
                 )
         else:
             logger.error(f"❌ Guild not found for lobby {self.lobby_id}")
@@ -4021,48 +3979,37 @@ async def process_match_result_with_mvps(guild, lobby_id, winner_team, winner_mv
         db.create_match_result(lobby_id, winner_team, len(wt), len(lt), mvp=winner_mvp_id)
 
         # بناء رسالة النتيجة
-        wd = "🔴  Team 1" if winner_team == "team1" else "🟢  Team 2"
+        wd = "🔴 Team 1" if winner_team == "team1" else "🟢 Team 2"
         wt_mentions = "\n".join([
-            f"{'🔱' if is_mvp else '✅'}  <@{pid}>  →  `{'+' if pts > 0 else ''}{pts}` pts  (RANK #{old}→#{new})"
+            f"{'🔱' if is_mvp else '✅'}  <@{pid}> → `{'+' if pts > 0 else ''}{pts}` pts  (RANK #{old}→#{new})"
             for pid, pts, is_mvp, old, new in winner_details
         ]) or "*لا يوجد لاعبون*"
         lt_mentions = "\n".join([
-            f"{'✦' if is_mvp else '☠️'}  <@{pid}>  →  `{'+' if pts > 0 else ''}{pts}` pts  (RANK #{old}→#{new})"
+            f"{'✦' if is_mvp else '☠️'}  <@{pid}> → `{'+' if pts > 0 else ''}{pts}` pts  (RANK #{old}→#{new})"
             for pid, pts, is_mvp, old, new in loser_details
         ]) or "*لا يوجد لاعبون*"
 
         embed = discord.Embed(
-            title=f"🏆  Match Result  —  `#{lobby_id}`",
+            title=f"🏅 Match Result — `#{lobby_id}`",
             description=(
                 f"## 🎉  {wd}  Wins!\n"
                 f"{separator()}\n"
-                f"> 🎮  **Mode:**  `{game_mode.upper()}`\n"
-                f"> 🏆  **Winner MVP:**  {f'<@{winner_mvp_id}>' if winner_mvp_id else '*N/A*'}  →  `+{WINNER_MVP_POINTS}` pts\n"
-                f"> ✦  **Loser MVP:**  {f'<@{loser_mvp_id}>' if loser_mvp_id else '*N/A*'}  →  `+{LOSER_MVP_POINTS}` pts"
+                f"> 🎮 Mode:  `{game_mode.upper()}`\n"
+                f"> 🏆 Winner MVP:  {f'<@{winner_mvp_id}>' if winner_mvp_id else '*N/A*'} → `+{WINNER_MVP_POINTS}` pts\n"
+                f"> ✦ Loser MVP:  {f'<@{loser_mvp_id}>' if loser_mvp_id else '*N/A*'} → `+{LOSER_MVP_POINTS}` pts"
             ),
             color=COLORS["success"],
             timestamp=discord.utils.utcnow()
         )
         embed.add_field(
-            name=f"🏆  Winners  —  `{len(winner_details)}` players",
+            name=f"🏆 Winners —  `{len(winner_details)}` players",
             value=wt_mentions,
             inline=True
         )
         embed.add_field(
-            name=f"☠️  Losers  —  `{len(loser_details)}` players",
+            name=f"☠️ Losers —  `{len(loser_details)}` players",
             value=lt_mentions,
             inline=True
-        )
-        embed.add_field(
-            name="📊  Points System",
-            value=(
-                f"> 🔱  **Winner MVP:**  `+{WINNER_MVP_POINTS}` pts\n"
-                f"> ✅  **Winners:**  `+{WINNER_POINTS}` pts\n"
-                f"> ✦  **Loser MVP:**  `+{LOSER_MVP_POINTS}` pts\n"
-                f"> ☠️  **Losers:**  `{LOSER_POINTS}` pts\n"
-                f"> 📈  **Rank:**  كل `50` نقطة = `+1` رانك"
-            ),
-            inline=False
         )
         embed.set_author(name="Match Finished", icon_url=None)
         embed.set_footer(text=f"{BOT_FOOTER}  •  GG WP!  •  Match #{lobby_id}")
@@ -4168,7 +4115,7 @@ class VoteView(discord.ui.View):
             # 🆕 حالة 0-0 (لا أصوات إطلاقاً) — تاغ الأدمنز للحل
             if result_ch:
                 no_votes_embed = discord.Embed(
-                    title="⏰  Vote Ended — No Votes!",
+                    title="⏰ Vote Ended — No Votes!",
                     description=(
                         f"> ⚠️  لم يصوت أي لاعب في الماتش  `#{self.lobby_id}`\n"
                         f"> 📊  **النتيجة:**  `0 — 0`\n"
@@ -4696,7 +4643,7 @@ async def on_ready():
                 waiting_rooms = db.get_waiting_rooms(guild.id)
                 report_channels = db.get_report_channels(guild.id)
                 success_embed = discord.Embed(
-                    title="✅  AUTO-DETECT Complete",
+                    title="✅ AUTO-DETECT Complete",
                     description=(
                         f"> 🤖  **Bot:**  Free Fire Bot V3 MAX\n"
                         f"> 🏠  **Server:**  {guild.name}\n"
@@ -4710,7 +4657,7 @@ async def on_ready():
                         f"{separator()}\n"
                         f"> ✅  كل القنوات الموجودة تم تسجيلها تلقائياً\n"
                         f"> ✅  البوت جاهز للعمل بدون أي إعداد يدوي\n"
-                        f"> 💡  استخدم  `{PREFIX}help`  لعرض الأوامر"
+                        f"> 💡 Use  `{PREFIX}help`  لعرض الأوامر"
                     ),
                     color=COLORS["success"],
                     timestamp=discord.utils.utcnow()
@@ -5306,7 +5253,7 @@ async def play_cmd(ctx, mode: str = None):
                 f"> ─  صلاحية  `Manage Guild`  (إدارة السيرفر)\n"
                 f"> ─  role تبعك في النصف العلوي من الهرم\n"
                 f">    (مطلوب position  `≥ {threshold}`  —  أنت حالياً  `{member_top}`)\n"
-                f"> 💡  استخدم  `{PREFIX}play 4v4`  للعب العادي  (متاح للجميع)."
+                f"> 💡 Use  `{PREFIX}play 4v4`  للعب العادي  (متاح للجميع)."
             ),
             color=COLORS["error"],
             timestamp=discord.utils.utcnow()
@@ -5341,7 +5288,7 @@ async def play1v1_cmd(ctx):
                 f"> ─  صلاحية  `Manage Guild`  (إدارة السيرفر)\n"
                 f"> ─  role تبعك في النصف العلوي من الهرم\n"
                 f">    (مطلوب position  `≥ {threshold}`  —  أنت حالياً  `{member_top}`)\n"
-                f"> 💡  استخدم  `{PREFIX}play`  للعب 4v4 العادي  (متاح للجميع)."
+                f"> 💡 Use  `{PREFIX}play`  للعب 4v4 العادي  (متاح للجميع)."
             ),
             color=COLORS["error"],
             timestamp=discord.utils.utcnow()
@@ -5632,7 +5579,7 @@ async def fixrank_cmd(ctx, member: discord.Member = None):
         await ctx.send(embed=discord.Embed(
             title="🔱  Server Owner",
             description=(
-                f"> {target.mention}  →  **RANK `#{level}`**\n"
+                f"> {target.mention} → **RANK `#{level}`**\n"
                 f"──────────────────────\n"
                 f"> 📝  **Target Nickname:**  `{target_nick}`\n"
                 f"> Apply manually:  *Right-click → Edit Profile → Nickname*"
@@ -5644,7 +5591,7 @@ async def fixrank_cmd(ctx, member: discord.Member = None):
     await ctx.send(embed=discord.Embed(
         title="🔧  Rank Applied",
         description=(
-            f"> {target.mention}  →  **RANK `#{level}`**"
+            f"> {target.mention} → **RANK `#{level}`**"
         ),
         color=COLORS["success"]
     ))
@@ -5676,7 +5623,7 @@ async def matchinfo_cmd(ctx, lobby_id: int = None):
         title=f"📋  Match  —  `#{lobby_id}`",
         description=(
             f"> 📊  **Status:**  `{lobby['status']}`\n"
-            f"> 🎮  **Mode:**  `{lobby.get('game_mode', DEFAULT_MODE).upper()}`\n"
+            f"> 🎮 Mode:  `{lobby.get('game_mode', DEFAULT_MODE).upper()}`\n"
             f"──────────────────────"
         ),
         color=COLORS["info"]
@@ -6122,7 +6069,7 @@ async def botinfo_cmd(ctx):
     total_text_channels = sum(len(g.text_channels) for g in bot.guilds)
     total_voice_channels = sum(len(g.voice_channels) for g in bot.guilds)
     embed = discord.Embed(
-        title="🤖  Bot Info",
+        title="🤖 Bot Info",
         description=(
             f"> 🔥  **Free Fire Matchmaking Bot**\n"
             f"> نظام ماتشмейكنج متكامل لإدارة مباريات Free Fire\n"
@@ -6547,7 +6494,7 @@ async def reportchannels_cmd(ctx):
             else:
                 embed.add_field(
                     name=f"#{i}  —  ⚠️ محذوف",
-                    value=f"> ❌  Channel ID:  `{cid}`  غير موجود\n> 💡  استخدم  `{PREFIX}removereportchannel`  لتنظيف القائمة",
+                    value=f"> ❌  Channel ID:  `{cid}`  غير موجود\n> 💡 Use  `{PREFIX}removereportchannel`  لتنظيف القائمة",
                     inline=False
                 )
     embed.set_footer(text=f"{BOT_FOOTER}  •  Use !!setreportchannel to add")
@@ -7058,7 +7005,7 @@ async def startvote_cmd(ctx, lobby_id: int = None):
                 description=(
                     f"> Usage:  `{PREFIX}startvote <lobby_id>`\n"
                     f"> أو استخدم  `{PREFIX}startvote`  لو فيه ماتش نشط\n"
-                    f"> 💡  استخدم  `{PREFIX}matches`  لعرض الماتشات النشطة"
+                    f"> 💡 Use  `{PREFIX}matches`  لعرض الماتشات النشطة"
                 ),
                 color=COLORS["error"]
             ), delete_after=15)
@@ -7271,7 +7218,7 @@ async def setlevel_cmd(ctx, target: Union[discord.User, int] = None, level: int 
     await ctx.send(embed=discord.Embed(
         title="✅  Level Updated",
         description=(
-            f"> <@{user_id}>  →  **RANK  `#{level}`**"
+            f"> <@{user_id}> → **RANK  `#{level}`**"
         ),
         color=COLORS["success"]
     ))
@@ -7311,7 +7258,7 @@ async def setpoints_cmd(ctx, target: Union[discord.User, int] = None, points: in
     await ctx.send(embed=discord.Embed(
         title="✅  Points Updated",
         description=(
-            f"> <@{user_id}>  →  **`{points}` points**  (RANK `#{new_level}`)"
+            f"> <@{user_id}> → **`{points}` points**  (RANK `#{new_level}`)"
         ),
         color=COLORS["success"]
     ))
@@ -7392,7 +7339,7 @@ async def general_cmd(ctx):
         f"›  `{PREFIX}play 2v2`  أو  `{PREFIX}play2v2`  —  2v2\n"
         f"›  `{PREFIX}play 3v3`  أو  `{PREFIX}play3v3`  —  3v3\n"
         f"›  `{PREFIX}play 1v1`  أو  `{PREFIX}play1v1`  🔒  (للـ roles العالية)\n"
-        f"›  ⚠️  `{PREFIX}play`  بدون مود  →  رسالة خطأ"
+        f"›  ⚠️  `{PREFIX}play`  بدون مود → رسالة خطأ"
     ), inline=False)
     embed.add_field(name="📊  Stats", value=(
         f"›  `{PREFIX}p`  —  Profile (full stats)\n"
@@ -7409,11 +7356,11 @@ async def general_cmd(ctx):
     embed.add_field(name="🤖  How to Play", value=(
         f"> 1️⃣  Join a ⏳ waiting room\n"
         f"> 2️⃣  `{PREFIX}play 4v4`  in a play channel  (حدد المود!)\n"
-        f"> 3️⃣  Press **Create Lobby**  →  Enter Room Info\n"
+        f"> 3️⃣  Press **Create Lobby** → Enter Room Info\n"
         f"> 4️⃣  Players press **Join Team 1 / 2**\n"
-        f"> 5️⃣  Lobby fills  →  Match starts\n"
+        f"> 5️⃣  Lobby fills → Match starts\n"
         f"> 6️⃣  Host presses **Start Vote**  (or **Cancel Match** to abort)\n"
-        f"> 7️⃣  Vote  →  Result  →  Points + RANK updates\n"
+        f"> 7️⃣  Vote → Result → Points + RANK updates\n"
         f"> 8️⃣  Players return to waiting rooms\n"
         f"\n"
         f"> 💰  **نظام النقاط:**\n"
