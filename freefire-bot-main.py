@@ -1452,30 +1452,39 @@ class Database:
             pass
 
     def recalculate_ranks(self, gid):
-        """🆕 V3 MAX: يُعيد حساب رانك كل اللاعبين.
-        - اللاعبون بنقاط > 0 → رانكهم حسب الترتيب (1, 2, 3...)
-        - اللاعبون بنقاط ≤ 0 → رانك = 1000 + ترتيبهم في المجموعة السالبة (1001, 1002...)
-        ✅ كل لاعب له رانك فريد (ROW_NUMBER مع tie-breaker: points → wins → matches)
-        ☁️ بعد الحساب: يزامن البيانات للسحابة
+        """V4: يُعيد حساب رانك كل اللاعبين.
+        - نقاط > 0 → رانك حسب الترتيب (1, 2, 3...)
+        - نقاط = 0 → رانك 1000 (افتراضي — لم يلعب أو متوازن)
+        - نقاط < 0 → رانك 1001, 1002... (عقوبة، كل لاعب له رانك فريد)
+        ✅ إصلاح ثغرة: اللاعبين الجدد كانوا يأخذون 1001+ بدل 1000
         """
         conn = self.conn()
         try:
+            # 1) لاعبون بنقاط إيجابية → رانك 1, 2, 3...
             active = conn.execute("""
-                SELECT user_id, points, wins, matches_played,
+                SELECT user_id,
                        ROW_NUMBER() OVER (ORDER BY points DESC, kills DESC, mvps DESC, wins DESC, losses ASC, matches_played ASC) as rank_pos
                 FROM players
                 WHERE guild_id=? AND points > 0
             """, (gid,)).fetchall()
             updates = [(p["rank_pos"], p["user_id"]) for p in active]
 
-            zero_or_negative = conn.execute("""
-                SELECT user_id, points, wins, matches_played,
+            # 2) لاعبون بنقاط صفر → رانك 1000 ثابت (الجدد + من صُفّر)
+            zero_pts = conn.execute("""
+                SELECT user_id FROM players
+                WHERE guild_id=? AND points = 0
+            """, (gid,)).fetchall()
+            for p in zero_pts:
+                updates.append((STARTING_LEVEL, p["user_id"]))
+
+            # 3) لاعبون بنقاط سالبة → رانك 1001, 1002... (عقوبة)
+            negative = conn.execute("""
+                SELECT user_id,
                        ROW_NUMBER() OVER (ORDER BY points DESC, kills DESC, mvps DESC, wins DESC, losses ASC, matches_played ASC) as rn
                 FROM players
-                WHERE guild_id=? AND points <= 0
+                WHERE guild_id=? AND points < 0
             """, (gid,)).fetchall()
-
-            for p in zero_or_negative:
+            for p in negative:
                 penalty_rank = STARTING_LEVEL + p["rn"]
                 updates.append((penalty_rank, p["user_id"]))
 
@@ -1495,9 +1504,10 @@ class Database:
                 logger.warning(f"☁️ Cloud sync failed in recalculate_ranks: {e}")
 
     def get_player_rank_position(self, uid, gid):
-        """🆕 V3 MAX: يرجع ترتيب اللاعب في السيرفر (1 = الأعلى نقاط).
-        ✅ الترتيب فريد لكل لاعب (tie-breaker بـ wins DESC, matches_played ASC).
-        ✅ لو اللاعب بنقاط ≤ 0 → RANK = 1000 + عدد الخسارات (1001, 1002, ...)
+        """V4: يرجع ترتيب اللاعب (متوافق مع recalculate_ranks).
+        - نقاط > 0 → ترتيبه بين الإيجابيين (1, 2, 3...)
+        - نقاط = 0 → 1000
+        - نقاط < 0 → 1001+ حسب عدد السلبيين قبله
         """
         conn = self.conn()
         try:
@@ -1507,11 +1517,28 @@ class Database:
             ).fetchone()
             if not player:
                 return None
-            # 🆕 V3 MAX: لو نقاطه ≤ 0 → رانكه = 1000 + عدد الخسارات
-            if player["points"] <= 0:
-                negative_points = abs(player["points"])
-                return STARTING_LEVEL + math.ceil(negative_points / 50)
-            # ✅ عدّ اللاعبين الذين يسبقونه في الترتيب
+            # نقاط صفر → رانك افتراضي
+            if player["points"] == 0:
+                return STARTING_LEVEL
+            # نقاط سالبة → 1001 + ترتيبه بين السلبيين
+            if player["points"] < 0:
+                higher_neg = conn.execute("""
+                    SELECT COUNT(*) FROM players
+                    WHERE guild_id=? AND points < 0 AND (
+                        points > ? OR
+                        (points = ? AND wins > ?) OR
+                        (points = ? AND wins = ? AND matches_played < ?) OR
+                        (points = ? AND wins = ? AND matches_played = ? AND user_id < ?)
+                    )
+                """, (
+                    gid,
+                    player["points"],
+                    player["points"], player["wins"],
+                    player["points"], player["wins"], player["matches_played"],
+                    player["points"], player["wins"], player["matches_played"], uid
+                )).fetchone()[0]
+                return STARTING_LEVEL + higher_neg + 1
+            # نقاط إيجابية → عدّ من فوقه
             higher = conn.execute("""
                 SELECT COUNT(*) FROM players
                 WHERE guild_id=? AND points > 0 AND (
@@ -1527,7 +1554,7 @@ class Database:
                 player["points"], player["wins"], player["matches_played"],
                 player["points"], player["wins"], player["matches_played"], uid
             )).fetchone()[0]
-            return higher + 1  # ترتيبه = عدد من فوقه + 1
+            return higher + 1
         finally:
             pass  # thread-local connection
 
@@ -4897,7 +4924,19 @@ async def on_member_join(member):
         return
     await asyncio.sleep(2)
     player = db.get_or_create_player(member.id, member.guild.id, member.display_name)
-    await update_member_nickname(member, player.get("level", STARTING_LEVEL))
+    # ✅ تحديث النك نيم مباشرة بدون استدعاء update_member_nickname (يتجنب get_or_create_player مرة ثانية)
+    try:
+        if not member.guild.me.guild_permissions.manage_nicknames:
+            return
+        if member.id == member.guild.owner_id:
+            return
+        level = player.get("level", STARTING_LEVEL)
+        original = player.get("original_nickname") or extract_original_nickname(member.display_name) or "Player"
+        new_nick = build_nickname_with_level(original, level)
+        if member.display_name != new_nick:
+            await member.edit(nick=new_nick)
+    except Exception as e:
+        logger.warning(f"on_member_join: nickname update failed for {member.id}: {e}")
 
 
 # 🆕 منع المحظورين من مغادرة فويس التفتيش
@@ -7252,7 +7291,7 @@ async def setpoints_cmd(ctx, target: Union[discord.User, int] = None, points: in
     db.update_player_stats(user_id, ctx.guild.id, points=points)
     db.recalculate_ranks(ctx.guild.id)
     player = db.get_player(user_id, ctx.guild.id)
-    new_level = player.get("level", 50) if player else 50
+    new_level = player.get("level", STARTING_LEVEL) if player else STARTING_LEVEL
     if member:
         await update_member_nickname(member, new_level)
     await ctx.send(embed=discord.Embed(
