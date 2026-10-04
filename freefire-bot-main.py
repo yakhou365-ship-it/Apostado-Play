@@ -1968,8 +1968,7 @@ def create_profile_embed(player, member=None, gid=None):
         timestamp=discord.utils.utcnow()
     )
 
-    if avatar_url:
-        embed.set_thumbnail(url=avatar_url)
+    # V0: لا صور في الـ embed
 
     # V0: التقدم نحو #1
     if pts_to_next > 0:
@@ -4671,8 +4670,7 @@ async def on_ready():
                     timestamp=discord.utils.utcnow()
                 )
                 success_embed.set_footer(text=f"{BOT_FOOTER}  •  V3 MAX AUTO-DETECT")
-                if guild.icon:
-                    success_embed.set_thumbnail(url=guild.icon.url)
+                # V0: لا صور
                 await success_ch.send(embed=success_embed)
                 logger.info(f"  ✅ [AUTO-DETECT] Success message sent to #{success_ch.name} in {guild.name}")
             else:
@@ -5400,7 +5398,6 @@ async def points_cmd(ctx, member: discord.Member = None):
         value=f"`{wr_bar}`  `{player['wins']}/{player['matches_played']}`",
         inline=False
     )
-    embed.set_thumbnail(url=target.display_avatar.url)
     embed.set_author(name="Player Points", icon_url=None)
     embed.set_footer(text=f"{BOT_FOOTER}  •  {rank_title} #{level}")
     embed = apply_branding(embed, ctx.guild)
@@ -5557,7 +5554,6 @@ async def mylevel_cmd(ctx, member: discord.Member = None):
         value=f"`{wr_bar}`  `{player['wins']}/{player['matches_played']}`",
         inline=False
     )
-    embed.set_thumbnail(url=target.display_avatar.url)
     embed.set_author(name="Player Rank", icon_url=None)
     embed.set_footer(text=f"{BOT_FOOTER}  •  {rank_title} #{level}")
     embed = apply_branding(embed, ctx.guild)
@@ -5716,10 +5712,7 @@ async def setup_cmd(ctx):
             )
             rules_embed.set_author(name="Server Rules")
             rules_embed.set_footer(text=f"{BOT_FOOTER}  •  Read carefully")
-            if RULES_IMAGE_URL:
-                rules_embed.set_image(url=RULES_IMAGE_URL)
-            elif guild.icon:
-                rules_embed.set_image(url=guild.icon.url)
+            # V0: لا صور في القواعد
             await rules_ch.send(embed=rules_embed)
         except Exception as e:
             logger.warning(f"Failed to send rules embed: {e}")
@@ -6123,7 +6116,6 @@ async def botinfo_cmd(ctx):
         ),
         inline=False
     )
-    embed.set_thumbnail(url=bot.user.display_avatar.url)
     embed.set_author(name="Bot Information", icon_url=bot.user.display_avatar.url)
     embed.set_footer(text=f"{BOT_FOOTER}  •  Online & Ready")
     embed = apply_branding(embed, ctx.guild)
@@ -6254,7 +6246,6 @@ async def reports_cmd(ctx, member: discord.Member = None):
         color=COLORS["error"] if count >= REPORT_THRESHOLD else COLORS["warning"],
         timestamp=discord.utils.utcnow()
     )
-    embed.set_thumbnail(url=target.display_avatar.url)
     if reports:
         # اعرض آخر 10 بلاغات
         for i, r in enumerate(reports[:10], 1):
@@ -6864,8 +6855,7 @@ async def rules_cmd(ctx):
         color=COLORS["warning"], timestamp=discord.utils.utcnow()
     )
     rules_embed.set_author(name="Server Rules"); rules_embed.set_footer(text=f"{BOT_FOOTER}  •  Read carefully")
-    if RULES_IMAGE_URL: rules_embed.set_image(url=RULES_IMAGE_URL)
-    elif ctx.guild.icon: rules_embed.set_image(url=ctx.guild.icon.url)
+    # V0: لا صور في القواعد
     await ctx.send(embed=rules_embed)
 
 
