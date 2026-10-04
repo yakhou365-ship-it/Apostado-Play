@@ -1,1 +1,1 @@
-web: python freefire-bot-main.py
+web: python main.py
