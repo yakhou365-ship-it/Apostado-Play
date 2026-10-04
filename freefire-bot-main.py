@@ -172,19 +172,14 @@ COLORS = {
 BOT_LOGO_URL = "https://i.imgur.com/8RYMfAE.png"
 BOT_FOOTER = "✨ {server_name} • Dev By Aizen"
 
-# 🆕 صورة ثابتة تظهر في كل ردود البوت (في كل السيرفرات)
-BOT_BANNER_URL = "https://iili.io/CRNXkFe.png"
+# 🚫 صور/GIF معطّلة — تم إزالتها من كل الـ embeds (V0 تصميم نظيف)
+BOT_BANNER_URL = None
 
-# 🆕 صورة القواعد — تظهر في أسفل رسالة !!rules وفي قناة rules
-RULES_IMAGE_URL = "https://iili.io/CRepLH7.png"
+# 🚫 صورة القواعد معطّلة
+RULES_IMAGE_URL = None
 
-# 🆕 GIF مخصص لكل سيرفر — يظهر بدل الصورة الثابتة في السيرفرات المحددة
-SERVER_GIFS = {
-    1504736689610821711: "https://iili.io/CRNXNM7.gif",  # السيرفر الأول
-    1516566061820936242: "https://iili.io/CRObS8F.gif",  # السيرفر الثاني
-    1521654113761235186: "https://iili.io/CrIS3ZX.gif",  # apos vortex
-    1403482656556978196: "https://iili.io/CrISKnn.gif",  # elit hzx
-}
+# 🚫 GIF مخصص لكل سيرفر معطّل
+SERVER_GIFS = {}
 
 # 🆕 MAX: مطابقة بالاسم — تُطبّع Unicode (NFKD) لمطابقة الأسماء الخاصة
 # ⚠️ تم تبديل: APOS MENA ↔ King s
@@ -218,7 +213,7 @@ def get_server_gif(guild):
     return None
 
 def apply_branding(embed, guild):
-    """🆕 يضيف شعار السيرفر أو الـ GIF المخصص + فوتر ديناميكي في كل ردود البوت."""
+    """V0: يضيف فوتر + تاريخ فقط — بدون صور/GIF (تصميم نظيف)."""
     if not guild:
         return embed
     # فوتر ديناميكي حسب اسم السيرفر
@@ -228,21 +223,7 @@ def apply_branding(embed, guild):
         footer_text = BOT_FOOTER
     embed.set_footer(text=footer_text)
     embed.timestamp = discord.utils.utcnow()
-    # 🆕 MAX: استخدم get_server_gif (يدعم ID + الاسم)
-    server_gif = get_server_gif(guild)
-    if server_gif:
-        embed.set_image(url=server_gif)
-        if guild.icon:
-            embed.set_thumbnail(url=guild.icon.url)
-    else:
-        # 🆕 استخدم شعار السيرفر كصورة أسفل كل رد
-        if BOT_BANNER_URL:
-            embed.set_image(url=BOT_BANNER_URL)
-        elif guild.icon:
-            embed.set_image(url=guild.icon.url)
-        # استخدم شعار السيرفر كـ thumbnail أيضاً
-        if guild.icon:
-            embed.set_thumbnail(url=guild.icon.url)
+    # V0: تصميم نظيف — بدون صور أو GIF في أسفل الـ embed
     return embed
 
 # روابط أيقونات احترافية (تستخدم في thumbnails) — لم تعد مستخدمة (apply_branding يستخدم شعار السيرفر)
