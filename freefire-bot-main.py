@@ -7682,8 +7682,8 @@ if __name__ == "__main__":
     # ⚠️ تحذير أمني: التوكن مكتوب كـ fallback للراحة.
     # للحصول على أمان أعلى، يُفضّل استخدام متغير البيئة DISCORD_TOKEN فقط
     # وحذف التوكن من هنا نهائياً.
-    TOKEN = os.getenv("DISCORD_TOKEN") or "MTUxNzU4NjA4MTk3NTg5NDAxNw.G8aIVU.rtExW4jn8oqWqUswklDkoAG97PHhlyWBx9ymNw"
+    TOKEN = os.getenv("DISCORD_TOKEN")
     if not TOKEN:
-        raise RuntimeError("DISCORD_TOKEN required")
+        raise RuntimeError("❌ DISCORD_TOKEN environment variable is required! Set it on Railway/Render.")
     logger.info("🚀 Starting Free Fire Bot v4.0 CLEAN...")
     bot.run(TOKEN)
