@@ -655,6 +655,34 @@ async def setup_rank_roles_permissions(guild):
     logger.info(f"✅ Rank roles setup complete in {guild.name}")
 
 
+def sanitize_user_text(text, max_length=200):
+    """🔒 يمنع مدخلات اللاعبين من اختلاق Discord mentions.
+
+    السبب: مدخلات مثل سبب البلاغ تُخزَّن في DB ثم تُطبع داخل
+    `notify_admins()` / `!!reports` — فلو سمحنا بـ `<@&id>` أو `@everyone`
+    يقدر أي لاعب يعمل mass-ping للأدمنز أو أي role، ويكسر حد 1024 حرف
+    في حقل الـ embed ويسبب HTTPException 400.
+
+    ✅FIX: نكسر بنية الـ mention بإدراج zero-width space بعد `‎@`
+    (يبقى النص مقروء بصرياً لكنه ما يفتح mention).
+    """
+    if not text:
+        return None
+    cleaned = str(text)
+    zws = "\u200b"  # zero-width space
+    # <@123> / <@!123> / <@&123>  ->  <@ZWS 123>  (ما عادش mention)
+    cleaned = re.sub(r"<([@!&#]+)(\d+)>", lambda m: f"<{m.group(1)}{zws}{m.group(2)}>", cleaned)
+    # @everyone / @here  ->  @ZWS everyone  (ما عادش mention)
+    cleaned = re.sub(
+        r"@(everyone|here)\b",
+        lambda m: f"@{zws}{m.group(1)}",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = " ".join(cleaned.split()).strip()
+    return cleaned[:max_length] or None
+
+
 async def notify_admins(guild, title, description, color=None):
     """🆕 يرسل رسالة تاغ للأدمنز وكل الـ roles العالية في قناة match-results.
     ✅ يُتاغ: الأونر + كل من لديه Administrator / Manage Guild + أعلى role في السيرفر.
@@ -1021,7 +1049,12 @@ class Database:
         conn = self.conn()
         try:
             conn.execute("INSERT INTO play_channels(guild_id,channel_id) VALUES(?,?)", (gid, cid))
-            conn.commit(); return True
+            conn.commit()
+            # ✅ FIX (MEDIUM): get_play_channels يخزّن cache تحت `play_ch_{gid}`،
+            # ولم يكن أي add/remove يمسحه ⇒ cache قديم حتى إعادة التشغيل
+            # (يؤثّر على RematchView و notify_admins التي تختار play_channels[0]).
+            self._channels_cache.pop(f"play_ch_{gid}", None)
+            return True
         except sqlite3.IntegrityError:
             return False
         finally:
@@ -1031,7 +1064,10 @@ class Database:
         conn = self.conn()
         try:
             cur = conn.execute("DELETE FROM play_channels WHERE guild_id=? AND channel_id=?", (gid, cid))
-            conn.commit(); return cur.rowcount > 0
+            conn.commit()
+            # ✅ FIX (MEDIUM): نفس السبب — امسح cache قناة الـ play
+            self._channels_cache.pop(f"play_ch_{gid}", None)
+            return cur.rowcount > 0
         finally:
             pass  # thread-local connection
 
@@ -2669,6 +2705,21 @@ async def auto_trigger_vote(lobby_id, guild):
         first_joiner_id = lobby.get("first_joiner_id")
         mc = db.get_match_channels(lobby_id)
         if not mc:
+            # ✅ FIX (CRITICAL): ما فيه قنوات ماتش = ما راح ينعرض أي voting UI،
+            # وما في timer بيشتغل. لو تركنا الحالة 'voting' اللاعبون يضلون محبوسين
+            # في اللوبي للأبد (get_player_active_lobby يحسب 'voting' كـ active).
+            logger.error(
+                f"❌ auto_trigger_vote: lobby {lobby_id} has no match_channels — "
+                f"reverting status to 'started'"
+            )
+            db.update_lobby_status(lobby_id, "started")
+            await notify_admins(
+                guild,
+                "❌ فشل إطلاق التصويت",
+                f"> 🐛  اللوبي `#{lobby_id}` ما لقى قنوات الماتش — ما راح ينعرض التصويت.\n"
+                f"> 🔄  رجّعنا الحالة إلى `started`.\n"
+                f"> 💡  جرّب  `!!startvote {lobby_id}`  أو  `!!resolve {lobby_id} team1|team2`"
+            )
             return
 
         t1m = " ".join([f"<@{p}>" for p in lobby["team1_players"]])
@@ -2710,18 +2761,46 @@ async def auto_trigger_vote(lobby_id, guild):
 
         general_text = guild.get_channel(mc["team1_text_id"])
         vote_msg_id = None
-        if general_text:
-            mvp_view = MvpVoteView(
-                lobby_id, guild, creator_id, first_joiner_id,
-                lobby["team1_players"], lobby["team2_players"]
+        if not general_text:
+            # ✅ FIX (HIGH): نفس المشكلة — بدون شات ما في رسالة تصويت = اللوبي محبوس
+            logger.error(
+                f"❌ auto_trigger_vote: lobby {lobby_id} match text channel "
+                f"({mc['team1_text_id']}) not found — reverting status to 'started'"
             )
+            db.update_lobby_status(lobby_id, "started")
+            await notify_admins(
+                guild,
+                "❌ فشل إطلاق التصويت",
+                f"> 🐛  قناة الماتش `{mc['team1_text_id']}` مفقودة في السيرفر "
+                f"`{guild.name}` — ما راح ينعرض التصويت.\n"
+                f"> 🔄  رجّعنا الحالة إلى `started`.\n"
+                f"> 💡  جرّب  `!!startvote {lobby_id}`  أو  `!!resolve {lobby_id} team1|team2`"
+            )
+            return
+        mvp_view = MvpVoteView(
+            lobby_id, guild, creator_id, first_joiner_id,
+            lobby["team1_players"], lobby["team2_players"]
+        )
+        try:
             vote_msg = await general_text.send(
                 f"🔱 {t1m} {t2m}",
                 embed=mvp_embed,
                 view=mvp_view
             )
-            db.set_vote_message(lobby_id, vote_msg.id)
-            vote_msg_id = vote_msg.id
+        except discord.HTTPException as e:
+            # ✅ FIX (HIGH): فشل الإرسال = نفس الحبس — رجّع الحالة وبلّغ الأدمن
+            logger.exception(f"❌ auto_trigger_vote: failed to send vote message (lobby {lobby_id}): {e}")
+            db.update_lobby_status(lobby_id, "started")
+            await notify_admins(
+                guild,
+                "❌ فشل إرسال رسالة التصويت",
+                f"> 🐛  **الخطأ:**  `{str(e)[:200]}`\n"
+                f"> 🔄  رجّعنا حالة اللوبي `#{lobby_id}` إلى `started`.\n"
+                f"> 💡  جرّب  `!!startvote {lobby_id}`  أو  `!!resolve {lobby_id} team1|team2`"
+            )
+            return
+        db.set_vote_message(lobby_id, vote_msg.id)
+        vote_msg_id = vote_msg.id
 
         db.save_vote_metadata(lobby_id, creator_id, first_joiner_id, vote_msg_id)
     except Exception as e:
@@ -3028,7 +3107,8 @@ class ReportReasonModal(discord.ui.Modal, title="⚠️  سبب البلاغ"):
 
     async def on_submit(self, interaction):
         try:
-            reason = str(self.reason_input.value).strip() if self.reason_input.value else None
+            # 🔒 نظّف السبب قبل التخزين (يمنع mass-ping + كسر حد Discord)
+            reason = sanitize_user_text(self.reason_input.value) if self.reason_input.value else None
             added, total = db.add_report(
                 self.guild_id, self.reporter_id, self.reported_id,
                 lobby_id=self.lobby_id, reason=reason
@@ -4984,6 +5064,22 @@ class CreateLobbyView(discord.ui.View):
 
     @discord.ui.button(label="📋 Create Lobby", style=discord.ButtonStyle.success, custom_id="create_lobby_btn")
     async def create_lobby_btn(self, interaction, button):
+        # ✅ FIX (MEDIUM): الـ View مسجّلة persistent عند on_ready بـ ctx=None.
+        # أي رسالة "Create Lobby" قديمة (من قبل إعادة تشغيل البوت) تضغط زرها →
+        # self.ctx كان None ⇒ AttributeError غير معالَج.
+        if self.ctx is None:
+            await interaction.response.send_message(
+                embed=discord.Embed(
+                    title="⏳  انتهت صلاحية الرسالة",
+                    description=(
+                        "> 🔄  البوت أُعيد تشغيله — الرسالة دي ما عادتش صالحة anymore.\n"
+                        f"> 💡  أعد الأمر  `{PREFIX}play {self.mode.upper()}`  لإنشاء روم جديد."
+                    ),
+                    color=COLORS["warning"]
+                ),
+                ephemeral=True
+            )
+            return
         if interaction.user.id != self.ctx.author.id:
             await interaction.response.send_message("❌ Not your command!", ephemeral=True)
             return
@@ -5112,6 +5208,11 @@ intents.reactions = True
 intents.dm_messages = True
 
 bot = commands.Bot(command_prefix=PREFIX, intents=intents, help_command=None)
+
+# 🆕 حاوية للـ background task الدوري (أُضيفت في الفحص الأمني 2026-10)
+# السبب: كان `asyncio.create_task(periodic_rank_sync())` يُنشئ task جديدة عند كل
+# on_ready (= كل reconnect) ⇒ عدة حلقات متوازية تجهد Discord API.
+_periodic_rank_task = None
 
 
 def is_admin_check(ctx):
@@ -5314,8 +5415,23 @@ async def on_ready():
                 break
             except Exception as e:
                 logger.warning(f"Periodic rank sync error: {e}")
-    
-    asyncio.create_task(periodic_rank_sync())
+
+    # ✅ FIX (HIGH): `on_ready` ينفَذ من جديد عند كل reconnect، وقبل التعديل كان
+    # كل نداء ينشئ task جديد بلا أي فحص ⇒ N loops متوازية بعد N انقطاع،
+    # وكلها تنفّذ recalculate_ranks + sync_all_players_roles (API calls مكررة
+    # ⇒ rate limits + بطء). الآن نضمن task واحدة فقط.
+    global _periodic_rank_task
+    if _periodic_rank_task is not None and not _periodic_rank_task.done():
+        logger.warning(
+            "⚠️ Periodic rank sync task still running — cancelling the duplicate "
+            "(previous on_ready run)"
+        )
+        _periodic_rank_task.cancel()
+        try:
+            await _periodic_rank_task
+        except (asyncio.CancelledError, Exception):
+            pass
+    _periodic_rank_task = asyncio.create_task(periodic_rank_sync())
     logger.info("🔄 Periodic rank sync started (every 60 seconds)")
 
 
@@ -5676,7 +5792,27 @@ async def on_message(message):
     if message.author.bot:
         return
     if isinstance(message.channel, discord.DMChannel):
-        await bot.process_commands(message)
+        # ✅ FIX (MEDIUM): `ctx.guild is None` في DM ⇒ أي أمر غير محمي يطبع
+        # AttributeError في اللوقز بدون أي رسالة للمستخدم. نمنع الأوامر غير المدعومة.
+        content = message.content.strip()
+        parts = content.split()
+        invoked = parts[0].lower() if parts else ""
+        # ✅ `!!serverleave` فقط: هو الأمر الوحيد المصمَّم لـ DM عمداً.
+        #    `!!help` يستدعي apply_branding(ctx.guild) ⇒ None ⇒ AttributeError،
+        #    فبقي خارج القائمة (سلوكه السابق: خطأ في اللوقز بدون رد — disparه الآن).
+        dm_safe = {f"{PREFIX}serverleave"}
+        if invoked in dm_safe:
+            await bot.process_commands(message)
+            return
+        await message.channel.send(embed=discord.Embed(
+            title="📡  الأوامر داخل السيرفر فقط",
+            description=(
+                f"> هذه الرسالة خاصة (DM) — أوامر البوت كلها تحتاج قناة داخل السيرفر.\n"
+                f"> 💡  افتح قناة الأوامر واكتب  `{PREFIX}help`  لعرض كل الأوامر.\n"
+                f"> 📌  أوامر تعمل هنا:  `{PREFIX}serverleave`"
+            ),
+            color=COLORS["info"]
+        ), delete_after=20)
         return
     if not message.guild:
         return
@@ -6888,6 +7024,9 @@ async def report_cmd(ctx, member: discord.Member = None, *, reason: str = None):
             color=COLORS["error"]
         ), delete_after=10)
         return
+    # 🔒 نظّف السبب قبل التخزين: يمنع mass-ping عبر <@&id> / @everyone
+    #    ويمنع كسر حد 1024 حرف في حقل الـ embed (HTTPException 400)
+    reason = sanitize_user_text(reason, max_length=200)
     # سجل البلاغ
     added, total = db.add_report(ctx.guild.id, ctx.author.id, member.id, reason=reason)
     if not added:
