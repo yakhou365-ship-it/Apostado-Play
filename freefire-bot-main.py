@@ -92,7 +92,12 @@ LOBBY_TIMEOUT_SECONDS = 1800
 
 # 🆕 نظام تصويت MVP الجماعي — أول شخصين من كل فريق يصوّتون معاً
 MVP_VOTERS_PER_TEAM = 2      # عدد المصوّنين من كل فريق (المجموع 4)
-MVP_CONSENSUS_NEEDED = 3     # عدد الأصوات المطلوب达成 اتفاق (من أصل 4)
+MVP_CONSENSUS_NEEDED = 3     # عدد الأصوات المطلوبة للاتفاق (من أصل 4)
+
+# 🆕 معرّف البناء — Railway يضع RAILWAY_GIT_COMMIT_SHA تلقائياً عند النشر من Git
+#    يُعرض في  !!botinfo  للتأكد أي نسخة شغّالة فعلياً (بدون هذا ما نعرف إذا نُشر التعديل)
+BUILD_ID = os.getenv("RAILWAY_GIT_COMMIT_SHA") or os.getenv("BOT_BUILD_ID") or "local-dev"
+BUILD_SHA = str(BUILD_ID)[:7]
 
 # 🆕 إعدادات إعادة محاولة تغيير الأدوار (إصلاح ابتلاع الأخطاء بصمت)
 ROLE_OP_RETRY_ATTEMPTS = 3   # عدد المحاولات عند rate limit / خطأ شبكة مؤقت
@@ -6783,7 +6788,8 @@ async def botinfo_cmd(ctx):
         timestamp=discord.utils.utcnow()
     )
     embed.add_field(name="📛  Name", value=f"```fix\n{bot.user.name}\n```", inline=True)
-    embed.add_field(name="🏷️  Version", value=f"```fix\nv4.0 CLEAN\n```", inline=True)
+    embed.add_field(name="🏷️  Version", value=f"```fix\nv4.1 MVP-COLLECTIVE\n```", inline=True)
+    embed.add_field(name="🔨  Build", value=f"```fix\n{BUILD_SHA}\n```", inline=True)
     embed.add_field(name="⌨️  Prefix", value=f"```fix\n{PREFIX}\n```", inline=True)
     embed.add_field(name="🏠  Servers", value=f"```fix\n{len(bot.guilds)}\n```", inline=True)
     embed.add_field(name="👥  Users", value=f"```fix\n{total_members:,}\n```", inline=True)
@@ -6800,10 +6806,11 @@ async def botinfo_cmd(ctx):
         name="🎮  Features",
         value=(
             f"> 🏆  4 Game Modes (1v1, 2v2, 3v3, 4v4)\n"
-            f"> 🗳️  Auto Vote System\n"
+            f"> 🗳️  Group MVP Voting (4 voters, `{MVP_CONSENSUS_NEEDED}` consensus)\n"
             f"> 🏅  Dynamic Rank System\n"
             f"> 📊  Live Leaderboard\n"
-            f"> ❌  Cancel Match Button"
+            f"> 🛡️  Auto Rules Channel (`{RULES_CHANNEL_NAME}`)\n"
+            f"> ⏱️  Auto-hide 'Create Lobby' after `{CREATE_PROMPT_DELETE_AFTER}s`"
         ),
         inline=False
     )
