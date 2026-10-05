@@ -90,6 +90,14 @@ DEFAULT_MODE = "4v4"
 VOTE_TIMEOUT_SECONDS = 60   # ✅ MAX: تقليل من 120 إلى 60 ثانية (دقيقة واحدة)
 LOBBY_TIMEOUT_SECONDS = 1800
 
+# 🆕 نظام تصويت MVP الجماعي — أول شخصين من كل فريق يصوّتون معاً
+MVP_VOTERS_PER_TEAM = 2      # عدد المصوّنين من كل فريق (المجموع 4)
+MVP_CONSENSUS_NEEDED = 3     # عدد الأصوات المطلوب达成 اتفاق (من أصل 4)
+
+# 🆕 إعدادات إعادة محاولة تغيير الأدوار (إصلاح ابتلاع الأخطاء بصمت)
+ROLE_OP_RETRY_ATTEMPTS = 3   # عدد المحاولات عند rate limit / خطأ شبكة مؤقت
+ROLE_OP_RETRY_BASE_DELAY = 1.5  # ثواني الانتظار الأساسية (exponential backoff)
+
 # 🆕 نظام البلاغات والحظر
 REPORT_THRESHOLD = 6            # عدد البلاغات اللازمة للحظر التلقائي
 REPORT_CHANNELS_COUNT = 3       # عدد الفويسات التي يستطيع المحظور دخولها
@@ -414,11 +422,92 @@ async def create_role_if_not_exists(guild, role_name, color):
         return None
 
 
+async def role_change_with_retry(member, role, *, add: bool, reason: str, attempts: int = None):
+    """🆕 ينفّذ add_roles / remove_roles مع إعادة محاولة ذكية — بدل ابتلاع الأخطاء بصمت.
+
+    ✅ يُرجع (ok: bool, permanent_error: bool) بدل None:
+       • rate limit (429) أو خطأ شبكة مؤقت  → إعادة محاولة بـ exponential backoff
+       • discord.Forbidden / HierarchyError  → خطأ **دائم** (needs admin fix)
+       • discord.NotFound                  → الـ role/العضو انحذف، ما ينفع نعيد
+
+    ⚠️ ما يرمي Exceptions — والمصنّف يمنع ابتلاع الأخطاء بصمت.
+    """
+    if attempts is None:
+        attempts = ROLE_OP_RETRY_ATTEMPTS
+    action = "إضافة" if add else "سحب"
+    action_api = "add_roles" if add else "remove_roles"
+    delay = ROLE_OP_RETRY_BASE_DELAY
+    last_exc = None
+
+    for attempt in range(1, attempts + 1):
+        try:
+            if add:
+                await member.add_roles(role, reason=reason)
+            else:
+                await member.remove_roles(role, reason=reason)
+            logger.info(f"✅ {action} role {role.name!r} → {member.display_name} ({action_api}, محاولة {attempt}/{attempts})")
+            return True, False
+
+        except discord.NotFound:
+            logger.warning(
+                f"⚠️ NotFound في {action_api}: role={role.name!r} member={member.id} "
+                f"(الـ role أو العضو انحذف — تخطّي بلا إعادة)"
+            )
+            return False, False
+
+        except discord.Forbidden as e:
+            msg = str(e).lower()
+            hierarchy = ("highest" in msg) or ("hierarchy" in msg)
+            logger.error(
+                f"❌ Forbidden في {action_api}: role={role.name!r} member={member.id} "
+                f"in_guild={getattr(member.guild, 'name', '?')} | hierarchy={hierarchy} | {e}"
+            )
+            return False, True
+
+        except discord.HTTPException as e:
+            last_exc = e
+            status = getattr(e, "status", None) or getattr(e, "code", None)
+            if status == 429:
+                logger.warning(
+                    f"⏳ Rate limit في {action_api} (محاولة {attempt}/{attempts}): role={role.name!r} member={member.id}"
+                )
+            else:
+                logger.warning(
+                    f"⚠️ HTTP {status} في {action_api} (محاولة {attempt}/{attempts}): "
+                    f"role={role.name!r} member={member.id} | {e}"
+                )
+            if attempt < attempts:
+                sleep_for = getattr(e, "retry_after", None)
+                try:
+                    sleep_for = float(sleep_for) if sleep_for is not None else delay
+                except (TypeError, ValueError):
+                    sleep_for = delay
+                await asyncio.sleep(sleep_for)
+                delay *= 2
+                continue
+            logger.error(
+                f"❌ فشل {action_api} بعد {attempts} محاولات: role={role.name!r} member={member.id} | {e}"
+            )
+            return False, False
+
+        except Exception as e:
+            logger.exception(
+                f"❌ خطأ غير متوقع في {action_api}: role={role.name!r} member={member.id} | {e}"
+            )
+            return False, False
+
+    logger.error(f"❌ {action_api} نفد بلا نتيجة: role={role.name!r} member={member.id} | last={last_exc}")
+    return False, False
+
+
 async def sync_player_role(guild, member, rank):
     """🆕 يزامن role اللاعب حسب ترتيبه.
-    - يعطيه الـ role المناسب لترتيبه
-    - يسحب منه أي role من tiers أعلى/أقل لم يعد يستحقه
-    - يحدّث صلاحيات SoundBoard و Waiting Prv
+
+    ✅ إصلاح نهائي:
+       • كل عملية add/remove تمر عبر role_change_with_retry (rate limit + logging)
+       • **إذا فشل سحب الـ role القديم → ما نضيف الـ role الجديد أبداً**
+         (يمنع تراكم أكثر من Rank Role على نفس اللاعب)
+       • خطأ Forbidden الدائم → تاغ الأدمن مع رسالة تشرح السبب
     """
     if not member or member.bot:
         return
@@ -427,33 +516,85 @@ async def sync_player_role(guild, member, rank):
     # اجمع كل أسماء الـ roles الخاصة بالألقاب
     title_role_names = {tier: data["name"] for tier, data in RANK_TITLES.items()}
 
-    # أزل من اللاعب أي role لقب لم يعد يستحقه
+    # ─────────────────────────────────────────────
+    # 1) أزل من اللاعب أي role لقب لم يعد يستحقه
+    # ─────────────────────────────────────────────
+    removal_failed = []   # أسماء الـ roles التي فشل سحبها
+    permanent_error = None
+
     for tier, role_name in title_role_names.items():
         if tier == target_tier:
             continue  # هذا الـ role اللي نبيه — اتركه
         # لو اللاعب عنده هذا الـ role، اسحبه
-        for role in member.roles:
-            if role.name == role_name:
-                try:
-                    await member.remove_roles(role, reason=f"Rank changed to #{rank} — lost {role_name}")
-                    logger.info(f"📤 Removed role {role_name} from {member.display_name} (now RANK #{rank})")
-                except (discord.HTTPException, discord.Forbidden):
-                    pass
-                break
+        role = discord.utils.get(guild.roles, name=role_name)
+        if role is None:
+            continue
+        if role not in member.roles:
+            continue
+        ok, is_perm = await role_change_with_retry(
+            member, role, add=False,
+            reason=f"Rank changed to #{rank} — lost {role_name}"
+        )
+        if not ok:
+            removal_failed.append(role_name)
+            if is_perm:
+                permanent_error = role_name
+                break   # لا فائدة من إكمال — نفس السبب سي فشل مع كل role
 
-    # أعطِ اللاعب الـ role المناسب لو يستحقه
+    # ─────────────────────────────────────────────
+    # 2) 🔴 حارس منع التراكم — سحب فشل = ما نضيف
+    # ─────────────────────────────────────────────
+    if removal_failed:
+        names = ", ".join(f"`{n}`" for n in removal_failed)
+        logger.error(
+            f"🛑 SKIP add-role لـ {member.display_name} (RANK #{rank}): "
+            f"فشل سحب {names} — لو أضفنا الآن لتراكم أكثر من Rank Role"
+        )
+        bot_position = guild.me.top_role.position if guild.me else 0
+        if permanent_error:
+            await notify_admins(
+                guild,
+                f"🛑 تعذّر مزامنة أدوار لاعب (RANK #{rank})",
+                f"> 👤  **اللاعب:**  {member.mention}  (`{member.id}`)\n"
+                f"> 🏷  **Role لم يُسحب:**  `{permanent_error}`\n"
+                f"> ⚠️  **السبب:**  البوت ما يقدر يسحب هذا الـ role — "
+                f"الـ role **أعلى** من role البوت في الهرمي (Hierarchy)\n"
+                f"> 📊  **Bot role:**  `{guild.me.top_role.name}`  (position `{bot_position}`)\n"
+                f"> 🔧  **الحل:**  إما اسحب `{permanent_error}` لأسفل من role البوت، "
+                f"أو ارفع role البوت فوقه في  `Server Settings → Roles`\n"
+                f"> 🚫  **مؤقتاً:**  ما أضفت له rank role جديد عشان ما يتراكم عليه أكثر من role\n"
+                f"> 📋  **Logs:**  شغّل `{PREFIX}botinfo` أو راجع Railway logs للتفاصيل",
+                color=COLORS["error"]
+            )
+        return  # ❌ لا تضيف أي role جديد — هذا هو الإصلاح الجذري
+
+    # ─────────────────────────────────────────────
+    # 3) أعطِ اللاعب الـ role المناسب لو يستحقه
+    # ─────────────────────────────────────────────
     if target_tier:
         target_role_name = RANK_TITLES[target_tier]["name"]
         # تحقق إن ما عنده بالفعل
-        has_role = any(r.name == target_role_name for r in member.roles)
+        has_role = discord.utils.get(guild.roles, name=target_role_name) in member.roles
         if not has_role:
             role = await create_role_if_not_exists(guild, target_role_name, RANK_TITLES[target_tier]["color"])
             if role:
-                try:
-                    await member.add_roles(role, reason=f"Rank #{rank} — earned {target_role_name}")
-                    logger.info(f"📥 Added role {target_role_name} to {member.display_name} (now RANK #{rank})")
-                except (discord.HTTPException, discord.Forbidden):
-                    pass
+                ok, is_perm = await role_change_with_retry(
+                    member, role, add=True,
+                    reason=f"Rank #{rank} — earned {target_role_name}"
+                )
+                if not ok and is_perm:
+                    bot_position = guild.me.top_role.position if guild.me else 0
+                    await notify_admins(
+                        guild,
+                        f"🛑 تعذّر إعطاء rank role للاعب (RANK #{rank})",
+                        f"> 👤  **اللاعب:**  {member.mention}  (`{member.id}`)\n"
+                        f"> 🏷  **Role:**  `{target_role_name}`\n"
+                        f"> ⚠️  **السبب:**  البوت ما يقدر يعطي هذا الـ role — "
+                        f"الـ role **أعلى** من role البوت في الهرمي (Hierarchy)\n"
+                        f"> 📊  **Bot role:**  `{guild.me.top_role.name}`  (position `{bot_position}`)\n"
+                        f"> 🔧  **الحل:**  ارفع role البوت فوق `{target_role_name}` في  `Server Settings → Roles`",
+                        color=COLORS["error"]
+                    )
 
 
 async def sync_all_players_roles(guild):
@@ -495,8 +636,14 @@ async def setup_rank_roles_permissions(guild):
                         overwrite.connect = True
                         overwrite.view_channel = True
                         await ch.set_permissions(role, overwrite=overwrite, reason="Free Fire Bot — Rank title permissions")
-                    except (discord.HTTPException, discord.Forbidden):
-                        pass
+                        logger.info(f"🔓 Permissions granted: {role.name} → #{ch.name}")
+                    except discord.Forbidden as e:
+                        logger.error(
+                            f"❌ Forbidden set_permissions: role={role.name!r} channel=#{ch.name} "
+                            f"in_guild={guild.name} | {e}"
+                        )
+                    except discord.HTTPException as e:
+                        logger.warning(f"⚠️ HTTP set_permissions failed: role={role.name!r} channel=#{ch.name} | {e}")
     logger.info(f"✅ Rank roles setup complete in {guild.name}")
 
 
@@ -2429,11 +2576,23 @@ async def auto_trigger_vote(lobby_id, guild):
 
         t1m = " ".join([f"<@{p}>" for p in lobby["team1_players"]])
         t2m = " ".join([f"<@{p}>" for p in lobby["team2_players"]])
+
+        # 🆕 المصوّنين = أول 2 من كل فريق
+        voters = build_mvp_voters(lobby["team1_players"], lobby["team2_players"], creator_id)
+        v1 = [p for p in voters if p in lobby["team1_players"]]
+        v2 = [p for p in voters if p in lobby["team2_players"]]
+
         mvp_embed = discord.Embed(
-            title=f"⚡ MVP Selection — Match `#{lobby_id}`",
+            title=f"🗳️  تصويت MVP الجماعي — Match `#{lobby_id}`",
             description=(
-                f"Match ended. Pick one MVP for each team.\n"
-                f"⏱️ You have **{VOTE_TIMEOUT_SECONDS // 60} minute** to choose."
+                f">Match finished — اختروا الـ MVPs معاً.\n"
+                f"> ⏱️  عندكم **{VOTE_TIMEOUT_SECONDS} ثانية** للتوصل لاتفاق.\n"
+                f"> 🎯  **الاتفاق المطلوب:**  `{MVP_CONSENSUS_NEEDED}` أصوات من `{len(voters)}`\n"
+                f"{separator()}\n"
+                f"> 🔴 **مصوّني Team 1 (أول 2):**  {' '.join(f'<@{p}>' for p in v1) or '*N/A*'}\n"
+                f"> 🟢 **مصوّني Team 2 (أول 2):**  {' '.join(f'<@{p}>' for p in v2) or '*N/A*'}\n"
+                f"> 💡  المصوّنين يدوّرون على  `🏆 MVP WINNER`  و  `✦ MVP LOSER`  من القوائم تحت.\n"
+                f"> ⚠️  **ما اتفقتم؟**  البوت ينقل أدمن لو حاضر بالفويسات، أو يتاغه مع الأوامر."
             ),
             color=COLORS["vote"],
             timestamp=discord.utils.utcnow()
@@ -2448,16 +2607,7 @@ async def auto_trigger_vote(lobby_id, guild):
             value=t2m or "*No players*",
             inline=True
         )
-        mvp_embed.add_field(
-            name="📋 How does it work?",
-            value=(
-                f"> 🏅 Winner MVP is chosen by the host.\n"
-                f"> ✦ Loser MVP is chosen by the first joiner.\n"
-                f"> ⚡ Points apply automatically."
-            ),
-            inline=False
-        )
-        mvp_embed.set_author(name="MVP Selection", icon_url=None)
+        mvp_embed.set_author(name="MVP Voting", icon_url=None)
         mvp_embed.set_footer(text=f"{BOT_FOOTER}  •  Match #{lobby_id}")
         mvp_embed = apply_branding(mvp_embed, guild)
 
@@ -3656,13 +3806,208 @@ class MvpSelectionView(discord.ui.View):
         )
 
 
+# ============================================================
+# 🆕 نظام تصويت MVP الجماعي — أول شخصين من كل فريق
+# ============================================================
+def build_mvp_voters(team1_players, team2_players, creator_id=None):
+    """🆕 يبني قائمة المصوّنين: أول شخصين من كل فريق.
+    • الفريق 1:  منشئ الروم أولاً، ثم شريكه (وترتيب الدخول)
+    • الفريق 2:  أول من دخل، ثم تاليه
+    • لو المود صغير (1v1 / 2v2) نكمل من البقية حتى لا يقل العدد عن 2
+    """
+    t1 = list(team1_players or [])
+    t2 = list(team2_players or [])
+    cid = creator_id
+
+    # رتّب منشئ الروم أولاً داخل فريقه
+    t1_ordered = ([cid] if cid in t1 else []) + [p for p in t1 if p != cid]
+    t2_ordered = ([cid] if cid in t2 else []) + [p for p in t2 if p != cid]
+
+    voters = []
+    for p in t1_ordered[:MVP_VOTERS_PER_TEAM]:
+        if p not in voters:
+            voters.append(p)
+    for p in t2_ordered[:MVP_VOTERS_PER_TEAM]:
+        if p not in voters:
+            voters.append(p)
+
+    # مود صغير: أكمل من باقي اللاعبين
+    if len(voters) < 2:
+        for p in t1_ordered + t2_ordered:
+            if p not in voters:
+                voters.append(p)
+    return voters
+
+
+def _collect_admin_members(guild):
+    """🆕 يرجع كل الأعضاء ذوي صلاحيات الأدمن (A+ / Manage Guild / ADMIN_ROLE_NAME / الأونر)."""
+    admins = {}
+    for role in guild.roles:
+        if role == guild.default_role or role.is_bot_managed() or role.is_integration():
+            continue
+        if role.permissions.administrator or role.permissions.manage_guild:
+            for m in role.members:
+                if not m.bot:
+                    admins[m.id] = m
+    for role in guild.roles:
+        if role.name.lower() == ADMIN_ROLE_NAME.lower():
+            for m in role.members:
+                if not m.bot:
+                    admins[m.id] = m
+    if guild.owner and not guild.owner.bot:
+        admins[guild.owner.id] = guild.owner
+    return list(admins.values())
+
+
+async def escalate_mvp_dispute(guild, lobby_id, reason_detail, *, team1_players=None, team2_players=None, channel=None):
+    """🆕 لا يوجد تفاهم بين المصوّرين → يُحال للأدمن (حسب طلبك).
+
+    السلوك:
+      1) لو فيه أدمن **حاضر الآن** بالفويسات الخاصة باللاعبين
+         → البوت ينقله عند اللاعبين ويبلّغه بالأوامر المناسبة في نفس المكان.
+      2) لو ما فيه أدمن حاضر
+         → تاغ الأدمن + تسليمه الأوامر المناسبة بالضبط لحل المشكلة.
+    """
+    try:
+        admins = _collect_admin_members(guild)
+        mc = db.get_match_channels(lobby_id)
+
+        # ── فويسات التفتيش الخاصة (Waiting Prv) ──
+        prv_ids = set()
+        for cid in db.get_waiting_rooms(guild.id):
+            vc = guild.get_channel(cid)
+            if vc and isinstance(vc, discord.VoiceChannel) and WAITING_PRV_CATEGORY_HINT.lower() in vc.name.lower():
+                prv_ids.add(vc.id)
+
+        t1v_id = mc.get("team1_voice_id") if mc else None
+        t2v_id = mc.get("team2_voice_id") if mc else None
+        t1_text_id = mc.get("team1_text_id") if mc else None
+        t2_text_id = mc.get("team2_text_id") if mc else None
+
+        # ── أين اللاعبين الآن؟ ──
+        players_voice = None
+        for cid in (t1v_id, t2v_id):
+            vc = guild.get_channel(cid) if cid else None
+            if vc and isinstance(vc, discord.VoiceChannel) and vc.members:
+                players_voice = vc
+                break
+        if players_voice is None:
+            lobby = db.get_lobby(lobby_id) or {}
+            ch = guild.get_channel(lobby.get("channel_id")) if lobby.get("channel_id") else None
+            if ch and isinstance(ch, discord.VoiceChannel):
+                players_voice = ch
+
+        # ── الأدمنز الحاضرون بالفويسات الخاصة ──
+        present = []
+        for m in admins:
+            if m.voice and m.voice.channel:
+                cid = m.voice.channel.id
+                if cid in prv_ids or (t1v_id and cid == t1v_id) or (t2v_id and cid == t2v_id):
+                    present.append(m)
+
+        # ── تبديل فرز ──
+        w_tally, l_tally = {}, {}
+        if present:
+            moves, errs = [], []
+            for m in present:
+                dest = players_voice or m.voice.channel
+                try:
+                    if dest and m.voice.channel.id != dest.id:
+                        await m.move_to(dest)
+                    moves.append((m, dest))
+                    logger.info(f"🚨 MVP dispute #{lobby_id}: pulled admin {m.display_name} → #{dest.name if dest else 'N/A'}")
+                except discord.Forbidden as e:
+                    errs.append(f"`{m.display_name}` — {e}")
+                    logger.error(f"❌ Forbidden move admin (MVP dispute): admin={m.id} dest={dest} | {e}")
+                except discord.HTTPException as e:
+                    errs.append(f"`{m.display_name}` — {e}")
+                    logger.warning(f"⚠️ HTTP move admin (MVP dispute): admin={m.id} | {e}")
+
+            mentions = " ".join(m.mention for m, _ in moves)
+            where = moves[0][1] if moves else None
+            embed = discord.Embed(
+                title=f"🚨 تعذّر الاتفاق على MVP — الماتش `#{lobby_id}`",
+                description=(
+                    f"{mentions}\n"
+                    f"> ⚠️  **ما في تفاهم بين المصوّنين** — نطلب تدخل أحد الأدمنز.\n"
+                    f"> 📌  **السبب:**  {reason_detail}\n"
+                    f"{separator()}\n"
+                    f"> 👥  **المصوّنين (أول 2 من كل فريق):**\n"
+                    f"> ─  Team 1 🔴:  {' '.join(f'<@{p}>' for p in (team1_players or [])[:MVP_VOTERS_PER_TEAM]) or '*N/A*'}\n"
+                    f"> ─  Team 2 🟢:  {' '.join(f'<@{p}>' for p in (team2_players or [])[:MVP_VOTERS_PER_TEAM]) or '*N/A*'}\n"
+                    f"> 🗳  **التصويت:**\n"
+                    f"> ─  🏆 Winner:  " + (", ".join(f"**{c}**×<@{p}>" for p, c in sorted(w_tally.items(), key=lambda x: -x[1])) or "*لا توجد أصوات*") + "\n"
+                    f"> ─  ✦ Loser:  " + (", ".join(f"**{c}**×<@{p}>" for p, c in sorted(l_tally.items(), key=lambda x: -x[1])) or "*لا توجد أصوات*")
+                ),
+                color=COLORS["error"],
+                timestamp=discord.utils.utcnow()
+            )
+            embed.add_field(
+                name="🔧  الأمر المطلوب منك",
+                value=(
+                    f"> `{PREFIX}w {lobby_id} @user`  —  عينِ MVPWINNER\n"
+                    f"> `{PREFIX}l {lobby_id} @user`  —  عينِ MVPLOSER\n"
+                    f"> 📌  لازم من فريقين مختلفين — بـ `!!w` + `!!l` بتُطبَّق النقاط تلقائياً"
+                ),
+                inline=False
+            )
+            embed.set_footer(text=f"{BOT_FOOTER}  • .Admin action required")
+            embed = apply_branding(embed, guild)
+
+            # أرسل في قناة الفريق المرتبط بالفويس اللي وصله الأدمن
+            sent = False
+            if where:
+                text_id = t2_text_id if where.id == t2v_id else t1_text_id
+                txt = guild.get_channel(text_id) if text_id else None
+                if txt:
+                    await txt.send(content=mentions, embed=embed)
+                    sent = True
+            if not sent and channel:
+                await channel.send(content=mentions, embed=embed)
+                sent = True
+            if not sent:
+                await notify_admins(guild, f"🚨 تعذّر الاتفاق على MVP — `#{lobby_id}`",
+                                    f"> 🛑  **فشل الإرسال للقنوات** — راجع صلاحيات البوت\n"
+                                    f"> 📌  {reason_detail}")
+            if errs:
+                logger.warning(f"⚠️ MVP dispute #{lobby_id}: بعض الأدمنز ما انقلوا — {'; '.join(errs)}")
+            return moves
+
+        # ── 2) ما فيه أدمن حاضر → تاغ + أوامر ──
+        await notify_admins(
+            guild,
+            f"🚨 تعذّر الاتفاق على MVP — الماتش `#{lobby_id}`",
+            f"> ⚠️  **ما في تفاهم بين المصوّنين** وما فيه أدمن حاضر بالفويسات.\n"
+            f"> 📌  **السبب:**  {reason_detail}\n"
+            f"> 👥  **المصوّنين:**  "
+            f"Team 1 🔴 {' '.join(f'<@{p}>' for p in (team1_players or [])[:MVP_VOTERS_PER_TEAM])}  |  "
+            f"Team 2 🟢 {' '.join(f'<@{p}>' for p in (team2_players or [])[:MVP_VOTERS_PER_TEAM])}\n"
+            f"> 🗳  **التصويت:**  🏆 " + (", ".join(f"{c}×<@{p}>" for p, c in sorted(w_tally.items(), key=lambda x: -x[1])) or "لا أصوات")
+            + "  |  ✦ " + (", ".join(f"{c}×<@{p}>" for p, c in sorted(l_tally.items(), key=lambda x: -x[1])) or "لا أصوات")
+            + f"\n{separator()}\n"
+            f"> 🔧  **الأوامر المطلوبة:**\n"
+            f"> ─  `{PREFIX}w {lobby_id} @user`  —  عينِ MVP WINNER\n"
+            f"> ─  `{PREFIX}l {lobby_id} @user`  —  عينِ MVP LOSER\n"
+            f"> 💡  لازم يكونو من **فريقين مختلفين** — بت `!!w` + `!!l` بتُطبَّق النقاط تلقائياً"
+        )
+        return []
+    except Exception as e:
+        logger.exception(f"❌ escalate_mvp_dispute failed for lobby {lobby_id}: {e}")
+        try:
+            await notify_admins(guild, f"❌ فشل تحكيم MVP `#{lobby_id}`",
+                                f"> 🐛  `{str(e)[:200]}`")
+        except Exception:
+            pass
+        return []
+
+
 # 🆕 V3 MAX: يحل محل VoteView + MvpSelectionView — لا تصويت للفريق، فقط اختيار MVP
 class MvpVoteView(discord.ui.View):
-    """MVP selection without team voting.
-    - MVP WINNER selected by the room creator (from all match players)
-    - MVP LOSER selected by the first joiner (from all match players)
-    - Winner team is determined by MVP WINNER's team
-    - Points applied automatically when both selections are made
+    """MVP selection without team voting — نظام جماعي.
+    - المصوّنون = أول 2 من كل فريق (4 مصوّنين)
+    - كلهم يختارون MVP WINNER و MVP LOSER
+    - يُطبَّق تلقائياً عند الاتفاق (MVP_CONSENSUS_NEEDED من 4)
+    - إذا ما في تفاهم → يُحال للأدمن (ينقله أو يتاغه)
     """
     def __init__(self, lobby_id, guild, creator_id, first_joiner_id, team1_players, team2_players):
         super().__init__(timeout=VOTE_TIMEOUT_SECONDS)
@@ -3676,6 +4021,10 @@ class MvpVoteView(discord.ui.View):
         self.winner_mvp_id = None
         self.loser_mvp_id = None
         self._applied = False
+        self._escalated = False
+        # 🆕 سجلّ المصوّنين: {user_id: {"winner": pid, "loser": pid}}
+        self.voters = build_mvp_voters(team1_players, team2_players, creator_id)
+        self.votes = {}
 
         all_players = list(team1_players) + list(team2_players)
 
@@ -3701,7 +4050,7 @@ class MvpVoteView(discord.ui.View):
 
         if options:
             winner_select = discord.ui.Select(
-                placeholder="🏆  اختر MVP WINNER — (فقط الهوست)",
+                placeholder="🏆  اختر MVP WINNER — (للمصوّنين فقط)",
                 options=options,
                 custom_id=f"mvp_winner_select_{lobby_id}",
                 min_values=1, max_values=1
@@ -3710,7 +4059,7 @@ class MvpVoteView(discord.ui.View):
             self.add_item(winner_select)
 
             loser_select = discord.ui.Select(
-                placeholder="✦  اختر MVP LOSER — (فقط أول داخل)",
+                placeholder="✦  اختر MVP LOSER — (للمصوّنين فقط)",
                 options=options,
                 custom_id=f"mvp_loser_select_{lobby_id}",
                 min_values=1, max_values=1
@@ -3727,144 +4076,281 @@ class MvpVoteView(discord.ui.View):
         tag_admin_btn.callback = self.tag_admin_callback
         self.add_item(tag_admin_btn)
 
-    async def tag_admin_callback(self, interaction):
+        # 🆕 زر محايد لإظهار الحالة الحالية (بدون تصويت)
+        status_btn = discord.ui.Button(
+            label="📊 حالة التصويت",
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"mvp_status_btn_{lobby_id}"
+        )
+        status_btn.callback = self.status_callback
+        self.add_item(status_btn)
+
+# ══════════════════════════════════════════════════════
+    # 🆕 أدوات المصوّنين + الحالة + الاتفاق
+    # ══════════════════════════════════════════════════════
+    def _is_voter(self, user_id):
+        return user_id in self.voters
+
+    async def _guard_voter(self, interaction):
+        """يتحقق إن المستخدم من المصوّنين المسموح لهم."""
+        if not self.voters:
+            return True
+        if interaction.user.id in self.voters:
+            return True
+        t1_names = " ".join(f"<@{p}>" for p in self.voters if p in self.team1_players)
+        t2_names = " ".join(f"<@{p}>" for p in self.voters if p in self.team2_players)
         await interaction.response.send_message(
             embed=discord.Embed(
-                title="⚠️  تم تاغ الأدمن",
+                title="⛔  ما أنت من المصوّنين",
                 description=(
-                    f"> تم إبلاغ الأدمن بوجود مشكلة في الماتش  `#{self.lobby_id}`\n"
+                    f"> ❌  موقعك ما يحسب تصويتاً في هذا النظام.\n"
+                    f"> 👥  المصوّنين هم **أول شخصين من كل فريق**:\n"
+                    f"> ─  🔴 Team 1:  {t1_names or '*N/A*'}\n"
+                    f"> ─  🟢 Team 2:  {t2_names or '*N/A*'}\n"
+                    f"> 📌  لو كنت من المصوّنين وبس، اختر MVP من القوائم بالأعلى."
+                ),
+                color=COLORS["error"]
+            ),
+            ephemeral=True
+        )
+        return False
+
+    def _tally(self, key):
+        """{player_id: عدد الأصوات} لقرار معيّن."""
+        counts = {}
+        for _uid, data in self.votes.items():
+            pid = data.get(key)
+            if pid:
+                counts[pid] = counts.get(pid, 0) + 1
+        return counts
+
+    def _consensus(self, key):
+        """يرجع اللاعب اللي وصل لـ MVP_CONSENSUS_NEEDED صوت، أو None."""
+        for pid, c in self._tally(key).items():
+            if c >= MVP_CONSENSUS_NEEDED:
+                return pid
+        return None
+
+    def _all_voted(self):
+        """هل صوّت كل المصوّنين على الاثنين (WINNER + LOSER)؟"""
+        if not self.voters:
+            return False
+        for uid in self.voters:
+            d = self.votes.get(uid) or {}
+            if not d.get("winner") or not d.get("loser"):
+                return False
+        return True
+
+    def _voted_count(self):
+        return len([u for u in self.voters if (self.votes.get(u) or {}).get("winner")])
+
+    def _tally_line(self, key, label):
+        tally = self._tally(key)
+        if not tally:
+            return f"> ─  {label}:  *لا توجد أصوات*"
+        parts = [f"<@{p}> ×{c}" for p, c in sorted(tally.items(), key=lambda x: -x[1])]
+        return f"> ─  {label}:  " + "   |   ".join(parts)
+
+    def _tally_text(self, key):
+        tally = self._tally(key)
+        if not tally:
+            return "لا أصوات"
+        return " / ".join(f"{c}×<@{p}>" for p, c in sorted(tally.items(), key=lambda x: -x[1]))
+
+    async def _refresh(self, interaction=None):
+        """يحدّث رسالة التصويت لعرض الحالة / يعطّل الأزرار بعد التطبيق."""
+        for item in self.children:
+            if isinstance(item, (discord.ui.Select, discord.ui.Button)):
+                item.disabled = True if self._applied else False
+        if interaction is None:
+            return
+        try:
+            await interaction.edit(view=self)
+        except discord.HTTPException as e:
+            logger.warning(f"⚠️ _refresh edit failed (lobby {self.lobby_id}): {e}")
+
+    async def status_callback(self, interaction):
+        """🆕 زر محايد: يعرض الحالة الحالية بدون أي تصويت."""
+        await interaction.response.send_message(
+            embed=discord.Embed(
+                title=f"📊  حالة تصويت MVP — ماتش `#{self.lobby_id}`",
+                description=(
+                    f"> 👥  **المصوّنين (أول 2 من كل فريق):**  "
+                    f"{' '.join(f'<@{p}>' for p in self.voters) or '*N/A*'}\n"
+                    f"> ✅  **صوّتوا:**  `{self._voted_count()}` / `{len(self.voters)}`\n"
+                    f"{separator()}\n"
+                    f"{self._tally_line('winner', '🏆 MVP WINNER')}\n"
+                    f"{self._tally_line('loser', '✦ MVP LOSER')}\n"
+                    f"> 🎯  **الاتفاق المطلوب:**  `{MVP_CONSENSUS_NEEDED}` أصوات"
+                ),
+                color=COLORS["info"],
+                timestamp=discord.utils.utcnow()
+            ),
+            ephemeral=True
+        )
+
+    async def tag_admin_callback(self, interaction):
+        """🆕 زر يدوي: يطلب تدخل الأدمن (ينقله لو حاضر، وإلا يتاغه)."""
+        await interaction.response.send_message(
+            embed=discord.Embed(
+                title="⚠️  تم طلب تدخل الأدمن",
+                description=(
+                    f"> 🚨  تم إبلاغ الأدمن بمشكلة في الماتش  `#{self.lobby_id}`\n"
                     f"> 👤  **المبلّغ:**  {interaction.user.mention}\n"
-                    f"> 📌  سيتم حل المشكلة قريباً"
+                    f"> 📌  لو فيه أدمن بالفويسات الخاصة باللاعبين، البوت نقله عندهم.\n"
+                    f"> 📌  وإلا، تم تاغ الأدمن مع الأوامر المناسبة."
                 ),
                 color=COLORS["warning"]
             ),
             ephemeral=True
         )
-        await notify_admins(
-            self.guild,
-            f"⚠️ مشكلة في التصويت — ماتش #{self.lobby_id}",
-            f"> 👤  **المبلّغ:**  {interaction.user.mention}\n"
-            f"> 🏆 Winner MVP:  {f'<@{self.winner_mvp_id}>' if self.winner_mvp_id else '*لم يُختار*'}\n"
-            f"> ✦ Loser MVP:  {f'<@{self.loser_mvp_id}>' if self.loser_mvp_id else '*لم يُختار*'}\n"
-            f"> 💡 Use  `!!w {self.lobby_id} @user`  و  `!!l {self.lobby_id} @user`  لحل المشكلة يدوياً"
+        await escalate_mvp_dispute(
+            self.guild, self.lobby_id,
+            reason_detail=f"بلاغ يدوي من {interaction.user.mention}",
+            team1_players=self.team1_players,
+            team2_players=self.team2_players,
+            channel=interaction.channel
         )
 
     async def _get_team(self, pid):
-        if pid in self.team1_players:
-            return "team1"
-        return "team2"
+        return "team1" if pid in self.team1_players else "team2"
 
+    # ══════════════════════════════════════════════════════
+    # 🆕 تسجيل الأصوات
+    # ══════════════════════════════════════════════════════
     async def winner_mvp_callback(self, interaction):
-        if interaction.user.id != self.creator_id:
-            await interaction.response.send_message(
-                f"❌ فقط منشئ الروم يختار MVP WINNER!  الهوست:  <@{self.creator_id}>",
-                ephemeral=True
-            )
+        if not await self._guard_voter(interaction):
             return
-        self.winner_mvp_id = int(interaction.data["values"][0])
+        chosen = int(interaction.data["values"][0])
+        self.votes.setdefault(interaction.user.id, {})["winner"] = chosen
+        self.winner_mvp_id = chosen   # آخر صوت — للتوافق مع أوامر !!w / !!l
         await interaction.response.send_message(
-            f"🏆  تم اختيار MVP WINNER:  <@{self.winner_mvp_id}>", ephemeral=True
+            f"🏆  تم تسجيل تصويتك لـ MVP WINNER:  <@{chosen}>", ephemeral=True
         )
         await self._try_apply(interaction)
 
     async def loser_mvp_callback(self, interaction):
-        if interaction.user.id != self.first_joiner_id:
-            await interaction.response.send_message(
-                f"❌ فقط أول داخل (First Joiner) يختار MVP LOSER!  الأول:  <@{self.first_joiner_id}>",
-                ephemeral=True
-            )
+        if not await self._guard_voter(interaction):
             return
-        self.loser_mvp_id = int(interaction.data["values"][0])
+        chosen = int(interaction.data["values"][0])
+        self.votes.setdefault(interaction.user.id, {})["loser"] = chosen
+        self.loser_mvp_id = chosen
         await interaction.response.send_message(
-            f"✦  تم اختيار MVP LOSER:  <@{self.loser_mvp_id}>", ephemeral=True
+            f"✦  تم تسجيل تصويتك لـ MVP LOSER:  <@{chosen}>", ephemeral=True
         )
         await self._try_apply(interaction)
 
+    # ══════════════════════════════════════════════════════
+    # 🆕 فحص الاتفاق بعد كل صوت
+    # ══════════════════════════════════════════════════════
     async def _try_apply(self, interaction):
         if self._applied:
             return
-        if not self.winner_mvp_id or not self.loser_mvp_id:
-            return
 
-        w_team = await self._get_team(self.winner_mvp_id)
-        l_team = await self._get_team(self.loser_mvp_id)
-        if w_team == l_team:
-            try:
-                await interaction.followup.send(
-                    embed=discord.Embed(
-                        title="❌  MVP من نفس الفريق!",
-                        description=(
-                            f"> 🏆  MVP WINNER و MVP LOSER يجب أن يكونا من فريقين مختلفين!\n"
-                            f"> كلا اللاعبين من  {'Team 1 🔴' if w_team == 'team1' else 'Team 2 🟢'}\n"
-                            f"> 🏆  WINNER:  <@{self.winner_mvp_id}>\n"
-                            f"> ✦  LOSER:  <@{self.loser_mvp_id}>\n"
-                            f"> 💡  اختر لاعباً من الفريق الآخر كـ MVP LOSER"
-                        ),
-                        color=COLORS.get("danger", COLORS.get("error", 0xE74C3C))
-                    )
+        w = self._consensus("winner")
+        l = self._consensus("loser")
+
+        # ✅ اتفاق كامل
+        if w and l:
+            if await self._get_team(w) == await self._get_team(l):
+                await self._escalate(
+                    interaction.channel,
+                    f"اتفق المصوّنون، لكن MVP WINNER <@{w}> و MVP LOSER <@{l}> **من نفس الفريق** — مستحيل يُطبَّق"
                 )
-            except:
-                pass
-            self.winner_mvp_id = None
-            self.loser_mvp_id = None
-            # أعد تفعيل الـ selects
-            for item in self.children:
-                if isinstance(item, discord.ui.Select):
-                    item.disabled = False
-            try:
-                await interaction.message.edit(view=self)
-            except:
-                pass
+                return
+            await self._apply(w, l, interaction)
             return
 
+        # 🛑 كل المصوّنين صوّتوا وما في اتفاق → لا تفاهم → للأدمن
+        if self._all_voted():
+            reason = (
+                f"صوّتوا كلهم وما اتفقوا — "
+                f"🏆 {self._tally_text('winner')}   •   "
+                f"✦ {self._tally_text('loser')}"
+            )
+            await self._escalate(interaction.channel, reason)
+            return
+
+        # 🟡 لسه في ناس ما صوّتوا — حدّث الحالة فقط
+        await self._refresh(interaction)
+
+    async def _escalate(self, channel, reason_detail):
+        """🆕 لا تفاهم → الأدمن (ينقله لو حاضر بالفويسات، وإلا يتاغه)."""
+        if self._applied or self._escalated:
+            return
+        self._escalated = True
+        logger.warning(f"🚨 MvpVoteView escalation — lobby={self.lobby_id}: {reason_detail}")
+        for item in self.children:
+            if isinstance(item, (discord.ui.Select, discord.ui.Button)):
+                item.disabled = True
+        await escalate_mvp_dispute(
+            self.guild, self.lobby_id,
+            reason_detail=reason_detail,
+            team1_players=self.team1_players,
+            team2_players=self.team2_players,
+            channel=channel
+        )
+
+    # ══════════════════════════════════════════════════════
+    # 🆕 تطبيق النتيجة
+    # ══════════════════════════════════════════════════════
+    async def _apply(self, winner_mvp, loser_mvp, interaction):
         self._applied = True
+        self.winner_mvp_id = winner_mvp
+        self.loser_mvp_id = loser_mvp
         for item in self.children:
             item.disabled = True
         try:
-            await interaction.message.edit(view=self)
-        except:
-            pass
-        # ✅ إصلاح: استخدم interaction.channel.send بدل followup لتجنب الأخطاء
+            await interaction.edit(view=self)
+        except discord.HTTPException as e:
+            logger.warning(f"⚠️ _apply edit failed (lobby {self.lobby_id}): {e}")
+
         try:
             await interaction.channel.send(
                 embed=discord.Embed(
-                    title="✅  تم تطبيق النقاط!",
+                    title="✅  تم الاتفاق على MVP!",
                     description=(
-                        f"> 🏆  **MVP WINNER:**  <@{self.winner_mvp_id}> → `+80` pts\n"
-                        f"> ✦  **MVP LOSER:**  <@{self.loser_mvp_id}> → `+30` pts\n"
+                        f"> 🤝  **اتفاق `{MVP_CONSENSUS_NEEDED}` أصوات من `{len(self.voters)}` مصوّنين**\n"
+                        f"> 🏆  **MVP WINNER:**  <@{winner_mvp}> → `+80` pts\n"
+                        f"> ✦  **MVP LOSER:**  <@{loser_mvp}> → `+30` pts\n"
                         f"> ⚡  جارٍ تطبيق النقاط وتحديث الرانك..."
                     ),
                     color=COLORS["success"]
                 )
             )
-        except:
-            pass
-        logger.info(f"🏆 MvpVoteView auto-confirmed — lobby={self.lobby_id}, winner_mvp={self.winner_mvp_id}, loser_mvp={self.loser_mvp_id}")
+        except discord.HTTPException as e:
+            logger.warning(f"⚠️ _apply send failed (lobby {self.lobby_id}): {e}")
 
-        winner_team = await self._get_team(self.winner_mvp_id)
-        # ✅ إصلاح: استخدم self.guild مباشرة بدل bot.get_guild
+        logger.info(
+            f"🏆 MvpVoteView confirmed — lobby={self.lobby_id}, "
+            f"winner_mvp={winner_mvp}, loser_mvp={loser_mvp}, "
+            f"voters={len(self.voters)}, votes={len(self.votes)}"
+        )
+
+        winner_team = await self._get_team(winner_mvp)
         guild = self.guild or bot.get_guild(self.guild_id)
-        if guild:
-            try:
-                await process_match_result_with_mvps(
-                    guild, self.lobby_id, winner_team,
-                    self.winner_mvp_id, self.loser_mvp_id,
-                    interaction.channel
-                )
-            except Exception as e:
-                logger.exception(f"❌ process_match_result_with_mvps failed in _try_apply: {e}")
-                # ✅ أرسل رسالة خطأ للأدمن
-                await notify_admins(
-                    guild,
-                    f"❌ فشل تطبيق نقاط الماتش #{self.lobby_id}",
-                    f"> 🐛  **الخطأ:**  `{str(e)[:200]}`\n"
-                    f"> 🏆 Winner MVP:  <@{self.winner_mvp_id}>\n"
-                    f"> ✦ Loser MVP:  <@{self.loser_mvp_id}>\n"
-                    f"> 💡 Use  `!!w {self.lobby_id} @user`  و  `!!l {self.lobby_id} @user`  يدوياً"
-                )
-        else:
+        if not guild:
             logger.error(f"❌ Guild not found for lobby {self.lobby_id}")
+            return
+        try:
+            await process_match_result_with_mvps(
+                guild, self.lobby_id, winner_team, winner_mvp, loser_mvp,
+                interaction.channel
+            )
+        except Exception as e:
+            logger.exception(f"❌ process_match_result_with_mvps failed in _apply: {e}")
+            await notify_admins(
+                guild,
+                f"❌ فشل تطبيق نقاط الماتش #{self.lobby_id}",
+                f"> 🐛  **الخطأ:**  `{str(e)[:200]}`\n"
+                f"> 🏆 Winner MVP:  <@{winner_mvp}>\n"
+                f"> ✦ Loser MVP:  <@{loser_mvp}>\n"
+                f"> 💡 Use  `!!w {self.lobby_id} @user`  و  `!!l {self.lobby_id} @user`  يدوياً"
+            )
 
+    # ══════════════════════════════════════════════════════
+    # 🆕 انتهاء الوقت = لا تفاهم → يُحال للأدمن
+    # ══════════════════════════════════════════════════════
     async def on_timeout(self):
         logger.info(f"⏰ MvpVoteView timeout — lobby={self.lobby_id}")
         lobby = db.get_lobby(self.lobby_id)
@@ -3874,43 +4360,26 @@ class MvpVoteView(discord.ui.View):
         if not guild:
             return
 
-        all_players = list(self.team1_players) + list(self.team2_players)
-
-        auto_winner = self.winner_mvp_id
-        if not auto_winner:
-            auto_winner = get_mvp_player(all_players, guild, db, guild.id)
-        if not auto_winner and all_players:
-            auto_winner = all_players[0]
-
-        auto_loser = self.loser_mvp_id
-        if not auto_loser:
-            wt = self.team1_players if auto_winner in self.team1_players else self.team2_players
-            lt = self.team2_players if auto_winner in self.team1_players else self.team1_players
-            if lt:
-                auto_loser = get_mvp_player(lt, guild, db, guild.id)
-            if not auto_loser and all_players:
-                candidates = [p for p in all_players if p != auto_winner]
-                if candidates:
-                    auto_loser = candidates[0]
-
-        await notify_admins(
-            guild,
-            "MvpVoteView Timeout",
-            f"> ⏰  انتهى وقت اختيار MVP للماتش `#{self.lobby_id}`\n"
-            f"> 🤖  تم اختيار MVP تلقائياً:\n"
-            f"> ─  🏆  WINNER:  {f'<@{auto_winner}>' if auto_winner else '*N/A*'}\n"
-            f"> ─  ✦  LOSER:  {f'<@{auto_loser}>' if auto_loser else '*N/A*'}",
-            color=COLORS["warning"]
-        )
         mc = db.get_match_channels(self.lobby_id)
         result_ch = guild.get_channel(mc["team1_text_id"]) if mc else guild.get_channel(lobby["channel_id"])
-        winner_team = await self._get_team(auto_winner) if auto_winner else "team1"
-        if not auto_loser:
-            auto_loser = auto_winner
-        await process_match_result_with_mvps(
-            guild, self.lobby_id, winner_team,
-            auto_winner, auto_loser,
-            result_ch
+
+        self._escalated = True
+        reason = (
+            f"⏰ انتهى الوقت ({VOTE_TIMEOUT_SECONDS} ثانية) — "
+            f"صوّت `{self._voted_count()}` من `{len(self.voters)}` مصوّنين فقط "
+            f"(المطلوب `{MVP_CONSENSUS_NEEDED}` أصوات)\n"
+            f"> 🏆 {self._tally_text('winner')}   •   ✦ {self._tally_text('loser')}"
+        )
+        logger.warning(f"🚨 MvpVoteView timeout → escalation — lobby={self.lobby_id}")
+        for item in self.children:
+            if isinstance(item, (discord.ui.Select, discord.ui.Button)):
+                item.disabled = True
+        await escalate_mvp_dispute(
+            guild, self.lobby_id,
+            reason_detail=reason,
+            team1_players=self.team1_players,
+            team2_players=self.team2_players,
+            channel=result_ch
         )
 
 
@@ -4083,8 +4552,10 @@ async def process_match_result_with_mvps(guild, lobby_id, winner_team, winner_mv
                 if target_vc:
                     try:
                         await m.move_to(target_vc)
-                    except (discord.HTTPException, discord.Forbidden):
-                        pass
+                    except discord.Forbidden as e:
+                        logger.error(f"❌ Forbidden move_to: {m.display_name} → #{target_vc.name} | {e}")
+                    except discord.HTTPException as e:
+                        logger.warning(f"⚠️ HTTP move_to failed: {m.display_name} → #{target_vc.name} | {e}")
         # 🆕 امسح الفويس الأصلي من الذاكرة
         _original_voice_channels.pop(lobby_id, None)
 
@@ -5702,48 +6173,12 @@ async def setup_cmd(ctx):
         voice_cat = await guild.create_category("🎮 FREE FIRE — VOICE", overwrites={guild.default_role: discord.PermissionOverwrite(read_messages=True), guild.me: discord.PermissionOverwrite(manage_channels=True, manage_messages=True)})
         created.append("🎮 FREE FIRE — VOICE")
 
-    # 🆕 قناة القواعد في كاتيجوري النصي
-    rules_channel_name = "🛡️・rules"
-    if not discord.utils.get(guild.text_channels, name=rules_channel_name):
-        rules_overwrites = {
-            guild.default_role: discord.PermissionOverwrite(read_messages=True, send_messages=False, add_reactions=False),
-            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_messages=True)
-        }
-        rules_ch = await guild.create_text_channel(rules_channel_name, category=text_cat, topic="Rules", overwrites=rules_overwrites, position=0)
-        try:
-            rules_embed = discord.Embed(
-                title="🛡️  قواعد السيرفر",
-                description=(
-                    f"> مرحباً بك في  **{guild.name}**  🔥\n"
-                    f"> يرجى الالتزام بالقواعد التالية:\n"
-                    f"{separator()}\n"
-                    f"> **1️⃣  الاحترام المتبادل**\n"
-                    f"> ─  احترم جميع اللاعبين والأدمنز.\n"
-                    f"> ─  ممنوع السب، الشتم، أو الإساءة.\n\n"
-                    f"> **2️⃣  قواعد اللعب**\n"
-                    f"> ─  ادخل غرفة انتظار قبل اللعب.\n"
-                    f"> ─  استخدم  `{PREFIX}play 4v4`  لبدء ماتش.\n"
-                    f"> ─  التزم بنتيجة التصويت.\n\n"
-                    f"> **3️⃣  عدم الغش**\n"
-                    f"> ─  ممنوع التلاعب بالتصويت.\n"
-                    f"> ─  ممنوع مغادرة الماتش في المنتصف.\n\n"
-                    f"> **4️⃣  استخدام الأوامر**\n"
-                    f"> ─  الأوامر تعمل فقط في قنوات play.\n\n"
-                    f"> **5️⃣  العقوبات**\n"
-                    f"> ─  مخالفة القواعد = تحذير / كتم / طرد.\n"
-                    f"> ─  القرار النهائي للأدمن.\n\n"
-                    f"> 💬  لأي استفسار، تواصل مع الأدمن."
-                ),
-                color=COLORS["warning"],
-                timestamp=discord.utils.utcnow()
-            )
-            rules_embed.set_author(name="Server Rules")
-            rules_embed.set_footer(text=f"{BOT_FOOTER}  •  Read carefully")
-            # V0: لا صور في القواعد
-            await rules_ch.send(embed=rules_embed)
-        except Exception as e:
-            logger.warning(f"Failed to send rules embed: {e}")
-        created.append(rules_channel_name)
+    # ✅ يُحذف إنشاء قناة القواعد عمداً.
+    #    البوت ما ينشئ أي شات أو قناة باسم "rules" / "🛡️・rules" بعد الآن.
+    #    القواعد متاحة عبر أمر  `!!rules`  في أي قناة (لست تحتاج قناة مخصصة).
+    #    لو عندك قناة rules قديمة وتبي تحذفها:  احذفها يدوياً من إعدادات السيرفر.
+    if discord.utils.get(guild.text_channels, name="🛡️・rules"):
+        logger.info(f"ℹ️ [setup] {guild.name}: قناة rules موجودة مسبقاً — البوت تجاهلها ولم ينشئ شيئاً")
 
     # 🆕 القنوات النصية في كاتيجوري النصي
     for ch_name, topic in [("🎮・apostada-play", "Play"), ("🎮・highlight-play", "Play"), ("🎮・zelika-play", "Play"), ("📊・match-results", "Results"), ("🏆・leaderboard", "Leaderboard"), ("👤・profiles", "Profiles")]:
@@ -5783,7 +6218,7 @@ async def setup_cmd(ctx):
         description=(
             f"> Created  `{len(created)}`  channels successfully.\n"
             f"{separator()}\n"
-            f"> 🛡️  **Rules channel:**  مفعّل (للقراءة فقط)\n"
+            f"> 🚫  **Rules channel:**  البوت **ما ينشئ** قناة قواعد — استخدم  `{PREFIX}rules`  في أي قناة\n"
             f"> 🔇  **Blacklist Role:**  `{BLACKLIST_ROLE_NAME}`\n"
             f"> 🎮  Use  `{PREFIX}play4v4`  in play channels to start."
         ),
@@ -7463,7 +7898,7 @@ async def help_cmd(ctx):
         f"›  ⚠️  زر البلاغ متاح داخل كل ماتش"
     ), inline=False)
     embed1.add_field(name="🛡️  المساعدة (4 أوامر)", value=(
-        f"›  `{PREFIX}rules`  —  عرض قواعد السيرفر\n"
+        f"›  `{PREFIX}rules`  —  عرض قواعد السيرفر (بدون قناة مخصصة)\n"
         f"›  `{PREFIX}general`  —  دليل اللاعب\n"
         f"›  `{PREFIX}help`  —  هذه القائمة\n"
         f"›  `{PREFIX}botinfo`  —  معلومات البوت"
@@ -7529,12 +7964,14 @@ async def help_cmd(ctx):
     embed2.add_field(name="💡  معلومات النظام", value=(
         f"> 💰  **النقاط:**  MVP فائز +80  •  فائز +30  •  MVP خاسر +30  •  خاسر -30\n"
         f"> 🏅  **الرانك:**  ترتيب الـ leaderboard (1 = الأفضل)\n"
+        f"> 🗳️  **تصويت MVP:**  أول 2 من كل فريق (4 مصوّنين) يختارون WINNER و LOSER — يحتاج `{MVP_CONSENSUS_NEEDED}` أصوات\n"
+        f"> 🚨  **ما في تفاهم:**  البوت ينقل أدمن لو حاضر بالفويسات الخاصة، وإلا يتاغه مع `!!w` و `!!l`\n"
         f"> 🏆  **Roles:**  #1 Best Player  •  #2-10 Goated  •  #11-50 Skilled  •  #51-100 Efficient\n"
         f"> ⚠️  **البلاغات:**  6 بلاغات = حظر تلقائي\n"
         f"> 🔒  **JAIL:**  فويس خاص + شاتات مخصصة فقط\n"
         f"> 🔇  **BLACKLIST:**  3 دق غياب أو 5 خروج/دخول = منع 10 دقائق\n"
         f"> 🗳️  **Cancel Match:**  أغلبية اللاعبين (5 من 8)\n"
-        f"> ⏳  **MVP Vote:**  يجب انتظار 10 دقائق من بدء الماتش — الهوست يختار MVP WINNER، أول داخل يختار MVP LOSER"
+        f"> 🚫  **Rules channel:**  البوت ما ينشئها — استخدم `{PREFIX}rules` في أي قناة"
     ), inline=False)
     embed2.set_footer(text=f"صفحة 2/2  •  Free Fire Bot v4.0  •  51 أمر إجمالي")
     embed2 = apply_branding(embed2, ctx.guild)
