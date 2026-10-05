@@ -98,6 +98,9 @@ MVP_CONSENSUS_NEEDED = 3     # عدد الأصوات المطلوب达成 اتف
 ROLE_OP_RETRY_ATTEMPTS = 3   # عدد المحاولات عند rate limit / خطأ شبكة مؤقت
 ROLE_OP_RETRY_BASE_DELAY = 1.5  # ثواني الانتظار الأساسية (exponential backoff)
 
+# 🆕 رسالة "Create Lobby" — تختفي بعد هذه المدة إذا ما انشأ اللاعب الروم
+CREATE_PROMPT_DELETE_AFTER = 60   # ثانية
+
 # 🆕 نظام البلاغات والحظر
 REPORT_THRESHOLD = 6            # عدد البلاغات اللازمة للحظر التلقائي
 REPORT_CHANNELS_COUNT = 3       # عدد الفويسات التي يستطيع المحظور دخولها
@@ -1968,6 +1971,14 @@ lobby_timeout_timers = {}
 vote_timeout_timers = {}
 _admin_mvp_results = {}  # 🆕 lobby_id -> {"winner": user_id, "loser": user_id} لأوامر !!w / !!l
 
+# 🆕 رسائل "Create Lobby" — تختفي تلقائياً
+# _create_prompt_msgs : {prompt_message_id: {"guild_id", "channel_id", "user_id"}}
+# _create_prompt_timers : {prompt_message_id: asyncio.Task}  — مؤقت الدقيقة
+# _lobby_prompt_msg : {lobby_id: prompt_message_id}  — ربط الرسالة باللوبي (تنتظر 끝 الروم)
+_create_prompt_msgs = {}
+_create_prompt_timers = {}
+_lobby_prompt_msg = {}
+
 # 🆕 V3 MAX: تخزين الفويس الأصلي لكل لاعب — {lobby_id: {user_id: original_voice_channel_id}}
 # يُستخدم لإرجاع اللاعبين لنفس الـ waiting room بعد انتهاء/إلغاء الماتش
 _original_voice_channels = {}
@@ -2289,6 +2300,77 @@ async def update_leaderboard_channel(guild):
         logger.exception(f"update_leaderboard_channel failed: {e}")
 
 
+async def delete_message_safely(channel, message_id, reason=""):
+    """🆕 يحذف رسالة ويتعامل مع كل الأخطاء بوضوح (بدل ابتلاعها)."""
+    if channel is None or message_id is None:
+        return False
+    try:
+        msg = await channel.fetch_message(message_id)
+        await msg.delete()
+        logger.info(f"🧹 Deleted message {message_id} ({reason})")
+        return True
+    except discord.NotFound:
+        logger.info(f"ℹ️ Message {message_id} already gone ({reason})")
+        return False
+    except discord.Forbidden as e:
+        logger.warning(f"⚠️ Cannot delete message {message_id} — Forbidden ({reason}): {e}")
+        return False
+    except discord.HTTPException as e:
+        logger.warning(f"⚠️ HTTP error deleting message {message_id} ({reason}): {e}")
+        return False
+    except Exception as e:
+        logger.exception(f"⚠️ Unexpected error deleting message {message_id} ({reason}): {e}")
+        return False
+
+
+async def auto_hide_create_prompt(guild, msg, user_id):
+    """🆕 ينتظر CREATE_PROMPT_DELETE_AFTER ثم يحذف رسالة "Create Lobby"
+       إذا ما انشأ اللاعب الروم.
+       ✅ إذا انشأ الروم → ما نحذفها، تنتظر لآخر الماتش.
+    """
+    prompt_id = msg.id
+    try:
+        await asyncio.sleep(CREATE_PROMPT_DELETE_AFTER)
+    except asyncio.CancelledError:
+        _create_prompt_timers.pop(prompt_id, None)
+        return
+
+    _create_prompt_timers.pop(prompt_id, None)
+
+    # ✅ انربطت بلوبي حقيقي → خلّها لآخر الماتش
+    if prompt_id in _lobby_prompt_msg.values():
+        logger.info(
+            f"⏱️ Create prompt {prompt_id}: room created — keeping until the match ends"
+        )
+        return
+
+    _create_prompt_msgs.pop(prompt_id, None)
+    await delete_message_safely(
+        msg.channel, prompt_id,
+        reason=f"لم يتم إنشاء الروم خلال {CREATE_PROMPT_DELETE_AFTER} ثانية"
+    )
+    logger.info(
+        f"🧹 Auto-removed 'Create Lobby' message {prompt_id} — "
+        f"no room created in {CREATE_PROMPT_DELETE_AFTER}s (user={user_id})"
+    )
+
+
+async def _delete_create_prompt_for_lobby(lobby_id, guild=None):
+    """🆕 يحذف رسالة "Create Lobby" عند انتهاء اللوبي (تم / أُلغي / timeout)."""
+    prompt_id = _lobby_prompt_msg.pop(lobby_id, None)
+    if not prompt_id:
+        return
+    meta = _create_prompt_msgs.pop(prompt_id, None)
+    if not meta:
+        return
+    g = guild or bot.get_guild(meta["guild_id"])
+    if not g:
+        logger.warning(f"⚠️ Guild {meta['guild_id']} not found — can't delete prompt {prompt_id}")
+        return
+    ch = g.get_channel(meta["channel_id"])
+    await delete_message_safely(ch, prompt_id, reason=f"انتهى اللوبي #{lobby_id}")
+
+
 def cleanup_lobby_memory(lobby_id):
     to_remove = [k for k, v in active_lobby_messages.items() if v == lobby_id]
     for k in to_remove:
@@ -2306,6 +2388,16 @@ def cleanup_lobby_memory(lobby_id):
         db.delete_vote_metadata(lobby_id)
     except Exception:
         pass
+
+    # 🆕 احذف رسالة "Create Lobby" المرتبطة بهذا اللوبي
+    if lobby_id in _lobby_prompt_msg:
+        try:
+            asyncio.create_task(_delete_create_prompt_for_lobby(lobby_id))
+        except RuntimeError:
+            # ما في event loop شغّال — نظّف على الأقل
+            pid = _lobby_prompt_msg.pop(lobby_id, None)
+            if pid:
+                _create_prompt_msgs.pop(pid, None)
 
 
 # ============================================================
@@ -4915,6 +5007,27 @@ class LobbyCreateModal(discord.ui.Modal, title="🎮 Create Lobby — Enter Room
             guild = self.ctx.guild
             user = self.ctx.author
             lid = db.create_lobby(guild.id, user.id, self.ctx.channel.id, mode=self.mode)
+
+            # 🆕 اربط رسالة "Create Lobby" بهذا اللوبي — تنحذف مع انتهاء الماتش
+            pending = None
+            for pid, meta in list(_create_prompt_msgs.items()):
+                if (meta.get("user_id") == user.id
+                        and meta.get("channel_id") == self.ctx.channel.id):
+                    pending = pid
+                    break
+            if pending:
+                _lobby_prompt_msg[lid] = pending
+                t = _create_prompt_timers.pop(pending, None)
+                if t:
+                    try:
+                        t.cancel()
+                    except Exception as e:
+                        logger.debug(f"cancel create-prompt timer failed: {e}")
+                logger.info(
+                    f"🔗 Create prompt {pending} linked to lobby {lid} — "
+                    f"will be deleted when the match ends"
+                )
+
             db.set_room_info(lid, room_id, password, private_key if private_key else None)
             db.add_player_to_lobby(lid, user.id, "team1")
             lobby = db.get_lobby(lid)
@@ -5334,6 +5447,14 @@ async def auto_setup_guild(guild):
             db.add_commands_channel(guild.id, ch.id)
             db.add_play_channel(guild.id, ch.id)
 
+    # 🆕 قناة القواعد — نفس منطق setup_cmd (idempotent)
+    try:
+        rules_ch, rules_created = await ensure_rules_channel(guild, text_cat)
+        if rules_created and rules_ch:
+            logger.info(f"  🛡️ Created {RULES_CHANNEL_NAME}")
+    except Exception as e:
+        logger.error(f"  [{guild.name}] Rules channel: {e}")
+
     # لو ما اكتشف أي فويس waiting، أنشئها
     if not detected_voice_channels["waiting"]:
         for ch_name in ["⏳・Waiting 1", "⏳・Waiting 2", "⏳・Waiting 3", "⏳・Waiting 4", "⏳・Waiting 5"]:
@@ -5675,18 +5796,50 @@ async def create_mode_lobby(ctx, mode):
         ), delete_after=10)
         return
     create_view = CreateLobbyView(ctx, mode)
-    await ctx.send(embed=discord.Embed(
+
+    # 🆕 لو عنده رسالة "Create Lobby" قديمة → احذفها (ما تتكدّس الرسائل)
+    stale = [pid for pid, meta in _create_prompt_msgs.items() if meta.get("user_id") == user.id]
+    for pid in stale:
+        meta = _create_prompt_msgs.pop(pid, None)
+        t = _create_prompt_timers.pop(pid, None)
+        if t:
+            try:
+                t.cancel()
+            except Exception as e:
+                logger.debug(f"cancel timer failed for prompt {pid}: {e}")
+        if meta:
+            asyncio.create_task(delete_message_safely(
+                ctx.channel, pid, reason="استُبدلت بأمر play جديد"
+            ))
+        logger.info(f"🧹 Removed stale 'Create Lobby' message {pid} for user {user.id}")
+
+    prompt = await ctx.send(embed=discord.Embed(
         title=f"🎮  Create  {mode.upper()}  Lobby",
         description=(
-            f"> Press the button below to enter Room Info and create the lobby.\n"
+            f"> اضغط الزر تحت لإدخال بيانات الغرفة وإنشاء اللوبي.\n"
             f"──────────────────────\n"
-            f"> 💡  **You'll need:**\n"
-            f"> ›  Room ID  (numbers)\n"
-            f"> ›  Password  (optional)\n"
-            f"> ›  Private Key  (optional)"
+            f"> 💡  **تحتاج:**\n"
+            f"> ›  Room ID  (أرقام)\n"
+            f"> ›  Password  (اختياري)\n"
+            f"> ›  Private Key  (اختياري)\n"
+            f"{separator()}\n"
+            f"> ⏱️  **تختفي هذه الرسالة تلقائياً بعد `{CREATE_PROMPT_DELETE_AFTER}` ثانية**"
+            f" إذا ما ضغطت الزر.\n"
+            f"> ✅  وإذا أنشأت الغرفة — تنحذف مع انتهاء الروم."
         ),
         color=COLORS["info"]
     ), view=create_view)
+
+    _create_prompt_msgs[prompt.id] = {
+        "guild_id": guild.id, "channel_id": prompt.channel.id, "user_id": user.id
+    }
+    _create_prompt_timers[prompt.id] = asyncio.create_task(
+        auto_hide_create_prompt(guild, prompt, user.id)
+    )
+    logger.info(
+        f"⏱️ Create prompt {prompt.id} by {user.id} — auto-remove in "
+        f"{CREATE_PROMPT_DELETE_AFTER}s if no room created"
+    )
 
 
 @bot.command(name="play")
@@ -6150,6 +6303,82 @@ async def matchinfo_cmd(ctx, lobby_id: int = None):
 
 
 # ============================================================
+# 🛡️ RULES — مصدر واحد لنص القواعد
+# ============================================================
+# 🆕 اسم قناة القواعد الثابت — لو غيّرته، غيّره في كل مكان مرة واحدة
+RULES_CHANNEL_NAME = "🛡️・rules"
+
+
+def build_rules_embed(guild_name):
+    """🆕 يبني embed القواعد — يستخدمه  !!setup  و  !!autosetup  و  !!rules.
+    ✅ مصدر واحد للنص: أي تعديل على القواعد يتم هنا فقط بدل 3 نسخ مكرّرة."""
+    embed = discord.Embed(
+        title="🛡️  قواعد السيرفر",
+        description=(
+            f"> مرحباً بك في  **{guild_name}**  🔥\n"
+            f"> يرجى الالتزام بالقواعد التالية:\n"
+            f"{separator()}\n"
+            f"> **1️⃣  الاحترام المتبادل**\n"
+            f"> ─  احترم جميع اللاعبين والأدمنز.\n"
+            f"> ─  ممنوع السب، الشتم، أو الإساءة.\n\n"
+            f"> **2️⃣  قواعد اللعب**\n"
+            f"> ─  ادخل غرفة انتظار قبل اللعب.\n"
+            f"> ─  استخدم  `{PREFIX}play 4v4`  لبدء ماتش.\n"
+            f"> ─  التزم بنتيجة التصويت.\n\n"
+            f"> **3️⃣  عدم الغش**\n"
+            f"> ─  ممنوع التلاعب بالتصويت.\n"
+            f"> ─  ممنوع مغادرة الماتش في المنتصف.\n\n"
+            f"> **4️⃣  استخدام الأوامر**\n"
+            f"> ─  الأوامر تعمل فقط في قنوات play.\n\n"
+            f"> **5️⃣  العقوبات**\n"
+            f"> ─  مخالفة القواعد = تحذير / كتم / طرد.\n"
+            f"> ─  القرار النهائي للأدمن.\n\n"
+            f"> 💬  لأي استفسار، تواصل مع الأدمن."
+        ),
+        color=COLORS["warning"],
+        timestamp=discord.utils.utcnow()
+    )
+    embed.set_author(name="Server Rules")
+    embed.set_footer(text=f"{BOT_FOOTER}  •  Read carefully")
+    return embed
+
+
+async def ensure_rules_channel(guild, text_cat=None):
+    """🆕 ينشئ قناة القواعد لو ناقصة، ويبعت القواعد فيها.
+    ✅ idempotent: لو موجودة يرجّعها بدون ما يعيد الإنشاء.
+    ✅ كل خطأ يتسجّل في اللوق (ما في ابتلاع صامت)."""
+    existing = discord.utils.get(guild.text_channels, name=RULES_CHANNEL_NAME)
+    if existing:
+        return existing, False
+
+    overwrites = {
+        guild.default_role: discord.PermissionOverwrite(read_messages=True, send_messages=False, add_reactions=False),
+        guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_messages=True)
+    }
+    try:
+        ch = await guild.create_text_channel(
+            RULES_CHANNEL_NAME, category=text_cat, topic="Rules",
+            overwrites=overwrites, position=0
+        )
+        logger.info(f"✅ Created rules channel: {RULES_CHANNEL_NAME} in {guild.name}")
+    except discord.Forbidden as e:
+        logger.error(f"❌ Forbidden create rules channel in {guild.name}: {e}")
+        return None, False
+    except discord.HTTPException as e:
+        logger.error(f"❌ HTTP error creating rules channel in {guild.name}: {e}")
+        return None, False
+
+    # ابعت رسالة القواعد (فشلت؟ القناة صارت موجودة على الأقل)
+    try:
+        await ch.send(embed=build_rules_embed(guild.name))
+    except discord.Forbidden as e:
+        logger.warning(f"⚠️ Cannot send rules embed (Forbidden) in {guild.name}: {e}")
+    except discord.HTTPException as e:
+        logger.warning(f"⚠️ HTTP error sending rules embed in {guild.name}: {e}")
+    return ch, True
+
+
+# ============================================================
 # ADMIN COMMANDS
 # ============================================================
 
@@ -6173,12 +6402,12 @@ async def setup_cmd(ctx):
         voice_cat = await guild.create_category("🎮 FREE FIRE — VOICE", overwrites={guild.default_role: discord.PermissionOverwrite(read_messages=True), guild.me: discord.PermissionOverwrite(manage_channels=True, manage_messages=True)})
         created.append("🎮 FREE FIRE — VOICE")
 
-    # ✅ يُحذف إنشاء قناة القواعد عمداً.
-    #    البوت ما ينشئ أي شات أو قناة باسم "rules" / "🛡️・rules" بعد الآن.
-    #    القواعد متاحة عبر أمر  `!!rules`  في أي قناة (لست تحتاج قناة مخصصة).
-    #    لو عندك قناة rules قديمة وتبي تحذفها:  احذفها يدوياً من إعدادات السيرفر.
-    if discord.utils.get(guild.text_channels, name="🛡️・rules"):
-        logger.info(f"ℹ️ [setup] {guild.name}: قناة rules موجودة مسبقاً — البوت تجاهلها ولم ينشئ شيئاً")
+    # 🆕 قناة القواعد — تنشأ تلقائياً (idempotent: ما تتكرر لو موجودة)
+    rules_ch, rules_created = await ensure_rules_channel(guild, text_cat)
+    if rules_created and rules_ch:
+        created.append(RULES_CHANNEL_NAME)
+    elif rules_ch:
+        logger.info(f"ℹ️ [setup] {guild.name}: قناة القواعد موجودة مسبقاً — تم تجاهل الإنشاء")
 
     # 🆕 القنوات النصية في كاتيجوري النصي
     for ch_name, topic in [("🎮・apostada-play", "Play"), ("🎮・highlight-play", "Play"), ("🎮・zelika-play", "Play"), ("📊・match-results", "Results"), ("🏆・leaderboard", "Leaderboard"), ("👤・profiles", "Profiles")]:
@@ -6218,7 +6447,7 @@ async def setup_cmd(ctx):
         description=(
             f"> Created  `{len(created)}`  channels successfully.\n"
             f"{separator()}\n"
-            f"> 🚫  **Rules channel:**  البوت **ما ينشئ** قناة قواعد — استخدم  `{PREFIX}rules`  في أي قناة\n"
+            f"> 🛡️  **Rules channel:**  `{RULES_CHANNEL_NAME}`  — للقراءة فقط، وإن لم تُنشأ استخدم  `{PREFIX}rules`\n"
             f"> 🔇  **Blacklist Role:**  `{BLACKLIST_ROLE_NAME}`\n"
             f"> 🎮  Use  `{PREFIX}play4v4`  in play channels to start."
         ),
@@ -7311,13 +7540,8 @@ async def blacklisted_cmd(ctx):
 @bot.command(name="rules")
 async def rules_cmd(ctx):
     """🛡️ !!rules — عرض قواعد السيرفر"""
-    rules_embed = discord.Embed(
-        title="🛡️  قواعد السيرفر",
-        description=(f"> مرحباً بك في  **{ctx.guild.name}**  🔥\n> يرجى الالتزام بالقواعد التالية:\n{separator()}\n> **1️⃣  الاحترام المتبادل**\n> ─  احترم جميع اللاعبين والأدمنز.\n> ─  ممنوع السب، الشتم، أو الإساءة.\n\n> **2️⃣  قواعد اللعب**\n> ─  ادخل غرفة انتظار قبل اللعب.\n> ─  استخدم  `{PREFIX}play 4v4`  لبدء ماتش.\n> ─  التزم بنتيجة التصويت.\n\n> **3️⃣  عدم الغش**\n> ─  ممنوع التلاعب بالتصويت.\n> ─  ممنوع مغادرة الماتش في المنتصف.\n\n> **4️⃣  استخدام الأوامر**\n> ─  الأوامر تعمل فقط في قنوات play.\n\n> **5️⃣  العقوبات**\n> ─  مخالفة القواعد = تحذير / كتم / طرد.\n> ─  القرار النهائي للأدمن.\n\n> 💬  لأي استفسار، تواصل مع الأدمن."),
-        color=COLORS["warning"], timestamp=discord.utils.utcnow()
-    )
-    rules_embed.set_author(name="Server Rules"); rules_embed.set_footer(text=f"{BOT_FOOTER}  •  Read carefully")
-    # V0: لا صور في القواعد
+    # ✅ نفس الدالة المستخدمة في  !!setup  و  !!autosetup  — مصدر واحد للنص
+    rules_embed = build_rules_embed(ctx.guild.name)
     await ctx.send(embed=rules_embed)
 
 
@@ -7971,7 +8195,7 @@ async def help_cmd(ctx):
         f"> 🔒  **JAIL:**  فويس خاص + شاتات مخصصة فقط\n"
         f"> 🔇  **BLACKLIST:**  3 دق غياب أو 5 خروج/دخول = منع 10 دقائق\n"
         f"> 🗳️  **Cancel Match:**  أغلبية اللاعبين (5 من 8)\n"
-        f"> 🚫  **Rules channel:**  البوت ما ينشئها — استخدم `{PREFIX}rules` في أي قناة"
+        f"> 🛡️  **Rules channel:**  `{RULES_CHANNEL_NAME}`  — للقراءة فقط (ينشئها `!!setup`)، أو `{PREFIX}rules` في أي قناة"
     ), inline=False)
     embed2.set_footer(text=f"صفحة 2/2  •  Free Fire Bot v4.0  •  51 أمر إجمالي")
     embed2 = apply_branding(embed2, ctx.guild)
