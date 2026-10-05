@@ -261,12 +261,17 @@ def get_rank_title(level):
 
 
 def get_rank_emoji(level):
-    """🆕 يرجع إيموجي حسب الترتيب."""
-    if level <= 1:    return "🔱"  # #1
-    if level <= 3:    return "💎"  # Top 3
-    if level <= 10:   return "🔥"  # Top 10
-    if level <= 50:   return "⭐"  # Top 50
-    return "🎯"  # باقي اللاعبين
+    """🆕 يرجع إيموجي حسب الترتيب (متوافق مع RANK_TITLES tiers).
+    ✅ إصلاح V5: توحيد الإيموجي مع الـ Roles:
+    - #1 → 🏆 Best Player (tier 1)
+    - #2-10 → 💎 Goated Players (tier 2)
+    - #11-50 → ⭐ Skilled Players (tier 3)
+    - #51+ → 🎯 Efficient/Rookie (tier 4+)
+    """
+    if level == 1:    return "🏆"  # #1 — Best Player
+    if level <= 10:   return "💎"  # #2-10 — Goated Players
+    if level <= 50:   return "⭐"  # #11-50 — Skilled Players
+    return "🎯"  # #51+ — Efficient/Rookie
 
 
 def make_progress_bar(current, total, length=10):
@@ -296,7 +301,7 @@ def separator():
 
 
 def compute_rank_from_points(points):
-    """🆕 deprecated — الرانك الآن يُحسب من الترتيب في الـ leaderboard."""
+    """⚠️ DEPRECATED V5 — لا تُستدعى. الرانك يُحسب الآن من الترتيب في الـ leaderboard عبر recalculate_ranks()."""
     return STARTING_LEVEL  # placeholder
 
 
@@ -1043,6 +1048,7 @@ class Database:
             pass  # thread-local connection
 
     def update_player_level(self, uid, gid, delta):
+        """⚠️ DEPRECATED V5 — لا تُستدعى. استخدم recalculate_ranks() بدلاً منها."""
         actual_delta = -delta
         conn = self.conn()
         try:
@@ -1062,22 +1068,26 @@ class Database:
             pass  # thread-local connection
 
     def get_leaderboard(self, gid, limit=10):
-        """🆕 يرجع اللاعبين مرتبين حسب النقاط. limit=None يرجع كل اللاعبين."""
+        """🆕 يرجع اللاعبين مرتبين حسب الترتيب الموحّد (متوافق مع recalculate_ranks). limit=None يرجع كل اللاعبين.
+        ✅ إصلاح V5: الترتيب مطابق تماماً لـ recalculate_ranks
+        """
+        ORDER = "points DESC, kills DESC, mvps DESC, wins DESC, losses ASC, matches_played ASC, user_id ASC"
         conn = self.conn()
         try:
             if limit is None:
                 return [dict(x) for x in conn.execute(
-                    "SELECT * FROM players WHERE guild_id=? ORDER BY points DESC, wins DESC, matches_played ASC",
+                    f"SELECT * FROM players WHERE guild_id=? ORDER BY {ORDER}",
                     (gid,)
                 ).fetchall()]
             return [dict(x) for x in conn.execute(
-                "SELECT * FROM players WHERE guild_id=? ORDER BY points DESC, wins DESC, matches_played ASC LIMIT ?",
+                f"SELECT * FROM players WHERE guild_id=? ORDER BY {ORDER} LIMIT ?",
                 (gid, limit)
             ).fetchall()]
         finally:
             pass  # thread-local connection
 
     def get_player_rank(self, points):
+        """⚠️ DEPRECATED V5 — لا تُستدعى. استخدم get_player_rank_position() بدلاً منها."""
         return 1
 
     def create_lobby(self, gid, creator, chan, mode="4v4"):
@@ -1393,9 +1403,10 @@ class Database:
         if not skip_recalculate:
             self.recalculate_ranks(gid)
 
-    def update_match_player(self, uid, gid, points_delta, *, add_win=0, add_loss=0, add_match=0, win_streak=0, lose_streak=0, max_win_streak=0, add_mvp=0, skip_recalculate=False):
+    def update_match_player(self, uid, gid, points_delta, *, add_win=0, add_loss=0, add_match=0, add_kills=0, win_streak=0, lose_streak=0, max_win_streak=0, add_mvp=0, skip_recalculate=False):
         """يحدّث النقاط والإحصائيات في استعلام واحد، ويرجع بيانات اللاعب المحدّثة.
-        ✅ إصلاح: يرجع بيانات اللاعب بعد recalculate_ranks (ليس قبله)."""
+        ✅ إصلاح: يرجع بيانات اللاعب بعد recalculate_ranks (ليس قبله).
+        ✅ إصلاح V5: إضافة add_kills لتحديث عمود kills."""
         conn = self.conn()
         try:
             conn.execute("""
@@ -1404,13 +1415,14 @@ class Database:
                     wins = wins + ?,
                     losses = losses + ?,
                     matches_played = matches_played + ?,
+                    kills = kills + ?,
                     win_streak = ?,
                     lose_streak = ?,
                     max_win_streak = MAX(max_win_streak, ?),
                     mvps = mvps + ?,
                     last_active = ?
                 WHERE user_id=? AND guild_id=?
-            """, (points_delta, add_win, add_loss, add_match, win_streak, lose_streak, max_win_streak, add_mvp, datetime.now().isoformat(), uid, gid))
+            """, (points_delta, add_win, add_loss, add_match, add_kills, win_streak, lose_streak, max_win_streak, add_mvp, datetime.now().isoformat(), uid, gid))
             conn.commit()
         finally:
             pass
@@ -1433,22 +1445,27 @@ class Database:
             pass
 
     def recalculate_ranks(self, gid):
-        """V4: يُعيد حساب رانك كل اللاعبين.
+        """V5: يُعيد حساب رانك كل اللاعبين.
         - نقاط > 0 → رانك حسب الترتيب (1, 2, 3...)
         - نقاط = 0 → رانك 1000 (افتراضي — لم يلعب أو متوازن)
         - نقاط < 0 → رانك 1001, 1002... (عقوبة، كل لاعب له رانك فريد)
-        ✅ إصلاح ثغرة: اللاعبين الجدد كانوا يأخذون 1001+ بدل 1000
+        ✅ إصلاح V5: إضافة user_id ASC كفاصل تعادل أخير لتحديد النتائج
+        ✅ إصلاح V5: تحديث rank_pos أيضاً (كان يُتجاهل سابقاً)
         """
+        # الترتيب الأساسي الموحّد — يُستخدم في كل مكان (recalculate_ranks, get_leaderboard, get_player_rank_position)
+        # user_id ASC يضمن تحديد النتائج عند تطابق كل المعايير السابقة
+        TIEBREAK_ORDER = "points DESC, kills DESC, mvps DESC, wins DESC, losses ASC, matches_played ASC, user_id ASC"
+
         conn = self.conn()
         try:
             # 1) لاعبون بنقاط إيجابية → رانك 1, 2, 3...
-            active = conn.execute("""
+            active = conn.execute(f"""
                 SELECT user_id,
-                       ROW_NUMBER() OVER (ORDER BY points DESC, kills DESC, mvps DESC, wins DESC, losses ASC, matches_played ASC) as rank_pos
+                       ROW_NUMBER() OVER (ORDER BY {TIEBREAK_ORDER}) as rank_pos
                 FROM players
                 WHERE guild_id=? AND points > 0
             """, (gid,)).fetchall()
-            updates = [(p["rank_pos"], p["user_id"]) for p in active]
+            updates = [(p["rank_pos"], p["rank_pos"], p["user_id"]) for p in active]
 
             # 2) لاعبون بنقاط صفر → رانك 1000 ثابت (الجدد + من صُفّر)
             zero_pts = conn.execute("""
@@ -1456,21 +1473,21 @@ class Database:
                 WHERE guild_id=? AND points = 0
             """, (gid,)).fetchall()
             for p in zero_pts:
-                updates.append((STARTING_LEVEL, p["user_id"]))
+                updates.append((STARTING_LEVEL, 0, p["user_id"]))
 
             # 3) لاعبون بنقاط سالبة → رانك 1001, 1002... (عقوبة)
-            negative = conn.execute("""
+            negative = conn.execute(f"""
                 SELECT user_id,
-                       ROW_NUMBER() OVER (ORDER BY points DESC, kills DESC, mvps DESC, wins DESC, losses ASC, matches_played ASC) as rn
+                       ROW_NUMBER() OVER (ORDER BY {TIEBREAK_ORDER}) as rn
                 FROM players
                 WHERE guild_id=? AND points < 0
             """, (gid,)).fetchall()
             for p in negative:
                 penalty_rank = STARTING_LEVEL + p["rn"]
-                updates.append((penalty_rank, p["user_id"]))
+                updates.append((penalty_rank, 0, p["user_id"]))
 
             if updates:
-                conn.executemany("UPDATE players SET level=? WHERE user_id=? AND guild_id=?", [(r, u, gid) for r, u in updates])
+                conn.executemany("UPDATE players SET level=?, rank_pos=? WHERE user_id=? AND guild_id=?", [(lv, rp, u, gid) for lv, rp, u in updates])
                 conn.commit()
         finally:
             pass  # thread-local connection
@@ -1485,15 +1502,17 @@ class Database:
                 logger.warning(f"☁️ Cloud sync failed in recalculate_ranks: {e}")
 
     def get_player_rank_position(self, uid, gid):
-        """V4: يرجع ترتيب اللاعب (متوافق مع recalculate_ranks).
+        """V5: يرجع ترتيب اللاعب (متوافق تماماً مع recalculate_ranks).
         - نقاط > 0 → ترتيبه بين الإيجابيين (1, 2, 3...)
         - نقاط = 0 → 1000
         - نقاط < 0 → 1001+ حسب عدد السلبيين قبله
+        ✅ إصلاح V5: معايير كسر التعادل مطابقة تماماً لـ recalculate_ranks:
+            points DESC, kills DESC, mvps DESC, wins DESC, losses ASC, matches_played ASC, user_id ASC
         """
         conn = self.conn()
         try:
             player = conn.execute(
-                "SELECT points, wins, matches_played FROM players WHERE user_id=? AND guild_id=?",
+                "SELECT points, kills, mvps, wins, losses, matches_played FROM players WHERE user_id=? AND guild_id=?",
                 (uid, gid)
             ).fetchone()
             if not player:
@@ -1501,40 +1520,48 @@ class Database:
             # نقاط صفر → رانك افتراضي
             if player["points"] == 0:
                 return STARTING_LEVEL
+
+            # ✅ V5: معايير كسر التعادل الموحّدة (متطابقة مع recalculate_ranks)
+            # points DESC → points > ? (أعلى نقاط أولاً)
+            # kills DESC → kills > ? (أكثر kills أولاً)
+            # mvps DESC → mvps > ? (أكثر mvps أولاً)
+            # wins DESC → wins > ? (أكثر فوز أولاً)
+            # losses ASC → losses < ? (أقل خسارة أولاً)
+            # matches_played ASC → matches_played < ? (أقل مباريات أولاً)
+            # user_id ASC → user_id < ? (أقل ID أولاً — للتحديد)
+            p = player  # shortcut
+            tiebreak_sql = """(
+                points > ? OR
+                (points = ? AND kills > ?) OR
+                (points = ? AND kills = ? AND mvps > ?) OR
+                (points = ? AND kills = ? AND mvps = ? AND wins > ?) OR
+                (points = ? AND kills = ? AND mvps = ? AND wins = ? AND losses < ?) OR
+                (points = ? AND kills = ? AND mvps = ? AND wins = ? AND losses = ? AND matches_played < ?) OR
+                (points = ? AND kills = ? AND mvps = ? AND wins = ? AND losses = ? AND matches_played = ? AND user_id < ?)
+            )"""
+            tiebreak_params = (
+                p["points"],
+                p["points"], p["kills"],
+                p["points"], p["kills"], p["mvps"],
+                p["points"], p["kills"], p["mvps"], p["wins"],
+                p["points"], p["kills"], p["mvps"], p["wins"], p["losses"],
+                p["points"], p["kills"], p["mvps"], p["wins"], p["losses"], p["matches_played"],
+                p["points"], p["kills"], p["mvps"], p["wins"], p["losses"], p["matches_played"], uid
+            )
+
             # نقاط سالبة → 1001 + ترتيبه بين السلبيين
-            if player["points"] < 0:
-                higher_neg = conn.execute("""
-                    SELECT COUNT(*) FROM players
-                    WHERE guild_id=? AND points < 0 AND (
-                        points > ? OR
-                        (points = ? AND wins > ?) OR
-                        (points = ? AND wins = ? AND matches_played < ?) OR
-                        (points = ? AND wins = ? AND matches_played = ? AND user_id < ?)
-                    )
-                """, (
-                    gid,
-                    player["points"],
-                    player["points"], player["wins"],
-                    player["points"], player["wins"], player["matches_played"],
-                    player["points"], player["wins"], player["matches_played"], uid
-                )).fetchone()[0]
+            if p["points"] < 0:
+                higher_neg = conn.execute(
+                    f"SELECT COUNT(*) FROM players WHERE guild_id=? AND points < 0 AND {tiebreak_sql}",
+                    (gid,) + tiebreak_params
+                ).fetchone()[0]
                 return STARTING_LEVEL + higher_neg + 1
+
             # نقاط إيجابية → عدّ من فوقه
-            higher = conn.execute("""
-                SELECT COUNT(*) FROM players
-                WHERE guild_id=? AND points > 0 AND (
-                    points > ? OR
-                    (points = ? AND wins > ?) OR
-                    (points = ? AND wins = ? AND matches_played < ?) OR
-                    (points = ? AND wins = ? AND matches_played = ? AND user_id < ?)
-                )
-            """, (
-                gid,
-                player["points"],
-                player["points"], player["wins"],
-                player["points"], player["wins"], player["matches_played"],
-                player["points"], player["wins"], player["matches_played"], uid
-            )).fetchone()[0]
+            higher = conn.execute(
+                f"SELECT COUNT(*) FROM players WHERE guild_id=? AND points > 0 AND {tiebreak_sql}",
+                (gid,) + tiebreak_params
+            ).fetchone()[0]
             return higher + 1
         finally:
             pass  # thread-local connection
@@ -5347,7 +5374,7 @@ async def points_cmd(ctx, member: discord.Member = None):
     points = player.get("points", 0)
     top_pts = db.get_top_points(ctx.guild.id)
     pts_to_next = max(0, top_pts - points) if top_pts > points else 0
-    progress_pct = int((points / max(top_pts, 1)) * 100) if top_pts else 0
+    progress_pct = max(0, min(100, int((points / max(top_pts, 1)) * 100))) if top_pts else 0  # ✅ إصلاح V5: تحديد النسبة بين 0-100
     progress_bar = make_progress_bar(points, max(top_pts, 1), length=15)
     rank_color = get_rank_color(level)
     rank_title = get_rank_title(level)
@@ -7161,6 +7188,7 @@ async def resetrankall_cmd(ctx):
                 member.id, guild.id,
                 points=0,
                 level=STARTING_LEVEL,
+                rank_pos=0,
                 wins=0,
                 losses=0,
                 kills=0,
@@ -7193,6 +7221,13 @@ async def resetrankall_cmd(ctx):
     )
     success_embed.set_footer(text=f"{BOT_FOOTER}  •  Reset complete")
     success_embed = apply_branding(success_embed, ctx.guild)
+    # ✅ إصلاح V5:زامن الـ Roles بعد التصفير (كانت تتأخر حتى الـ periodic sync)
+    try:
+        db.recalculate_ranks(guild.id)
+        await sync_all_players_roles(guild)
+        logger.info(f"✅ Roles synced after resetrankall in {guild.id}")
+    except Exception as e:
+        logger.warning(f"⚠️ Role sync after resetrankall failed: {e}")
     await progress.edit(embed=success_embed)
     logger.info(f"🏅 resetrankall: {reset_count} members fully reset to {STARTING_LEVEL} (points=0) in {guild.id}")
 
@@ -7225,6 +7260,11 @@ async def setlevel_cmd(ctx, target: Union[discord.User, int] = None, level: int 
     db.update_player_stats(user_id, ctx.guild.id, level=level)
     if member:
         await update_member_nickname(member, level)
+        # ✅ إصلاح V5: زامن الـ Role بعد تعيين الرانك يدوياً
+        try:
+            await sync_player_role(ctx.guild, member, level)
+        except Exception as e:
+            logger.warning(f"⚠️ Role sync after setlevel failed: {e}")
     await ctx.send(embed=discord.Embed(
         title="✅  Level Updated",
         description=(
