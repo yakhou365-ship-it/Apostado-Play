@@ -3,7 +3,7 @@
 > **هذا الملف هو "ذاكرة المشروع".** اقرأه قبل أي تعديل.
 > **الكود الفعلي هو المصدر الأساسي للحقيقة.** إذا لم يطابق هذا الملف الكود، صحّح هذا الملف.
 
-Last updated: 2026-10-07 (4 runtime bugs fixed + blacklist channel + 2-min fixrank/syncnicknames + v2: blacklist-channel dedupe + play-flow embed cleanup)
+Last updated: 2026-10-07 (v2 fixes: blacklist-channel dedupe + play-flow embed cleanup + v2b: fuzzy blacklist-channel matching for manually-named duplicates)
 
 ---
 
@@ -408,7 +408,7 @@ Status legend: **FIXED** in this audit · **OPEN** (needs a product decision) ·
 ### FIXED in the 2026-10-07 session (part 2, user follow-up)
 | Sev | Issue | Fix |
 |---|---|---|
-| HIGH | **Duplicate `🔇・Blacklisted` channels** could exist — a race between concurrent `auto_setup_guild`/`!!setup`/blacklist calls could create two, and old code never removed extras. | `update_blacklist_channel(guild)` now runs its find/create under a **per-guild `asyncio.Lock`** (`_blacklist_channel_locks`) and **dedupes**: it collects every channel named `BLACKLIST_CHANNEL_NAME`, keeps the settings-referenced one (or the first found), deletes the rest, then re-persists `blacklist_channel_id`. Verified in a stub harness (10/10). |
+| HIGH | **Duplicate `🔇・Blacklisted` channels** could exist — a race between concurrent `auto_setup_guild`/`!!setup`/blacklist calls could create two, old code never removed extras, and the dedupe only matched the **exact** channel name (manually-created `BLACKLISTED` / `blacklist-2` channels escaped it). | `update_blacklist_channel(guild)` runs its find/create under a **per-guild `asyncio.Lock`** (`_blacklist_channel_locks`) and **dedupes smartly**: candidates = channels matching the exact name **or** containing `"blacklist"` (case-insensitive); the settings-referenced channel is kept only if it actually looks like a blacklist channel (a bad pointer is repointed, never deleting an unrelated channel); otherwise the first exact-name channel wins, then any fuzzy candidate; all other candidates are deleted and `blacklist_channel_id` re-persisted. Verified in a stub harness (13/13). |
 | MEDIUM | **Match-flow embeds stayed in the play channel forever.** "Match Ready!" (sent at match start) was never deleted, cancel paths left an edited copy of the lobby embed, and embeds whose `message_id` was only in the DB (post-restart lobbies) were unreachable from memory. | New `_lobby_flow_msgs` registry — `{lobby_id: {(channel_id, msg_id)}}` — registers the lobby-join embed (modal + rematch) and the "Match Ready!" embed; `cleanup_lobby_memory` spawns `_delete_lobby_flow_msgs` so **any** match-end method removes them. Cancel now **deletes** the lobby embed instead of editing it (`delete_after=30` on the confirmation). `_delete_lobby_embed_for_lobby` falls back to `lobbies.message_id` in the DB when memory is empty. A post-restart task `recover_after_restart` (started in `on_ready`) deletes leftover embeds of terminal (`cancelled`/`completed`) lobbies and re-arms the 2-minute auto-close timer for `waiting` lobbies. |
 
 ### OPEN — deliberately not changed (needs your decision)
@@ -490,6 +490,7 @@ Status legend: **FIXED** in this audit · **OPEN** (needs a product decision) ·
 | `sync_all_nicknames` re-ranks a stale member nickname (`RANK n | name`) with throttle | 15/15 harness checks pass |
 | `_lobby_embed_hide_timers` self-cancel ordering (timer pops itself before `cleanup_lobby_memory` runs) | OK (read-through) |
 | **Part 2 harness (stub-`discord`, throwaway DB, 10/10):** blacklist-channel dedupe (2 duplicates → 1 survivor + settings re-pointed), no deadlock on re-entry, "Match Ready"/flow embeds deleted at match end + registry cleared, stale lobby embed deleted via DB `message_id` fallback | 10/10 |
+| **Part 2b harness (stub-`discord`, 13/13):** fuzzy blacklist-channel dedupe — manual names (`BLACKLISTED`, `blacklist-2`, `blacklist-نص`) deleted; exact-name survivor kept; unrelated channel (`general`) never deleted with a bad settings pointer; pointer re-pointed; creation when none exists | 13/13 |
 | Match-start ("Match Ready!") and cancel/decline flows register/delete their play-channel embeds; `delete_after` on cancel + failed-start notices | OK (code walk-through) |
 | `recover_after_restart` (on_ready): queries terminal `lobbies.message_id` leftovers, evokes `_delete_lobby_embed_for_lobby` fallback, re-arms 2-min auto-close for `waiting` lobbies | OK (read-through + harness fallback path) |
 

@@ -2406,21 +2406,33 @@ async def update_blacklist_channel(guild):
         # 🔒 قفل لكل سيرفر: يمنع إنشاء قناتين متوازيتين (سباق) عند تنفيذ أوامر متزامنة
         lock = _blacklist_channel_locks.setdefault(guild.id, asyncio.Lock())
         async with lock:
-            # 🆕 إزالة التكرارات: لو في أكثر من قناة بنفس الاسم → احذف الزائد، ابقَ على قناة واحدة
-            same_name = [c for c in guild.text_channels if c.name == BLACKLIST_CHANNEL_NAME]
+            # 🆕 إزالة التكرارات (أسماء دقيقة أو متضمنة لكلمة blacklist — يغطي القنوات اليدوية)
+            def _looks_like_blacklist_channel(ch):
+                lower = (ch.name or "").lower()
+                return ch.name == BLACKLIST_CHANNEL_NAME or "blacklist" in lower
+
+            candidates = [c for c in guild.text_channels if _looks_like_blacklist_channel(c)]
+            exact = [c for c in candidates if c.name == BLACKLIST_CHANNEL_NAME]
+
             channel = None
             if settings.get("blacklist_channel_id"):
-                channel = guild.get_channel(settings["blacklist_channel_id"])
-            if not channel and same_name:
-                channel = same_name[0]
-                db.set_guild_setting(guild.id, "blacklist_channel_id", channel.id)
-            for extra in same_name:
-                if channel is None or extra.id != channel.id:
+                ref = guild.get_channel(settings["blacklist_channel_id"])
+                # ⚡ نستخدم القناة المرجعية فقط لو كانت فعلاً قناة بلاك ليست (لا نمسح إشارة خاطئة لقناة أخرى)
+                if ref and _looks_like_blacklist_channel(ref):
+                    channel = ref
+            if not channel and exact:
+                channel = exact[0]
+            if not channel and candidates:
+                channel = candidates[0]
+
+            for extra in candidates:
+                if extra.id != (channel.id if channel else -1):
                     try:
                         await extra.delete(reason="🧹 Duplicate blacklist channel")
-                        logger.info(f"🧹 Deleted duplicate blacklist channel {extra.id}")
+                        logger.info(f"🧹 Deleted duplicate blacklist channel {extra.name} ({extra.id})")
                     except Exception as e:
                         logger.warning(f"🧹 Could not delete duplicate blacklist channel {extra.id}: {e}")
+
             # ⚡ ثبّت قناة البلاك ليست الفعلية بعد التنظيف (آخر إشارة صحيحة)
             if channel is not None:
                 db.set_guild_setting(guild.id, "blacklist_channel_id", channel.id)
