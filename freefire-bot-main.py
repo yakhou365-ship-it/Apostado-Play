@@ -7199,7 +7199,8 @@ async def fixrankall_cmd(ctx):
 
 @bot.command(name="botinfo")
 async def botinfo_cmd(ctx):
-    total_members = sum(g.member_count for g in bot.guilds)
+    # 🆕 FIX: member_count قد يكون None في السيرفرات الكبيرة → لا نكسر الأمر
+    total_members = sum((g.member_count or 0) for g in bot.guilds)
     total_text_channels = sum(len(g.text_channels) for g in bot.guilds)
     total_voice_channels = sum(len(g.voice_channels) for g in bot.guilds)
     embed = discord.Embed(
