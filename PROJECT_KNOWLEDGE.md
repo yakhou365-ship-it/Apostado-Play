@@ -508,6 +508,8 @@ Specifically **NOT TESTED**: gateway login; any prefix command; any button/selec
 | `35472be` | Rank-role error handling (no more silent `pass`), retry with backoff, admin notification, anti-accumulation guard; **collective 4-voter MVP voting** replaced the old team vote; `!!help` updated |
 | `a555d3b` | "Create Lobby" prompt auto-deletes after 60 s if no room was created, and is deleted when the match ends; rules channel restored and improved |
 | `c585615` | Build fingerprint (`BUILD_ID` from `RAILWAY_GIT_COMMIT_SHA`) surfaced in `!!botinfo`; Arabic text fix |
+| `77dd8e2` | Stop tracking compiled `__pycache__/*.pyc` artifacts (gitignore covers them now) |
+| `99d038a` | Dedupe `🔇・Blacklisted` channels (per-guild `asyncio.Lock` + duplicate deletion + settings re-point); delete **all** play-flow embeds at match end by any method — new `_lobby_flow_msgs` registry (lobby-join + "Match Ready!"), cancel deletes instead of editing, `_delete_lobby_embed_for_lobby` falls back to `lobbies.message_id`, post-restart `recover_after_restart` cleans terminal-lobby leftovers and re-arms 2-min auto-close for waiting lobbies |
 | *audit, uncommitted at time of writing* | Fixed the CRITICAL `voting`-lockout in `auto_trigger_vote`; fixed the duplicate periodic-task leak on reconnect; added `sanitize_user_text()` to close the mention-injection hole; guarded `CreateLobbyView` against `ctx=None` after restart; fixed the `play_channels` cache invalidation; made DM command handling explicit. Created this document. |
 
 ### Deployment reminder
