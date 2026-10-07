@@ -104,7 +104,13 @@ ROLE_OP_RETRY_ATTEMPTS = 3   # عدد المحاولات عند rate limit / خ�
 ROLE_OP_RETRY_BASE_DELAY = 1.5  # ثواني الانتظار الأساسية (exponential backoff)
 
 # 🆕 رسالة "Create Lobby" — تختفي بعد هذه المدة إذا ما انشأ اللاعب الروم
-CREATE_PROMPT_DELETE_AFTER = 60   # ثانية
+# ✅ تسريع: رُفع من 60 إلى 120 ثانية (دقيقتان) حسب طلب الأدمن — كل الـ embeds
+#    المؤقتة تختفي إما بانتهاء الماتش أو بعد دقيقتين على الأكثر.
+CREATE_PROMPT_DELETE_AFTER = 120   # ثانية (دقيقتان)
+
+# 🆕 الحد الأقصى لعمر أي embed مؤقت (رسائل مثل "Create Lobby"، رسائل اللوبي،
+#    إشعارات الإلغاء/التايم أوت) — تختفي تلقائياً بعدها لو ما انتهى الماتش قبلها
+TEMP_EMBED_DELETE_AFTER = 120   # ثانية (دقيقتان)
 
 # 🆕 نظام البلاغات والحظر
 REPORT_THRESHOLD = 6            # عدد البلاغات اللازمة للحظر التلقائي
@@ -119,6 +125,7 @@ JAIL_CATEGORY_NAME = "🔒 JAIL"
 
 # 🆕 نظام BLACKLIST — منع المخالفين من استخدام البوت مؤقتاً
 BLACKLIST_ROLE_NAME = "🔇 Blacklisted"
+BLACKLIST_CHANNEL_NAME = "🔇・Blacklisted"  # 🆕 شات مخصص يعرض اللاعبين في البلاك ليست
 BLACKLIST_TIME_LIMIT = 180   # 3 دقائق غياب تراكمي
 BLACKLIST_MAX_LEAVES = 5     # عدد مرات الخروج والدخول
 BLACKLIST_DURATION = 600     # 10 دقائق مدة المنع
@@ -605,15 +612,23 @@ async def sync_player_role(guild, member, rank):
                     )
 
 
-async def sync_all_players_roles(guild):
-    """🆕 يزامن roles كل اللاعبين في السيرفر حسب ترتيبهم الحالي.
+async def sync_all_players_roles(guild, player_ids=None):
+    """🆕 يزامن roles اللاعبين في السيرفر حسب ترتيبهم الحالي.
     تُستدعى بعد كل recalculate_ranks().
+
+    ⚡ تسريع: player_ids اختياري — يُمرَّر لتحديث أدوار مجموعة محددة فقط
+    (مثل لاعبي ماتش انتهى) بدل المرور على كل اللاعبين.
     """
     try:
         # اجلب كل اللاعبين مرتبين
         players = db.get_leaderboard(guild.id, limit=None)  # كل اللاعبين
         if not players:
             return
+        if player_ids is not None:
+            wanted = set(player_ids)
+            players = [p for p in players if p["user_id"] in wanted]
+            if not players:
+                return
         for player in players:
             member = guild.get_member(player["user_id"])
             if member and not member.bot:
@@ -622,6 +637,28 @@ async def sync_all_players_roles(guild):
                 await asyncio.sleep(0.1)  # تجنب rate limit
     except Exception as e:
         logger.exception(f"sync_all_players_roles failed: {e}")
+
+
+async def sync_all_nicknames(guild):
+    """🆕 fixrank + syncnicknames تلقائياً كل دقيقتين:
+    يصحّح نكات كل الأعضاء حسب رانكهم الحالي (للموجودين في السيرفر فقط).
+    """
+    updated = 0
+    title = "🔄 Nickname Sync"
+    try:
+        members = [m for m in guild.members if not m.bot]
+        for member in members:
+            try:
+                player = db.get_or_create_player(member.id, guild.id, member.display_name)
+                await update_member_nickname(member, player.get("level", STARTING_LEVEL))
+                updated += 1
+                await asyncio.sleep(0.05)  # تجنب rate limit (تصحيح نكات كل الأعضاء)
+            except Exception as e:
+                logger.debug(f"sync_all_nicknames skip {member.id}: {e}")
+        if updated:
+            logger.info(f"{title} ({guild.name}): checked {len(members)} members")
+    except Exception as e:
+        logger.warning(f"{title} failed for {guild.name}: {e}")
 
 
 async def setup_rank_roles_permissions(guild):
@@ -770,7 +807,9 @@ async def notify_admins(guild, title, description, color=None):
 GUILD_SETTINGS_COLUMNS = {
     "form_channel_id", "announcement_role_id", "leaderboard_channel_id",
     "leaderboard_message_id", "auto_channel_category_id",
-    "report_channel_ids"  # 🆕 قائمة فويسات التفتيش المحددة من الأدمن (JSON array)
+    "report_channel_ids",  # 🆕 قائمة فويسات التفتيش المحددة من الأدمن (JSON array)
+    "blacklist_channel_id",   # 🆕 قناة عرض اللاعبين في البلاك ليست
+    "blacklist_message_id"    # 🆕 رسالة القائمة في تلك القناة
 }
 
 
@@ -892,7 +931,9 @@ class Database:
                     leaderboard_channel_id INTEGER DEFAULT NULL,
                     leaderboard_message_id INTEGER DEFAULT NULL,
                     auto_channel_category_id INTEGER DEFAULT NULL,
-                    report_channel_ids TEXT DEFAULT NULL
+                    report_channel_ids TEXT DEFAULT NULL,
+                    blacklist_channel_id INTEGER DEFAULT NULL,
+                    blacklist_message_id INTEGER DEFAULT NULL
                 );
                 CREATE TABLE IF NOT EXISTS play_channels (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1017,6 +1058,9 @@ class Database:
                 ("lobbies", "start_vote_message_id", "INTEGER DEFAULT NULL"),
                 # 🆕 FIX: store the assigned investigation voice for each banned player
                 ("banned_players", "assigned_voice_id", "INTEGER DEFAULT NULL"),
+                # 🆕 قناة عرض البلاك ليست
+                ("guild_settings", "blacklist_channel_id", "INTEGER DEFAULT NULL"),
+                ("guild_settings", "blacklist_message_id", "INTEGER DEFAULT NULL"),
             ]:
                 try:
                     c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
@@ -2011,6 +2055,7 @@ active_lobby_messages = {}
 lobby_timeout_timers = {}
 vote_timeout_timers = {}
 _admin_mvp_results = {}  # 🆕 lobby_id -> {"winner": user_id, "loser": user_id} لأوامر !!w / !!l
+_lobby_embed_hide_timers = {}  # 🆕 مؤقتات إخفاء رسالة اللوبي تلقائياً بعد دقيقتين (عدد غير كافٍ)
 
 # 🆕 رسائل "Create Lobby" — تختفي تلقائياً
 # _create_prompt_msgs : {prompt_message_id: {"guild_id", "channel_id", "user_id"}}
@@ -2288,7 +2333,10 @@ async def update_leaderboard_channel(guild):
         channel = guild.get_channel(settings["leaderboard_channel_id"])
         if not channel:
             return
-        lb = db.get_leaderboard(guild.id, 10)
+        # 🆕 إخفاء اللاعبين في البلاك ليست من اللوحة (بدل عرضهم)
+        blacklisted_ids = {b["user_id"] for b in db.get_blacklisted_players(guild.id)}
+        lb = db.get_leaderboard(guild.id, 25)
+        lb = [p for p in lb if p["user_id"] not in blacklisted_ids][:10]
         embed = discord.Embed(
             title="◆ Free Fire — Top 10 Players",
             description=(
@@ -2339,6 +2387,78 @@ async def update_leaderboard_channel(guild):
         db.set_guild_setting(guild.id, "leaderboard_message_id", msg.id)
     except Exception as e:
         logger.exception(f"update_leaderboard_channel failed: {e}")
+
+
+async def update_blacklist_channel(guild):
+    """🔇 يحدّث قناة "🔇・Blacklisted" التي تعرض اللاعبين في البلاك ليست.
+    يُستدعى بعد كل apply/remove blacklist وبعد الـ setup.
+    ⚡ إذا ما كانت القناة موجودة بعد، يُنشئها تحت كاتيجوري الـ TEXT.
+    """
+    try:
+        settings = db.get_guild_settings(guild.id)
+        if not settings:
+            return
+        # 🆕 إنشاء القناة إن لم تكن موجودة بعد (بعد setup/autosetup)
+        channel = guild.get_channel(settings.get("blacklist_channel_id")) if settings.get("blacklist_channel_id") else None
+        if not channel:
+            channel = discord.utils.get(guild.text_channels, name=BLACKLIST_CHANNEL_NAME)
+        if not channel:
+            text_cat = discord.utils.get(guild.categories, name="🎮 FREE FIRE — TEXT")
+            try:
+                channel = await guild.create_text_channel(
+                    BLACKLIST_CHANNEL_NAME, category=text_cat, topic="Blacklisted Players"
+                )
+                db.set_guild_setting(guild.id, "blacklist_channel_id", channel.id)
+                logger.info(f"🔇 Created blacklist channel: {BLACKLIST_CHANNEL_NAME}")
+            except Exception as e:
+                logger.warning(f"🔇 Could not create blacklist channel: {e}")
+                return
+
+        blacklisted = db.get_blacklisted_players(guild.id)
+        embed = discord.Embed(
+            title="🔇  Blacklisted Players",
+            description=(
+                f"> 📊  **الإجمالي:**  `{len(blacklisted)}`\n"
+                f"{separator()}"
+            ),
+            color=COLORS["warning"] if blacklisted else COLORS["success"],
+            timestamp=discord.utils.utcnow()
+        )
+        embed.set_author(name="🔇 Blacklist")
+        if not blacklisted:
+            embed.description = "> ✅  لا يوجد لاعبون في البلاك ليست حالياً"
+        else:
+            for i, b in enumerate(blacklisted[:15], 1):
+                member = guild.get_member(b["user_id"])
+                name = member.display_name if member else f"User#{b['user_id']}"
+                mention = member.mention if member else f"<@{b['user_id']}>"
+                reason = b.get("reason") or "غير محدد"
+                expires = b.get("expires_at", "N/A")[:19] if b.get("expires_at") else "N/A"
+                embed.add_field(
+                    name=f"#{i}  —  {name}",
+                    value=(
+                        f"> 👤  {mention}\n"
+                        f"> 📝  `{reason}`\n"
+                        f"> ⏱️  ينتهي:  `{expires}`"
+                    ),
+                    inline=False
+                )
+            if len(blacklisted) > 15:
+                embed.set_footer(text=f"... و {len(blacklisted) - 15} لاعب آخر")
+        embed = apply_branding(embed, guild)
+
+        msg_id = settings.get("blacklist_message_id")
+        if msg_id:
+            try:
+                msg = await channel.fetch_message(msg_id)
+                await msg.edit(embed=embed)
+                return
+            except (discord.NotFound, discord.Forbidden):
+                pass
+        msg = await channel.send(embed=embed)
+        db.set_guild_setting(guild.id, "blacklist_message_id", msg.id)
+    except Exception as e:
+        logger.exception(f"update_blacklist_channel failed: {e}")
 
 
 async def delete_message_safely(channel, message_id, reason=""):
@@ -2412,11 +2532,74 @@ async def _delete_create_prompt_for_lobby(lobby_id, guild=None):
     await delete_message_safely(ch, prompt_id, reason=f"انتهى اللوبي #{lobby_id}")
 
 
+async def _delete_lobby_embed_for_lobby(lobby_id, msg_ids=None, guild=None):
+    """🆕 يحذف رسالة اللوبي (الـ embed مع أزرار الانضمام) عند انتهاء اللوبي.
+    يُستدعى من cleanup_lobby_memory، ومن مؤقت الدقيقتين لو ما اكتمل العدد.
+    msg_ids: معرّفات الرسائل المطلوب حذفها (تُلتقط قبل مسح الـ dict).
+    """
+    if msg_ids is None:
+        msg_ids = [k for k, v in active_lobby_messages.items() if v == lobby_id]
+    if not msg_ids:
+        return
+    lobby = db.get_lobby(lobby_id)
+    if not lobby:
+        return
+    g = guild or bot.get_guild(lobby["guild_id"])
+    if not g:
+        return
+    ch = g.get_channel(lobby["channel_id"])
+    for mid in msg_ids:
+        active_lobby_messages.pop(mid, None)
+        await delete_message_safely(ch, mid, reason=f"انتهى اللوبي #{lobby_id}")
+
+
+async def _auto_hide_idle_lobby_embed(lobby_id, guild):
+    """🆕 بعد دقيقتين: لو اللوبي لسا waiting (ما اكتمل العدد) → احذف رسالته
+    وألغِ اللوبي حتى لا يعلق اللاعبون في لوبي لا يمكن الانضمام إليه.
+    َيعمل مرة واحدة فقط (يُحذف من المؤقتات عند التنفيذ أو الإلغاء).
+    """
+    try:
+        await asyncio.sleep(TEMP_EMBED_DELETE_AFTER)
+        lobby = db.get_lobby(lobby_id)
+        if not lobby or lobby["status"] != "waiting":
+            _lobby_embed_hide_timers.pop(lobby_id, None)
+            return
+        # أزِل مؤقّتنا أولاً حتى لا يُلغي cleanup_lobby_memory هذه المهمة نفسها
+        _lobby_embed_hide_timers.pop(lobby_id, None)
+        # ما اكتمل العدد خلال دقيقتين → أغلق اللوبي + احذف الرسالة
+        db.update_lobby_status(lobby_id, "cancelled")
+        cleanup_lobby_memory(lobby_id)
+        ch = guild.get_channel(lobby["channel_id"])
+        if ch:
+            closed_embed = discord.Embed(
+                title="⏰  Lobby Closed — Not Enough Players",
+                description=(
+                    f"> لم يكتمل العدد المطلوب خلال **{TEMP_EMBED_DELETE_AFTER // 60} دقيقة**.\n"
+                    f"> استخدم `{PREFIX}play 4v4` لبدء ماتش جديد."
+                ),
+                color=COLORS["warning"],
+                timestamp=discord.utils.utcnow()
+            )
+            closed_embed.set_footer(text=f"{BOT_FOOTER}  •  Lobby #{lobby_id}")
+            closed_embed = apply_branding(closed_embed, guild)
+            await ch.send(embed=closed_embed, delete_after=TEMP_EMBED_DELETE_AFTER)
+            logger.info(
+                f"⏰ Lobby #{lobby_id} auto-closed — not enough players after "
+                f"{TEMP_EMBED_DELETE_AFTER}s"
+            )
+    except asyncio.CancelledError:
+        _lobby_embed_hide_timers.pop(lobby_id, None)
+        raise
+    except Exception as e:
+        logger.warning(f"_auto_hide_idle_lobby_embed failed for lobby #{lobby_id}: {e}")
+        _lobby_embed_hide_timers.pop(lobby_id, None)
+
+
 def cleanup_lobby_memory(lobby_id):
     to_remove = [k for k, v in active_lobby_messages.items() if v == lobby_id]
     for k in to_remove:
         del active_lobby_messages[k]
-    for timer_dict in (lobby_timeout_timers, vote_timeout_timers):
+    for timer_dict in (lobby_timeout_timers, vote_timeout_timers, _lobby_embed_hide_timers):
         if lobby_id in timer_dict:
             try:
                 timer_dict[lobby_id].cancel()
@@ -2439,6 +2622,13 @@ def cleanup_lobby_memory(lobby_id):
             pid = _lobby_prompt_msg.pop(lobby_id, None)
             if pid:
                 _create_prompt_msgs.pop(pid, None)
+
+    # 🆕 احذف رسالة اللوبي (الـ embed) الفعلية عند انتهاء اللوبي
+    if to_remove:
+        try:
+            asyncio.create_task(_delete_lobby_embed_for_lobby(lobby_id, msg_ids=list(to_remove)))
+        except RuntimeError:
+            pass
 
 
 # ============================================================
@@ -2482,7 +2672,7 @@ async def create_match_channels(guild, lobby, lobby_id):
 
     t1_voice = await guild.create_voice_channel("『🎮』︱ᴛᴇᴀᴍ ɪ", category=cat, overwrites=t1_overwrites)
     t2_voice = await guild.create_voice_channel("『🎮』︱ᴛᴇᴀᴍ ɪɪ", category=cat, overwrites=t2_overwrites)
-    general_text = await guild.create_text_channel("💬・general-chat", category=cat, overwrites=general_overwrites)
+    general_text = await guild.create_text_channel("💬・Teams chat", category=cat, overwrites=general_overwrites)
 
     db.save_match_channels(lobby_id, guild.id, cat.id, t1_voice.id, general_text.id, t2_voice.id, general_text.id)
     # 🆕 سجل الفويسات في مجموعة البلاك ليست المتابعة
@@ -2828,7 +3018,7 @@ async def auto_lobby_timeout(lobby_id, guild):
             )
             timeout_embed.set_footer(text=f"{BOT_FOOTER}  •  Lobby #{lobby_id}")
             timeout_embed = apply_branding(timeout_embed, guild)
-            await ch.send(embed=timeout_embed)
+            await ch.send(embed=timeout_embed, delete_after=TEMP_EMBED_DELETE_AFTER)
     except asyncio.CancelledError:
         pass
     except Exception as e:
@@ -2899,9 +3089,6 @@ async def process_match_result(guild, lobby_id, winner_team, channel=None):
                 skip_recalculate=True
             )
             new_level = new_p.get("level", STARTING_LEVEL) if new_p else old_level
-            m = guild.get_member(pid)
-            if m:
-                await update_member_nickname(m, new_level)
             winner_details.append((pid, pts, is_mvp, old_level, new_level))
 
         # معالجة الفريق الخاسر
@@ -2922,9 +3109,6 @@ async def process_match_result(guild, lobby_id, winner_team, channel=None):
                 skip_recalculate=True
             )
             new_level = new_p.get("level", STARTING_LEVEL) if new_p else old_level
-            m = guild.get_member(pid)
-            if m:
-                await update_member_nickname(m, new_level)
             loser_details.append((pid, pts, is_mvp, old_level, new_level))
 
         db.recalculate_ranks(guild.id)
@@ -2989,12 +3173,12 @@ async def process_match_result(guild, lobby_id, winner_team, channel=None):
         if channel:
             await channel.send(embed=embed)
 
-        # تحديث الـ Leaderboard
-        await update_leaderboard_channel(guild)
-        # 🆕 يزامن الـ Roles لكل اللاعبين حسب ترتيبهم الجديد
-        await sync_all_players_roles(guild)
+        # ⚡ تسريع: أغلق الفويسات فوراً — انقل اللاعبين + احذف قنوات الماتش قبل
+        #    أي عمل بطيء (leaderboard / roles) حتى يختفي الشات/الفويس بسرعة
+        await delete_match_channels(guild, lobby_id)
+        cleanup_lobby_memory(lobby_id)
 
-        # 🆕 أعد اللاعبين لغرف الانتظار
+        # 🆕 أعد اللاعبين لغرف الانتظار (بعد حذف القنوات مباشرة)
         all_players = lobby["team1_players"] + lobby["team2_players"]
         for pid in all_players:
             m = guild.get_member(pid)
@@ -3006,9 +3190,9 @@ async def process_match_result(guild, lobby_id, winner_team, channel=None):
                         try: await m.move_to(vc)
                         except (discord.HTTPException, discord.Forbidden): pass
 
-        await asyncio.sleep(5)
-        await delete_match_channels(guild, lobby_id)
-        cleanup_lobby_memory(lobby_id)
+        # تحديث الـ Leaderboard + مزامنة أدوار لاعبي الماتش فقط (تسريع)
+        await update_leaderboard_channel(guild)
+        await sync_all_players_roles(guild, player_ids=all_players)
     except Exception as e:
         logger.exception(f"process_match_result failed: {e}")
 
@@ -4608,9 +4792,6 @@ async def process_match_result_with_mvps(guild, lobby_id, winner_team, winner_mv
                 skip_recalculate=True
             )
             new_level = new_p.get("level", STARTING_LEVEL) if new_p else old_level
-            m = guild.get_member(pid)
-            if m:
-                await update_member_nickname(m, new_level)
             winner_details.append((pid, pts, is_mvp, old_level, new_level))
 
         # معالجة الفريق الخاسر
@@ -4631,9 +4812,6 @@ async def process_match_result_with_mvps(guild, lobby_id, winner_team, winner_mv
                 skip_recalculate=True
             )
             new_level = new_p.get("level", STARTING_LEVEL) if new_p else old_level
-            m = guild.get_member(pid)
-            if m:
-                await update_member_nickname(m, new_level)
             loser_details.append((pid, pts, is_mvp, old_level, new_level))
 
         db.recalculate_ranks(guild.id)
@@ -4697,49 +4875,17 @@ async def process_match_result_with_mvps(guild, lobby_id, winner_team, winner_mv
         if channel:
             await channel.send(embed=embed)
 
-        await update_leaderboard_channel(guild)
-        # 🆕 يزامن الـ Roles لكل اللاعبين حسب ترتيبهم الجديد
-        await sync_all_players_roles(guild)
-
-        # ✅ V3 MAX: انقل اللاعبين لفويسهم الأصلي قبل حذف القنوات
-        # ابحث عن fallback waiting room صالحة
-        fallback_vc = None
-        for cid in db.get_waiting_rooms(guild.id):
-            vc = guild.get_channel(cid)
-            if vc and isinstance(vc, discord.VoiceChannel):
-                fallback_vc = vc
-                break
-        
-        all_players = lobby["team1_players"] + lobby["team2_players"]
-        # 🆕 ابحث عن الفويس الأصلي لكل لاعب
-        original_channels = _original_voice_channels.get(lobby_id, {})
-        for pid in all_players:
-            m = guild.get_member(pid)
-            if m and m.voice and m.voice.channel:
-                target_vc = None
-                original_cid = original_channels.get(pid)
-                if original_cid:
-                    original_vc = guild.get_channel(original_cid)
-                    if original_vc and isinstance(original_vc, discord.VoiceChannel):
-                        target_vc = original_vc
-                        logger.info(f"  🔄 Returning {m.display_name} → original: {original_vc.name}")
-                if not target_vc and fallback_vc:
-                    target_vc = fallback_vc
-                    logger.info(f"  🔄 Returning {m.display_name} → fallback: {fallback_vc.name}")
-                if target_vc:
-                    try:
-                        await m.move_to(target_vc)
-                    except discord.Forbidden as e:
-                        logger.error(f"❌ Forbidden move_to: {m.display_name} → #{target_vc.name} | {e}")
-                    except discord.HTTPException as e:
-                        logger.warning(f"⚠️ HTTP move_to failed: {m.display_name} → #{target_vc.name} | {e}")
-        # 🆕 امسح الفويس الأصلي من الذاكرة
-        _original_voice_channels.pop(lobby_id, None)
-
-        await asyncio.sleep(3)  # ✅ تقليل من 5 إلى 3 ثواني
+        # ⚡ تسريع: أغلق الفويسات فوراً — انقل اللاعبين + احذف قنوات الماتش قبل
+        #    leaderboard / roles حتى تختفي القنوات بأسرع ما يمكن (خاصة !!w / !!l)
         await delete_match_channels(guild, lobby_id)
         cleanup_lobby_memory(lobby_id)
-        logger.info(f"✅ Match #{lobby_id} completed successfully — channels deleted, memory cleaned")
+        _original_voice_channels.pop(lobby_id, None)
+        logger.info(f"✅ Match #{lobby_id} completed — channels deleted, memory cleaned")
+
+        # تحديث الـ Leaderboard + مزامنة أدوار لاعبي الماتش فقط (تسريع)
+        all_players = lobby["team1_players"] + lobby["team2_players"]
+        await update_leaderboard_channel(guild)
+        await sync_all_players_roles(guild, player_ids=all_players)
     except Exception as e:
         logger.exception(f"❌ process_match_result_with_mvps FAILED for lobby {lobby_id}: {e}")
         # ✅ إصلاح: حتى لو فشل كل شيء، تأكد من إنهاء الماتش وحذف القنوات
@@ -5139,6 +5285,8 @@ class LobbyCreateModal(discord.ui.Modal, title="🎮 Create Lobby — Enter Room
             active_lobby_messages[msg.id] = lid
             db.get_or_create_player(user.id, guild.id, user.display_name)
             lobby_timeout_timers[lid] = asyncio.create_task(auto_lobby_timeout(lid, guild))
+            # 🆕 بعد دقيقتين لو اللوبي لسا waiting (عدد غير كافٍ) → أغلق + احذف الرسالة
+            _lobby_embed_hide_timers[lid] = asyncio.create_task(_auto_hide_idle_lobby_embed(lid, guild))
             await interaction.response.send_message(
                 embed=discord.Embed(
                     title="✅  Lobby Created!",
@@ -5191,6 +5339,8 @@ class RematchView(discord.ui.View):
             db.update_lobby_message(lid, msg.id)
             active_lobby_messages[msg.id] = lid
             lobby_timeout_timers[lid] = asyncio.create_task(auto_lobby_timeout(lid, guild))
+            # 🆕 بعد دقيقتين لو اللوبي لسا waiting (عدد غير كافٍ) → أغلق + احذف الرسالة
+            _lobby_embed_hide_timers[lid] = asyncio.create_task(_auto_hide_idle_lobby_embed(lid, guild))
             for item in self.children:
                 item.disabled = True
             try: await interaction.message.edit(view=self)
@@ -5399,16 +5549,22 @@ async def on_ready():
     
     # 🆕 V3 MAX: sync دوري للرانك والألقاب كل دقيقة
     async def periodic_rank_sync():
-        """يعيد حساب الرانك ويزامن الألقاب كل 60 ثانية."""
+        """يعيد حساب الرانك ويزامن الألقاب كل 60 ثانية،
+        وكل دقيقتين يشغّل fixrank + syncnicknames (تصحيح كل النكات)."""
+        tick = 0
         while True:
             try:
                 await asyncio.sleep(60)
+                tick += 1
                 for guild in bot.guilds:
                     try:
                         # أعِد حساب الرانك
                         db.recalculate_ranks(guild.id)
                         # يزامن الألقاب
                         await sync_all_players_roles(guild)
+                        # 🆕 كل دقيقتين: fixrank + syncnicknames لكل الأعضاء
+                        if tick % 2 == 0:
+                            await sync_all_nicknames(guild)
                     except Exception as e:
                         logger.warning(f"Periodic rank sync failed for {guild.name}: {e}")
             except asyncio.CancelledError:
@@ -5568,6 +5724,17 @@ async def auto_setup_guild(guild):
             db.add_commands_channel(guild.id, ch.id)
             db.add_play_channel(guild.id, ch.id)
 
+    # 🆕 قناة البلاك ليست — تعرض اللاعبين في البلاك ليست (تُنشأ + تُحدَّث تلقائياً)
+    try:
+        bl_ch = discord.utils.get(guild.text_channels, name=BLACKLIST_CHANNEL_NAME)
+        if not bl_ch:
+            bl_ch = await guild.create_text_channel(BLACKLIST_CHANNEL_NAME, category=text_cat, topic="Blacklisted Players")
+            db.add_commands_channel(guild.id, bl_ch.id)
+            logger.info(f"  📝 Created {BLACKLIST_CHANNEL_NAME}")
+        db.set_guild_setting(guild.id, "blacklist_channel_id", bl_ch.id)
+    except Exception as e:
+        logger.warning(f"  [{guild.name}] Blacklist channel: {e}")
+
     # 🆕 قناة القواعد — نفس منطق setup_cmd (idempotent)
     try:
         rules_ch, rules_created = await ensure_rules_channel(guild, text_cat)
@@ -5619,6 +5786,12 @@ async def auto_setup_guild(guild):
         await update_leaderboard_channel(guild)
     except:
         pass
+
+    # 🆕 محدّث قناة البلاك ليست تلقائياً بعد الـ setup
+    try:
+        await update_blacklist_channel(guild)
+    except Exception as e:
+        logger.warning(f"  [{guild.name}] Blacklist channel update: {e}")
 
     # ملخص ما تم اكتشافه
     total_detected = sum(len(v) for v in detected_text_channels.values()) + sum(len(v) for v in detected_voice_channels.values())
@@ -6207,7 +6380,10 @@ async def card_cmd(ctx, member: discord.Member = None):
 
 @bot.command(name="top")
 async def top_cmd(ctx):
-    lb = db.get_leaderboard(ctx.guild.id, 10)
+    # 🆕 إخفاء اللاعبين في البلاك ليست من اللوحة (بدل عرضهم)
+    blacklisted_ids = {b["user_id"] for b in db.get_blacklisted_players(ctx.guild.id)}
+    lb = db.get_leaderboard(ctx.guild.id, 25)
+    lb = [p for p in lb if p["user_id"] not in blacklisted_ids][:10]
     if not lb:
         await ctx.send(embed=discord.Embed(
             title="🏆  Leaderboard",
@@ -6551,13 +6727,15 @@ async def setup_cmd(ctx):
         logger.info(f"ℹ️ [setup] {guild.name}: قناة القواعد موجودة مسبقاً — تم تجاهل الإنشاء")
 
     # 🆕 القنوات النصية في كاتيجوري النصي
-    for ch_name, topic in [("🎮・apostada-play", "Play"), ("🎮・highlight-play", "Play"), ("🎮・zelika-play", "Play"), ("📊・match-results", "Results"), ("🏆・leaderboard", "Leaderboard"), ("👤・profiles", "Profiles")]:
+    for ch_name, topic in [("🎮・apostada-play", "Play"), ("🎮・highlight-play", "Play"), ("🎮・zelika-play", "Play"), ("📊・match-results", "Results"), ("🏆・leaderboard", "Leaderboard"), ("👤・profiles", "Profiles"), (BLACKLIST_CHANNEL_NAME, "Blacklist")]:
         if not discord.utils.get(guild.text_channels, name=ch_name):
             ch = await guild.create_text_channel(ch_name, category=text_cat, topic=topic)
             db.add_commands_channel(guild.id, ch.id)
             db.add_play_channel(guild.id, ch.id)
             if "leaderboard" in ch_name:
                 db.set_guild_setting(guild.id, "leaderboard_channel_id", ch.id)
+            if ch_name == BLACKLIST_CHANNEL_NAME:
+                db.set_guild_setting(guild.id, "blacklist_channel_id", ch.id)
             created.append(ch_name)
     
     # 🆕 القنوات الصوتية في كاتيجوري الصوتي
@@ -6571,6 +6749,11 @@ async def setup_cmd(ctx):
             created.append(ch_name)
     try: await update_leaderboard_channel(guild)
     except: pass
+    # 🆕 حدّث قناة البلاك ليست في الـ setup
+    try:
+        await update_blacklist_channel(guild)
+    except Exception as e:
+        logger.warning(f"setup blacklist channel update failed: {e}")
     # 🆕 أنشئ الـ Roles الخاصة بالألقاب + حدّث صلاحيات Waiting Prv
     try:
         await setup_rank_roles_permissions(guild)
@@ -7533,6 +7716,11 @@ async def apply_blacklist(guild, member, reason=None):
         f"> 🔇  لا يمكنه استخدام البوت لمدة 10 دقائق",
         color=COLORS["warning"]
     )
+    # 🆕 حدّث قناة البلاك ليست بعد التطبيق
+    try:
+        await update_blacklist_channel(guild)
+    except Exception as e:
+        logger.warning(f"update_blacklist_channel (apply) failed: {e}")
     return True
 
 
@@ -7552,6 +7740,11 @@ async def remove_blacklist(guild, member):
     timer = timers.pop(member.id, None)
     if timer and not timer.done():
         timer.cancel()
+    # 🆕 حدّث قناة البلاك ليست بعد الإزالة
+    try:
+        await update_blacklist_channel(guild)
+    except Exception as e:
+        logger.warning(f"update_blacklist_channel (remove) failed: {e}")
 
 
 def is_blacklisted_check(ctx):
@@ -7610,6 +7803,11 @@ async def blacklist_cmd(ctx, target: Union[discord.Member, int] = None, *, reaso
     embed.set_footer(text=f"{BOT_FOOTER}  •  Blacklisted")
     embed = apply_branding(embed, ctx.guild)
     await ctx.send(embed=embed)
+    # 🆕 حدّث القائمة في قناة البلاك ليست
+    try:
+        await update_blacklist_channel(ctx.guild)
+    except Exception as e:
+        logger.warning(f"update_blacklist_channel (blacklist_cmd) failed: {e}")
 
 
 @bot.command(name="unblacklist", aliases=["ubl", "removebl"])
@@ -7642,6 +7840,11 @@ async def unblacklist_cmd(ctx, target: Union[discord.User, int] = None):
     embed.set_footer(text=f"{BOT_FOOTER}  •  Unblacklisted")
     embed = apply_branding(embed, ctx.guild)
     await ctx.send(embed=embed)
+    # 🆕 حدّث القائمة في قناة البلاك ليست
+    try:
+        await update_blacklist_channel(ctx.guild)
+    except Exception as e:
+        logger.warning(f"update_blacklist_channel (unblacklist_cmd) failed: {e}")
 
 
 @bot.command(name="blacklisted", aliases=["bllist", "blacklistlist"])

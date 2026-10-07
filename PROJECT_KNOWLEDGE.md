@@ -3,7 +3,7 @@
 > **هذا الملف هو "ذاكرة المشروع".** اقرأه قبل أي تعديل.
 > **الكود الفعلي هو المصدر الأساسي للحقيقة.** إذا لم يطابق هذا الملف الكود، صحّح هذا الملف.
 
-Last updated: 2026-10-05 (Full Codebase Audit)
+Last updated: 2026-10-07 (4 runtime bugs fixed + blacklist channel + 2-min fixrank/syncnicknames)
 
 ---
 
@@ -35,7 +35,7 @@ The project is deliberately small but one file is very large:
 ```
 Apostado-Play/
 ├── main.py                  (27 lines)   ← ENTRY POINT (execs the big file)
-├── freefire-bot-main.py     (8,507)     ← 100% of the application
+├── freefire-bot-main.py     (8,700+)   ← 100% of the application
 ├── cloud_backup.py          (~501)       ← optional MongoDB Atlas sync layer
 ├── requirements.txt         (3 lines)
 ├── railway.json             (NIXPACKS build/start config)
@@ -60,6 +60,7 @@ Apostado-Play/
 | `notify_admins` + `sanitize_user_text` | 658–750 | admin alerting |
 | **`class Database`** | ~800–1990 | every SQL statement lives here |
 | Nickname / embed builders | 2002–2300 | `extract_original_nickname`, `build_nickname_with_level`, `create_lobby_embed`, `create_profile_embed`, `update_member_nickname`, `update_leaderboard_channel` |
+| **Blacklist channel** | 2327–2462 | `update_leaderboard_channel` (blacklist-excluded), `update_blacklist_channel` (🔇・Blacklisted) |
 | **Create-prompt lifecycle** | 2344–2441 | `delete_message_safely`, `auto_hide_create_prompt`, `_delete_create_prompt_for_lobby`, `cleanup_lobby_memory` |
 | Channel lifecycle | 2448–2621 | `create_match_channels`, `delete_match_channels`, `move_to_banned_channels`, `check_and_apply_auto_ban` |
 | **Vote trigger** | 2696–2791 | `auto_trigger_vote` |
@@ -347,12 +348,14 @@ process_match_result_with_mvps
       ├─ db.update_lobby_status('completed')  ← done FIRST so the match always closes
       ├─ update_match_player per player (+80/+30/+30/-30)
       ├─ db.recalculate_ranks(guild_id)
-      ├─ update_member_nickname + sync_player_role per player
+      ├─ update_member_nickname per player (single post-recalc pass)
       ├─ db.create_match_result
-      ├─ post result embed → match text channel + match-results
-      ├─ update_leaderboard_channel
-      ├─ delete_match_channels (move everyone home, then delete)
-      └─ cleanup_lobby_memory  →  also deletes the linked "Create Lobby" prompt
+      ├─ post result embed → match text channel   (must happen BEFORE channel deletion)
+      ├─ delete_match_channels (move everyone home, then delete)   ← fast close
+      ├─ cleanup_lobby_memory  →  deletes "Create Lobby" prompt + lobby embed
+      ├─ _original_voice_channels.pop
+      ├─ update_leaderboard_channel   (blacklist-excluded)
+      └─ sync_all_players_roles(guild, player_ids=all_players)   ← match players only
 ```
 
 **Points → rank → roles:** `update_match_player` writes points/stats → `recalculate_ranks` rewrites every `level` in the guild → `update_member_nickname` sets `RANK n | name` → `sync_player_role` grants/removes the tier role.
@@ -391,6 +394,17 @@ Status legend: **FIXED** in this audit · **OPEN** (needs a product decision) ·
 | MEDIUM | `Database.get_play_channels()` caches under `play_ch_<gid>`, but `add_play_channel()` / `remove_play_channel()` never invalidated it — stale channel lists until restart (affects `RematchView` target channel and `notify_admins` fallback). | Both methods now pop `play_ch_<gid>`. |
 | MEDIUM | Every command touches `ctx.guild`, and **no** command guards `ctx.guild is None`, while `on_message` processed commands in DMs ⇒ `AttributeError` logged with no reply to the user. | DM branch now only forwards `!!serverleave` and otherwise explains that commands are guild-only. |
 
+### FIXED in the 2026-10-07 session (runtime issues reported by the users)
+| Sev | Issue | Fix |
+|---|---|---|
+| HIGH | **Voice-channel close was slow at match end**, especially the admin `!!w`/`!!l` path: channels were deleted at the *end* of the result pipeline, after per-player overlaps, leaderboard refresh and a full-server role sync. | Tail of `process_match_result` and `process_match_result_with_mvps` reordered: result embed is sent first, then `delete_match_channels` + `cleanup_lobby_memory` close voice channels and move players to waiting rooms immediately; the leaderboard refresh + role sync come after and are restricted to **match players only** via the new `player_ids=` filter on `sync_all_players_roles(guild, player_ids=...)` (no full-server loop). |
+| HIGH | **Blacklisted players still appeared on the leaderboard** (both `update_leaderboard_channel` and `!!top` fetched and displayed them). | Both now fetch 25, exclude the user_ids returned by `db.get_blacklisted_players(guild)` (expired rows already skipped by the query), then take the top 10. |
+| MEDIUM | **The "💬・general-chat" channel name was misleading** — it was actually used as the Teams chat inside match channels. | Renamed to "💬・Teams chat" in `create_match_channels` (the same text channel object is reused for both team text chats). |
+| MEDIUM | **Lobby-creation embeds never disappeared** after the match ended or when not enough players joined: `active_lobby_messages` (msg.id → lobby_id) entries were only dropped from memory, the actual messages were never deleted. | New `_delete_lobby_embed_for_lobby(lobby_id, msg_ids=...)` deletes the real messages; `cleanup_lobby_memory` now spawns it (IDs captured before the dict is cleared) alongside the existing "Create Lobby" prompt deletion. A new `_auto_hide_idle_lobby_embed` timer (via the shared `TEMP_EMBED_DELETE_AFTER = 120`) fires 2 minutes after a lobby embed is posted: if the lobby is still `waiting`, it cancels the lobby and deletes the embed + posts a "Lobby Closed — Not Enough Players" notice; the timer is also wired into `auto_lobby_timeout` (timeout notice now `delete_after=TEMP_EMBED_DELETE_AFTER`) and is auto-cancelled by `cleanup_lobby_memory`. Timers live in `_lobby_embed_hide_timers`. |
+| MEDIUM | **Blacklisted players were invisible to the community** — only admins saw them internally. | New dedicated text channel **`🔇・Blacklisted`** (created under the `🎮 FREE FIRE — TEXT` category). `update_blacklist_channel(guild)` finds/or-creates the channel and posts/edits an embed listing every blacklisted player with reason and expiry. Created during `auto_setup_guild` and `!!setup`, and refreshed after every `apply_blacklist` / `remove_blacklist` / `!!blacklist` / `!!unblacklist`. Settings columns `blacklist_channel_id` + `blacklist_message_id` added to `guild_settings` (schema + migration). |
+| MEDIUM | **`fixrank` / `syncnicknames` had to be run manually** — nicknames drifted to wrong rank numbers over time. | The periodic background task now runs `fixrank` + `syncnicknames` **every 2 minutes**: `periodic_rank_sync` (still every 60 s for `recalculate_ranks` + role sync) counts ticks and every 2nd iteration calls the new `sync_all_nicknames(guild)`, which walks guild members, re-reads each player's level and applies rank-based nicknames via `update_member_nickname` (throttled with a 0.05 s sleep). |
+| LOW | Two duplicate `recalculate_ranks`-adjacent nickname passes in the match-result flows (pre- and post-recalc) could fight. | Dropped the pre-`recalculate_ranks` inline nickname updates; a single post-recalc pass applies nicknames with the freshly computed level. |
+
 ### OPEN — deliberately not changed (needs your decision)
 | Sev | Issue | Why it was not changed |
 |---|---|---|
@@ -404,7 +418,7 @@ Status legend: **FIXED** in this audit · **OPEN** (needs a product decision) ·
 | LOW | ~26 unused locals (`t1m`, `t2m`, `mode_info`, `banned`, `avatar_url`, `rank_title`) and ~44 f-strings with no placeholders. | Cosmetic. |
 | LOW | `on_command_error` uses a bare `logger.exception` for unknown errors — users get no feedback. | Needs a decision on what to expose. |
 | LOW | Result embeds label levels as `RANK #{old}→#{new}` although `old`/`new` are **levels**, not ranks. | Cosmetic wording. |
-| LOW | Remaining bare `except: pass` sites: `update_leaderboard_channel`, `create_banned_voice_channels` / `move_to_banned_channels`, `_execute_cancel`, blacklist role removal, `MvpSelectionView`. | Same class of bug as the role fix, but each needs per-site review. |
+| LOW | Remaining bare `except: pass` sites: `create_banned_voice_channels` / `move_to_banned_channels`, `_execute_cancel`, blacklist role removal, dead `MvpSelectionView`. | Same class of bug as the role fix, but each needs per-site review. |
 | LOW | Unbounded dependency versions in `requirements.txt`. | Pinning may break the current deploy. |
 
 ### BY-DESIGN
@@ -427,6 +441,10 @@ Status legend: **FIXED** in this audit · **OPEN** (needs a product decision) ·
 9. **`ensure_rules_channel()` never deletes.** It only ever creates when absent.
 10. **`BUILD_ID` reads `RAILWAY_GIT_COMMIT_SHA`** so `!!botinfo` reveals which build is actually running — added because we could not tell whether a redeploy had picked up new commits.
 11. **Legacy `lobby_votes` + `vote_metadata` tables are retained** even though the current system keeps votes in memory, so old rows are not lost and `!!resolve` still works.
+12. **`TEMP_EMBED_DELETE_AFTER = 120`** is the single knob for "every temporary embed self-deletes at match end **or** after max 2 minutes, whichever first". It covers the lobby create-prompt (`CREATE_PROMPT_DELETE_AFTER`, same value), the lobby-creation embed, the auto-close notice, and the lobby timeout notice. Some callers still opt out (channel/prop notices are not temporary).
+13. **`sync_all_players_roles` takes a `player_ids` filter** so match-end and match-cancel paths can refresh only the players of the finished match instead of every player on the server — the main speedup for `!!w`/`!!l`.
+14. **The blacklist channel is part of setup**, not lazy-only: `auto_setup_guild` / `!!setup` create `🔇・Blacklisted` and record `blacklist_channel_id` + `blacklist_message_id` in `guild_settings`; `update_blacklist_channel` still self-heals if the channel is missing.
+15. **The periodic task is the only place a full nickname sweep runs** — commands `!!fixrank` / `!!syncnicknames` are interactive one-offs, while the loop re-syncs every 2 minutes so nicknames self-correct without an admin.
 
 ---
 
@@ -452,6 +470,19 @@ Status legend: **FIXED** in this audit · **OPEN** (needs a product decision) ·
 | `sanitize_user_text` unit tests (6 injection vectors, length cap, whitespace, Arabic, email) | all pass |
 | `auto_trigger_vote` structural test (1 transition in, ≥3 recoveries out, send wrapped in try) | all pass |
 | `CreateLobbyView` null-ctx guard ordering | passes |
+
+**Verification performed during the 2026-10-07 session (stub-`discord` exec harness against a throwaway SQLite DB):**
+
+| Check | Result |
+|---|---|
+| `ast.parse` + `py_compile` on the edited bot file | OK |
+| `sync_all_players_roles` optional `player_ids` filter present and used at match end | OK (read-through) |
+| Leaderboard (`update_leaderboard_channel`) excludes blacklisted players, keeps clean players, top-10 cap | 15/15 harness checks pass |
+| `🔇・Blacklisted` channel embed lists banned player + reason; `blacklist_channel_id`/`blacklist_message_id` persisted | 15/15 harness checks pass |
+| `cleanup_lobby_memory` removes lobby-embed entries AND spawns real message deletion (+ create-prompt link) | 15/15 harness checks pass |
+| 2-min auto-hide: waiting lobby with too few players → cancelled + embed deleted + "Lobby Closed" notice | 15/15 harness checks pass |
+| `sync_all_nicknames` re-ranks a stale member nickname (`RANK n | name`) with throttle | 15/15 harness checks pass |
+| `_lobby_embed_hide_timers` self-cancel ordering (timer pops itself before `cleanup_lobby_memory` runs) | OK (read-through) |
 
 **NOT TESTED — Reason:** everything requiring a live Discord connection.
 
