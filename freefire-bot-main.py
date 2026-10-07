@@ -2075,6 +2075,11 @@ _blacklist_voice_tracking = {}
 _active_match_voice_channels = set()
 # 🆕 BLACKLIST: مؤقتات الإزالة التلقائية — {guild_id: {user_id: timer_task}}
 _blacklist_auto_remove_timers = {}
+# 🆕 قفل إنشاء قناة البلاك ليست لكل سيرفر — يمنع تكرار القناة عند التنفيذ المتوازي
+_blacklist_channel_locks = {}
+# 🆕 رسائل تدفق اللعب في قناة اللعب — {lobby_id: set((channel_id, message_id))}
+# تُحذف كلها تلقائياً عند انتهاء الماتش بأي طريقة (بما فيها "Match Ready")
+_lobby_flow_msgs = {}
 
 # ============================================================
 # HELPERS
@@ -2398,21 +2403,38 @@ async def update_blacklist_channel(guild):
         settings = db.get_guild_settings(guild.id)
         if not settings:
             return
-        # 🆕 إنشاء القناة إن لم تكن موجودة بعد (بعد setup/autosetup)
-        channel = guild.get_channel(settings.get("blacklist_channel_id")) if settings.get("blacklist_channel_id") else None
-        if not channel:
-            channel = discord.utils.get(guild.text_channels, name=BLACKLIST_CHANNEL_NAME)
-        if not channel:
-            text_cat = discord.utils.get(guild.categories, name="🎮 FREE FIRE — TEXT")
-            try:
-                channel = await guild.create_text_channel(
-                    BLACKLIST_CHANNEL_NAME, category=text_cat, topic="Blacklisted Players"
-                )
+        # 🔒 قفل لكل سيرفر: يمنع إنشاء قناتين متوازيتين (سباق) عند تنفيذ أوامر متزامنة
+        lock = _blacklist_channel_locks.setdefault(guild.id, asyncio.Lock())
+        async with lock:
+            # 🆕 إزالة التكرارات: لو في أكثر من قناة بنفس الاسم → احذف الزائد، ابقَ على قناة واحدة
+            same_name = [c for c in guild.text_channels if c.name == BLACKLIST_CHANNEL_NAME]
+            channel = None
+            if settings.get("blacklist_channel_id"):
+                channel = guild.get_channel(settings["blacklist_channel_id"])
+            if not channel and same_name:
+                channel = same_name[0]
                 db.set_guild_setting(guild.id, "blacklist_channel_id", channel.id)
-                logger.info(f"🔇 Created blacklist channel: {BLACKLIST_CHANNEL_NAME}")
-            except Exception as e:
-                logger.warning(f"🔇 Could not create blacklist channel: {e}")
-                return
+            for extra in same_name:
+                if channel is None or extra.id != channel.id:
+                    try:
+                        await extra.delete(reason="🧹 Duplicate blacklist channel")
+                        logger.info(f"🧹 Deleted duplicate blacklist channel {extra.id}")
+                    except Exception as e:
+                        logger.warning(f"🧹 Could not delete duplicate blacklist channel {extra.id}: {e}")
+            # ⚡ ثبّت قناة البلاك ليست الفعلية بعد التنظيف (آخر إشارة صحيحة)
+            if channel is not None:
+                db.set_guild_setting(guild.id, "blacklist_channel_id", channel.id)
+            if not channel:
+                text_cat = discord.utils.get(guild.categories, name="🎮 FREE FIRE — TEXT")
+                try:
+                    channel = await guild.create_text_channel(
+                        BLACKLIST_CHANNEL_NAME, category=text_cat, topic="Blacklisted Players"
+                    )
+                    db.set_guild_setting(guild.id, "blacklist_channel_id", channel.id)
+                    logger.info(f"🔇 Created blacklist channel: {BLACKLIST_CHANNEL_NAME}")
+                except Exception as e:
+                    logger.warning(f"🔇 Could not create blacklist channel: {e}")
+                    return
 
         blacklisted = db.get_blacklisted_players(guild.id)
         embed = discord.Embed(
@@ -2539,10 +2561,14 @@ async def _delete_lobby_embed_for_lobby(lobby_id, msg_ids=None, guild=None):
     """
     if msg_ids is None:
         msg_ids = [k for k, v in active_lobby_messages.items() if v == lobby_id]
-    if not msg_ids:
-        return
     lobby = db.get_lobby(lobby_id)
     if not lobby:
+        return
+    # 🆕 لو الرسالة ما رُصدت في الذاكرة (مثلاً لوبي قديم قبل إعادة التشغيل)
+    # → استخدم message_id المحفوظ في DB لضمان الحذف
+    if not msg_ids and lobby.get("message_id"):
+        msg_ids = [lobby["message_id"]]
+    if not msg_ids:
         return
     g = guild or bot.get_guild(lobby["guild_id"])
     if not g:
@@ -2551,6 +2577,24 @@ async def _delete_lobby_embed_for_lobby(lobby_id, msg_ids=None, guild=None):
     for mid in msg_ids:
         active_lobby_messages.pop(mid, None)
         await delete_message_safely(ch, mid, reason=f"انتهى اللوبي #{lobby_id}")
+
+
+def register_lobby_flow_msg(lobby_id, channel_id, message_id):
+    """🆕 يسجّل رسالة من تدفق اللعب (إنشاء/انضمام/Match Ready...) في قناة اللعب
+    لتُحذف كلها تلقائياً عند انتهاء الماتش بأي طريقة."""
+    if not lobby_id or not message_id:
+        return
+    _lobby_flow_msgs.setdefault(lobby_id, set()).add((channel_id, message_id))
+
+
+async def _delete_lobby_flow_msgs(lobby_id):
+    """🆕 يحذف كل رسائل تدفق اللعب المسجّلة للوبي عند انتهائه (بأي طريقة)."""
+    flow = _lobby_flow_msgs.pop(lobby_id, None)
+    if not flow:
+        return
+    for ch_id, mid in list(flow):
+        ch = bot.get_channel(ch_id)
+        await delete_message_safely(ch, mid, reason=f"انتهى اللوبي #{lobby_id} (flow)")
 
 
 async def _auto_hide_idle_lobby_embed(lobby_id, guild):
@@ -2629,6 +2673,13 @@ def cleanup_lobby_memory(lobby_id):
             asyncio.create_task(_delete_lobby_embed_for_lobby(lobby_id, msg_ids=list(to_remove)))
         except RuntimeError:
             pass
+
+    # 🆕 احذف كل رسائل تدفق اللعب المسجّلة (Match Ready / أي رسائل أخرى في قناة اللعب)
+    if lobby_id in _lobby_flow_msgs:
+        try:
+            asyncio.create_task(_delete_lobby_flow_msgs(lobby_id))
+        except RuntimeError:
+            _lobby_flow_msgs.pop(lobby_id, None)
 
 
 # ============================================================
@@ -3504,22 +3555,21 @@ class LobbyButtonsView(discord.ui.View):
                 f"> Use `{PREFIX}play` to start a new match."
             ),
             color=COLORS["error"]
-        ))
+        ), delete_after=30)
 
         # الآن حدّث الحالة وامسح القنوات بأمان
         db.update_lobby_status(self.lobby_id, "cancelled")
         cleanup_lobby_memory(self.lobby_id)
 
-        # عدّل رسالة اللوبي الأصلية (في قناة play — لم تُحذف)
-        try: await interaction.message.edit(embed=discord.Embed(
-            title="🛡️ Match Cancelled",
-            description=(
-                f"> This `{mode}` match was cancelled by the host.\n"
-                f"> Use `{PREFIX}play` to start a new match."
-            ),
-            color=COLORS["error"]
-        ), view=None)
-        except discord.HTTPException: pass
+        # 🆕 احذف رسالة اللوبي الأصلية في قناة play بدل ترك نسخة معدّلة منها
+        if interaction.message is not None:
+            try:
+                await delete_message_safely(
+                    interaction.message.channel, interaction.message.id,
+                    reason=f"cancel_game lobby #{self.lobby_id}"
+                )
+            except Exception as e:
+                logger.debug(f"delete lobby embed in cancel_game failed: {e}")
 
         # احذف قنوات الماتش (إن وُجدت — اللوبي قد يكون waiting بدون قنوات)
         try:
@@ -3713,21 +3763,26 @@ class LobbyButtonsView(discord.ui.View):
                         f"> Lobby `#{self.lobby_id}` has been cancelled."
                     ),
                     color=COLORS["error"]
-                ))
+                ), delete_after=15)
                 return
 
             t1m = " ".join([f"<@{p}>" for p in lobby["team1_players"]])
             t2m = " ".join([f"<@{p}>" for p in lobby["team2_players"]])
 
-            await interaction.channel.send(embed=discord.Embed(
-                title="✅  Match Ready!",
-                description=(
-                    f"> Lobby is full — match is starting now!\n"
-                    f"> Moving players to their team voice channels..."
-                ),
-                color=COLORS["success"],
-                timestamp=discord.utils.utcnow()
-            ))
+            try:
+                ready_msg = await interaction.channel.send(embed=discord.Embed(
+                    title="✅  Match Ready!",
+                    description=(
+                        f"> Lobby is full — match is starting now!\n"
+                        f"> Moving players to their team voice channels..."
+                    ),
+                    color=COLORS["success"],
+                    timestamp=discord.utils.utcnow()
+                ))
+                # 🆕 سجّل رسالة "Match Ready" — تُحذف تلقائياً عند انتهاء الماتش بأي طريقة
+                register_lobby_flow_msg(self.lobby_id, interaction.channel.id, ready_msg.id)
+            except discord.HTTPException as e:
+                logger.debug(f"send Match Ready embed failed: {e}")
 
             if channels:
                 # 🆕 V3 MAX: خزّن الفويس الأصلي لكل لاعب قبل نقله لفويس الفريق
@@ -5283,6 +5338,7 @@ class LobbyCreateModal(discord.ui.Modal, title="🎮 Create Lobby — Enter Room
             msg = await self.ctx.send(embed=embed, view=view)
             db.update_lobby_message(lid, msg.id)
             active_lobby_messages[msg.id] = lid
+            register_lobby_flow_msg(lid, self.ctx.channel.id, msg.id)
             db.get_or_create_player(user.id, guild.id, user.display_name)
             lobby_timeout_timers[lid] = asyncio.create_task(auto_lobby_timeout(lid, guild))
             # 🆕 بعد دقيقتين لو اللوبي لسا waiting (عدد غير كافٍ) → أغلق + احذف الرسالة
@@ -5338,6 +5394,7 @@ class RematchView(discord.ui.View):
             msg = await target_channel.send(embed=embed, view=view)
             db.update_lobby_message(lid, msg.id)
             active_lobby_messages[msg.id] = lid
+            register_lobby_flow_msg(lid, target_channel.id, msg.id)
             lobby_timeout_timers[lid] = asyncio.create_task(auto_lobby_timeout(lid, guild))
             # 🆕 بعد دقيقتين لو اللوبي لسا waiting (عدد غير كافٍ) → أغلق + احذف الرسالة
             _lobby_embed_hide_timers[lid] = asyncio.create_task(_auto_hide_idle_lobby_embed(lid, guild))
@@ -5589,6 +5646,43 @@ async def on_ready():
             pass
     _periodic_rank_task = asyncio.create_task(periodic_rank_sync())
     logger.info("🔄 Periodic rank sync started (every 60 seconds)")
+
+    # 🆕 استعادة/تنظيف بعد إعادة التشغيل: احذف رسائل اللوبيات المنتهية القديمة
+    #    التي تركت في قنوات اللعب، وأعد تفعيل الإغلاق التلقائي للوبيات المعلّقة (waiting).
+    async def recover_after_restart():
+        try:
+            for guild in bot.guilds:
+                try:
+                    conn = db.conn()
+                    stale_rows = conn.execute(
+                        "SELECT * FROM lobbies WHERE guild_id=? AND status IN ('cancelled','completed')",
+                        (guild.id,)
+                    ).fetchall()
+                except Exception as e:
+                    logger.warning(f"recover_after_restart (query) failed for {guild.name}: {e}")
+                    stale_rows = []
+                for r in stale_rows:
+                    l = dict(r)
+                    mid = l.get("message_id")
+                    lid = l.get("id")
+                    if mid:
+                        try:
+                            await _delete_lobby_embed_for_lobby(lid, guild=guild)
+                        except Exception as e:
+                            logger.debug(f"clean stale lobby embed #{lid} failed: {e}")
+                # لوبيات waiting علّقت بعد إعادة التشغيل → أعد تفعيل مؤقت الدقيقتين
+                for l in db.get_active_lobbies(guild.id):
+                    try:
+                        if l["status"] == "waiting" and l["id"] not in _lobby_embed_hide_timers:
+                            _lobby_embed_hide_timers[l["id"]] = asyncio.create_task(
+                                _auto_hide_idle_lobby_embed(l["id"], guild)
+                            )
+                    except Exception as e:
+                        logger.debug(f"re-arm hide timer for #{l['id']} failed: {e}")
+        except Exception as e:
+            logger.warning(f"recover_after_restart failed: {e}")
+    asyncio.create_task(recover_after_restart())
+    logger.info("🧹 Lobby embed recovery/cleanup scheduled after restart")
 
 
 async def auto_setup_guild(guild):
