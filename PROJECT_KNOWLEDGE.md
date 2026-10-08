@@ -512,6 +512,7 @@ Specifically **NOT TESTED**: gateway login; any prefix command; any button/selec
 | `77dd8e2` | Stop tracking compiled `__pycache__/*.pyc` artifacts (gitignore covers them now) |
 | `99d038a` | Dedupe `🔇・Blacklisted` channels (per-guild `asyncio.Lock` + duplicate deletion + settings re-point); delete **all** play-flow embeds at match end by any method — new `_lobby_flow_msgs` registry (lobby-join + "Match Ready!"), cancel deletes instead of editing, `_delete_lobby_embed_for_lobby` falls back to `lobbies.message_id`, post-restart `recover_after_restart` cleans terminal-lobby leftovers and re-arms 2-min auto-close for waiting lobbies |
 | `14d6d16` | Fuzzy blacklist-channel dedupe: match **any** channel name containing `blacklist` (covers manually-created `BLACKLISTED`/`blacklist-2`); keeps the settings-referenced channel only if it looks like a blacklist channel (never deletes unrelated channels); re-points bad pointers |
+| `77d6fef` | Harden `!!botinfo` against crash when `guild.member_count` is `None` (large servers) — reproducible-foundation for diagnosing what build is actually running |
 | *audit, uncommitted at time of writing* | Fixed the CRITICAL `voting`-lockout in `auto_trigger_vote`; fixed the duplicate periodic-task leak on reconnect; added `sanitize_user_text()` to close the mention-injection hole; guarded `CreateLobbyView` against `ctx=None` after restart; fixed the `play_channels` cache invalidation; made DM command handling explicit. Created this document. |
 
 ### Deployment reminder
