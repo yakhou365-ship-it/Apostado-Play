@@ -721,7 +721,8 @@ def sanitize_user_text(text, max_length=200):
 
 
 async def notify_admins(guild, title, description, color=None):
-    """🆕 يرسل رسالة تاغ للأدمنز وكل الـ roles العالية في قناة match-results.
+    """🆕 يرسل رسالة تاغ للأدمنز وكل الـ roles العالية في قناة 🔇・Blacklisted.
+    (سابقاً كانت تُرسل إلى قناة match-results — الآن مخصصة للنتائج فقط).
     ✅ يُتاغ: الأونر + كل من لديه Administrator / Manage Guild + أعلى role في السيرفر.
     """
     try:
@@ -770,19 +771,14 @@ async def notify_admins(guild, title, description, color=None):
         admin_mentions = list(dict.fromkeys(admin_mentions))
         admin_mention_str = " ".join(admin_mentions) if admin_mentions else "@here"
         
-        # ابحث عن قناة match-results
-        channel = None
-        for cid in db.get_commands_channels(guild.id):
-            ch = guild.get_channel(cid)
-            if ch and "match-results" in ch.name.lower():
-                channel = ch
-                break
-        # fallback: أي قناة play
+        # 🆕 تُرسل التنبيهات إلى قناة البلاك ليست (طلب: قناة match-results = نتائج فقط)
+        channel = _resolve_blacklist_channel(guild)
+        # fallback 1: أي قناة play
         if not channel:
             play_channels = db.get_play_channels(guild.id)
             if play_channels:
                 channel = guild.get_channel(play_channels[0])
-        # fallback: أول قناة نصية يقدر البوت يكتب فيها
+        # fallback 2: أول قناة نصية يقدر البوت يكتب فيها
         if not channel:
             for ch in guild.text_channels:
                 if ch.permissions_for(guild.me).send_messages:
@@ -2518,6 +2514,58 @@ async def delete_message_safely(channel, message_id, reason=""):
         return False
 
 
+def find_match_results_channel(guild):
+    """🆕 يبحث عن قناة النتائج المخصصة (match-results / match result / نتائج الماتش) في السيرفر.
+    تُرسل إليها نتيجة الماتش النهائية فقط — أي رسائل أخرى لن تذهب إليها.
+    """
+    try:
+        for ch in guild.text_channels:
+            name = (ch.name or "").lower().replace("_", " ").replace("-", " ").replace("・", " ")
+            if "match result" in name or "نتائج" in name or "result" in name:
+                return ch
+        return None
+    except Exception as e:
+        logger.warning(f"find_match_results_channel failed in {getattr(guild, 'name', '?')}: {e}")
+        return None
+
+
+def _resolve_blacklist_channel(guild):
+    """🆕 يرجع قناة 🔇・Blacklisted (من الإعدادات أو بالاسم) — أو None إن لم توجد."""
+    try:
+        settings = db.get_guild_settings(guild.id)
+        if settings and settings.get("blacklist_channel_id"):
+            ch = guild.get_channel(settings["blacklist_channel_id"])
+            if ch:
+                return ch
+        for ch in guild.text_channels:
+            if ch.name == BLACKLIST_CHANNEL_NAME:
+                return ch
+        return None
+    except Exception as e:
+        logger.warning(f"_resolve_blacklist_channel failed in {getattr(guild, 'name', '?')}: {e}")
+        return None
+
+
+async def _post_match_result(guild, embed, channel):
+    """🆕 يرسل نتيجة الماتش إلى قناة النتائج المخصصة (match-results) إن وُجدت،
+    وإلا إلى القناة الأصلية — بحيث تكون قناة النتائج مخصصة للنتائج فقط.
+    """
+    mrs_ch = find_match_results_channel(guild)
+    results_ch = mrs_ch or channel
+    if results_ch:
+        try:
+            await results_ch.send(embed=embed)
+        except discord.HTTPException as e:
+            logger.warning(f"⚠️ Failed to send result to {results_ch.name}: {e}")
+            if mrs_ch and channel:
+                try:
+                    await channel.send(embed=embed)
+                except discord.HTTPException:
+                    pass
+    else:
+        logger.warning("⚠️ No channel to post match result")
+
+
 async def auto_hide_create_prompt(guild, msg, user_id):
     """🆕 ينتظر CREATE_PROMPT_DELETE_AFTER ثم يحذف رسالة "Create Lobby"
        إذا ما انشأ اللاعب الروم.
@@ -3233,8 +3281,8 @@ async def process_match_result(guild, lobby_id, winner_team, channel=None):
         embed.set_author(name="Match Finished", icon_url=None)
         embed.set_footer(text=f"{BOT_FOOTER}  •  GG WP!  •  Match #{lobby_id}")
         embed = apply_branding(embed, guild)
-        if channel:
-            await channel.send(embed=embed)
+        # 🆕 نتيجة الماتش → قناة النتائج المخصصة (match-results) فقط، وإلا القناة الأصلية
+        await _post_match_result(guild, embed, channel)
 
         # ⚡ تسريع: أغلق الفويسات فوراً — انقل اللاعبين + احذف قنوات الماتش قبل
         #    أي عمل بطيء (leaderboard / roles) حتى يختفي الشات/الفويس بسرعة
@@ -4939,8 +4987,8 @@ async def process_match_result_with_mvps(guild, lobby_id, winner_team, winner_mv
         embed.set_author(name="Match Finished", icon_url=None)
         embed.set_footer(text=f"{BOT_FOOTER}  •  GG WP!  •  Match #{lobby_id}")
         embed = apply_branding(embed, guild)
-        if channel:
-            await channel.send(embed=embed)
+        # 🆕 نتيجة الماتش → قناة النتائج المخصصة (match-results) فقط، وإلا القناة الأصلية
+        await _post_match_result(guild, embed, channel)
 
         # ⚡ تسريع: أغلق الفويسات فوراً — انقل اللاعبين + احذف قنوات الماتش قبل
         #    leaderboard / roles حتى تختفي القنوات بأسرع ما يمكن (خاصة !!w / !!l)
