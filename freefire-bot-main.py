@@ -170,20 +170,21 @@ WAITING_PRV_CATEGORY_HINT = "Waiting Prv"
 # V0 DESIGN SYSTEM — Color Palette
 # ══════════════════════════════════════════════
 COLORS = {
-    # الأساسية
-    "success": 0x2ECC71,   # أخضر زمردي
-    "error":   0xE74C3C,   # أحمر فاتح
-    "warning": 0xF1C40F,   # أصفر ذهبي
-    "info":    0x3498DB,   # أزرق سماوي
-    # الخاصة بالبوت (V0 redesigned)
-    "play":        0xFFD700,  # ذهبي ناري (كان برتقالي)
-    "profile":     0x9B59B6,  # بنفسجي ملكي
-    "leaderboard": 0xF1C40F,  # ذهبي
-    "match":       0x3498DB,  # أزرق محيطي
-    "admin":       0xC0392B,  # أحمر داكن
-    "vote":        0x8E44AD,  # بنفسجي داكن
-    "auto":        0x16A085,  # أخضر فيروزي
-    # أحوال اللاعب
+    # 🆕 V1 DESIGN SYSTEM (إعادة تصميم 2026-10) — 10 رموز، كل لون = تدفّق واحد
+    "success":     0x2ECC71,  # نجاح، نتيجة ماتش، إتمام عملية
+    "error":       0xE74C3C,  # خطأ، رفض، حظر، إلغاء
+    "warning":     0xF1C40F,  # تنبيه، انتظار، عملية جارية، بلاك ليست
+    "info":        0x3498DB,  # معلومات، قوائم، ماتش إنفو، سكان
+    "play":        0xFF6B00,  # اللوبي والماتش الحيّ ودلائل اللاعب (برتقالي = «العب»)
+    "profile":     0x9B59B6,  # الرانك/البروفايل (ويُستبدل بـ rank_color الديناميكي)
+    "leaderboard": 0xFFD700,  # لوحة الصدارة فقط
+    "vote":        0x5865F2,  # كل ما يخص التصويت واختيار MVP
+    "admin":       0x607D8B,  # لوحات الأدمن والمساعدة (رمادي-أزرق بدل الأحمر)
+    "neutral":     0x2B2D31,  # محايد/احتياطي (يذوب في الدارك مود)
+    # ── aliases قديمة (للتوافق مع بقية الكود قبل اكتمال التطبيق) ──
+    "match":       0xFF6B00,  # = play
+    "auto":        0xFF6B00,  # = play
+    # أحوال اللاعب (تبقى كما هي)
     "rank_low":    0x95A5A6,  # رمادي - رانك منخفض
     "rank_mid":    0x3498DB,  # أزرق - رانك متوسط
     "rank_high":   0x9B59B6,  # بنفسجي - رانك عالي
@@ -788,12 +789,15 @@ async def notify_admins(guild, title, description, color=None):
             logger.warning(f"notify_admins: No channel found in {guild.name}")
             return
         embed = discord.Embed(
-            title=f"⚠️  {title}",
-            description=f"{admin_mention_str}\n{description}",
+            title=f"⚠️ {title}",
+            description=(
+                f"{admin_mention_str}\n"
+                f"{description}"
+            ),
             color=color,
             timestamp=discord.utils.utcnow()
         )
-        embed.set_author(name="Admin Alert")
+        embed.set_author(name="🛡️ Admin Alert")
         embed.set_footer(text=f"{BOT_FOOTER}  •  Action required")
         embed = apply_branding(embed, guild)
         await channel.send(content=admin_mention_str, embed=embed)
@@ -2136,19 +2140,17 @@ def create_lobby_embed(lobby, guild):
     else:
         status_text = "🎮 Match ready to start!"
 
-    # بناء الـ embed (V0 design)
+    # بناء الـ embed (V1 design)
     host_member = guild.get_member(lobby['creator_id'])
     host_name = host_member.display_name if host_member else 'Unknown'
 
     embed = discord.Embed(
-        title=f"✦ Free Fire — {mode.upper()} Lobby",
+        title=f"🎮 Free Fire • {mode.upper()} Lobby",
         description=(
-            f"> Lobby ID: `{lobby['id']}`\n"
-            f"> Host: <@{lobby['creator_id']}>\n"
-            f"> Mode: `{mode.upper()}` · Progress: `{total}/{lobby_size}` `{progress_pct}%`\n"
-            f"`{progress_bar}`"
+            f"**Lobby** `#{lobby['id']}`\n"
+            f"`{progress_bar}`  `{total}/{lobby_size}`  ·  `{progress_pct}%`"
         ),
-        color=0xFFD700,
+        color=COLORS["play"],
         timestamp=discord.utils.utcnow()
     )
 
@@ -2163,20 +2165,17 @@ def create_lobby_embed(lobby, guild):
         inline=True
     )
 
+    embed.add_field(name="📋 Status", value=f"{status_text}", inline=False)
+
     # معلومات الغرفة الخاصة
     pk = db.get_lobby_private_key(lobby['id'])
     room_id = lobby.get('room_id')
     if pk and not room_id:
         embed.add_field(
             name="🔐 Private Match",
-            value=(
-                f"> This match is protected with a private key.\n"
-                f"> Ask <@{lobby['creator_id']}> for the key to join."
-            ),
+            value=f"Protected with a private key — ask <@{lobby['creator_id']}> for the key to join.",
             inline=False
         )
-
-    embed.add_field(name="📋 Status", value=f"> {status_text}", inline=False)
 
     embed.set_author(
         name=f"Host: {host_name} · Match Lobby",
@@ -2230,36 +2229,51 @@ def create_profile_embed(player, member=None, gid=None):
         display_title += f" {mvp_badge}"
 
     embed = discord.Embed(
-        title=display_title,
+        title=f"{display_title}",
         description=(
-            f"> 🏅 Rank: `{rank_title}` — `#{level}`\n"
-            f"> 💰 Points: `{points:,}` pts{streak_display.replace('> ', '\n> ')}\n"
-            f"> 🔱 MVPs: `{mvps}` — `{mvp_title}`{f' {mvp_badge}' if mvp_badge else ''}"
+            f"🏅 **{rank_title}**  `#{level}`\n"
+            f"💰 `{points:,}` pts{streak_display.replace('> ', '\n> ')}\n"
+            f"🔱 `{mvp_title}`{f' {mvp_badge}' if mvp_badge else ''}"
         ),
         color=rank_color,
         timestamp=discord.utils.utcnow()
     )
 
-    # V0: لا صور في الـ embed
+    # V1: 3×2 stats grid
+    embed.add_field(name="🏆 Wins",    value=f"`{player['wins']}`", inline=True)
+    embed.add_field(name="☠️ Losses",  value=f"`{player['losses']}`", inline=True)
+    embed.add_field(name="⚖️ W/L",     value=f"`{kd_sign}{kd_diff}`", inline=True)
 
-    # V0: التقدم نحو #1
+    embed.add_field(name="🎮 Matches", value=f"`{player['matches_played']}`", inline=True)
+    embed.add_field(name="🔱 MVPs",    value=f"`{mvps}`", inline=True)
+    embed.add_field(name="🔪 Kills",   value=f"`{player['kills']}`", inline=True)
+
+    # V1: Win rate bar
+    wr_status = "🔥 God Tier" if wr >= 70 else ("⭐ Pro" if wr >= 50 else ("🌱 Rising" if wr >= 30 else "☠️ Struggling"))
+    embed.add_field(
+        name=f"📊 Win Rate — `{wr}%` {wr_status}",
+        value=f"{wr_bar} `{player['wins']}/{player['matches_played']}`",
+        inline=False
+    )
+
+    # V1: التقدم نحو #1 / المتصدّر
     if pts_to_next > 0:
         embed.add_field(
             name="📈 Progress Toward `#1`",
             value=(
-                f"`{rank_progress_bar}` `{progress_pct}%`\n"
-                f"> Your pts: `{points:,}` · Top: `{top_pts:,}` · Remaining: `{pts_to_next:,}`"
+                f"`{rank_progress_bar}`  `{progress_pct}%`\n"
+                f"Your pts `{points:,}`  ·  Top `{top_pts:,}`  ·  Remaining `{pts_to_next:,}`"
             ),
             inline=False
         )
     else:
         embed.add_field(
             name="🔱 You're the Leader!",
-            value=f"> 🎉 You're at the top with `{points:,}` points! Keep it up!",
+            value=f"🎉 You're at the top with `{points:,}` points! Keep it up!",
             inline=False
         )
 
-    # V0: MVP achievement
+    # V1: MVP achievement
     if mvps > 0:
         badge_display = ""
         if mvps >= 100:   badge_display = "🔱 🔱 🔱 LEGEND"
@@ -2269,28 +2283,11 @@ def create_profile_embed(player, member=None, gid=None):
         else:              badge_display = "🥉 BRONZE"
         embed.add_field(
             name=f"🔱 MVP Achievement — `{mvps}` total",
-            value=f"> `{badge_display}` — `{mvp_title}`",
+            value=f"`{badge_display}` — `{mvp_title}`",
             inline=False
         )
 
-    # V0: 3×2 stats grid
-    embed.add_field(name="🏆 Wins",   value=f"`{player['wins']}`", inline=True)
-    embed.add_field(name="☠️ Losses",  value=f"`{player['losses']}`", inline=True)
-    embed.add_field(name="⚖️ W/L",     value=f"`{kd_sign}{kd_diff}`", inline=True)
-
-    embed.add_field(name="🎮 Matches", value=f"`{player['matches_played']}`", inline=True)
-    embed.add_field(name="🔱 MVPs",    value=f"`{mvps}`", inline=True)
-    embed.add_field(name="🔪 Kills",   value=f"`{player['kills']}`", inline=True)
-
-    # V0: Win rate bar
-    wr_status = "🔥 God Tier" if wr >= 70 else ("⭐ Pro" if wr >= 50 else ("🌱 Rising" if wr >= 30 else "☠️ Struggling"))
-    embed.add_field(
-        name=f"📊 Win Rate — `{wr}%` {wr_status}",
-        value=f"{wr_bar} `{player['wins']}/{player['matches_played']}`",
-        inline=False
-    )
-
-    embed.set_footer(text=f"{BOT_FOOTER}  •  {rank_title} #{level}  •  {mvp_title}")
+    embed.set_footer(text=f"{BOT_FOOTER}")
     if member and member.guild:
         embed = apply_branding(embed, member.guild)
     embed.set_author(name="Player Profile")
@@ -2339,9 +2336,11 @@ async def update_leaderboard_channel(guild):
         lb = db.get_leaderboard(guild.id, 25)
         lb = [p for p in lb if p["user_id"] not in blacklisted_ids][:10]
         embed = discord.Embed(
-            title="◆ Free Fire — Top 10 Players",
+            title="🏆 Free Fire — Top 10 Players",
             description=(
-                f"📊 Ranking by points · 🔄 Auto-updates after every match · 📈 Every `50` pts = `+1` rank"
+                "📊 Ranking by points\n"
+                "🔄 Auto-updates after every match\n"
+                "📈 Every `50` pts = `+1` rank"
             ),
             color=COLORS["leaderboard"],
             timestamp=discord.utils.utcnow()
@@ -2374,9 +2373,9 @@ async def update_leaderboard_channel(guild):
                     f"└ 🔱 `{p['mvps']}` MVPs{next_rank_hint}\n"
                 )
             embed.description = desc
-        embed.set_footer(text=f"{BOT_FOOTER}  •  Live Leaderboard  •  {len(lb)} players ranked")
         embed = apply_branding(embed, guild)
-        embed.set_author(name=f"🏆 {guild.name} Leaderboard", icon_url=None)
+        embed.set_author(name=f"{guild.name} Leaderboard", icon_url=None)
+        embed.set_footer(text=f"{BOT_FOOTER}  •  Live Leaderboard  ·  {len(lb)} players ranked")
         if settings.get("leaderboard_message_id"):
             try:
                 msg = await channel.fetch_message(settings["leaderboard_message_id"])
@@ -2446,15 +2445,12 @@ async def update_blacklist_channel(guild):
 
         blacklisted = db.get_blacklisted_players(guild.id)
         embed = discord.Embed(
-            title="🔇  Blacklisted Players",
-            description=(
-                f"> 📊  **الإجمالي:**  `{len(blacklisted)}`\n"
-                f"{separator()}"
-            ),
+            title="🔇 Blacklisted Players",
+            description=f"📊 **الإجمالي:** `{len(blacklisted)}`",
             color=COLORS["warning"] if blacklisted else COLORS["success"],
             timestamp=discord.utils.utcnow()
         )
-        embed.set_author(name="🔇 Blacklist")
+        embed.set_author(name="Blacklist")
         if not blacklisted:
             embed.description = "> ✅  لا يوجد لاعبون في البلاك ليست حالياً"
         else:
@@ -2465,16 +2461,12 @@ async def update_blacklist_channel(guild):
                 reason = b.get("reason") or "غير محدد"
                 expires = b.get("expires_at", "N/A")[:19] if b.get("expires_at") else "N/A"
                 embed.add_field(
-                    name=f"#{i}  —  {name}",
-                    value=(
-                        f"> 👤  {mention}\n"
-                        f"> 📝  `{reason}`\n"
-                        f"> ⏱️  ينتهي:  `{expires}`"
-                    ),
+                    name=f"#{i} — {name}",
+                    value=f"👤 {mention}\n📝 `{reason}`\n⏱️ ينتهي: `{expires}`",
                     inline=False
                 )
             if len(blacklisted) > 15:
-                embed.set_footer(text=f"... و {len(blacklisted) - 15} لاعب آخر")
+                embed.set_footer(text=f"{BOT_FOOTER}  •  و {len(blacklisted) - 15} لاعب آخر")
         embed = apply_branding(embed, guild)
 
         msg_id = settings.get("blacklist_message_id")
@@ -2676,10 +2668,10 @@ async def _auto_hide_idle_lobby_embed(lobby_id, guild):
         ch = guild.get_channel(lobby["channel_id"])
         if ch:
             closed_embed = discord.Embed(
-                title="⏰  Lobby Closed — Not Enough Players",
+                title="⏰ Lobby Closed — Not Enough Players",
                 description=(
-                    f"> لم يكتمل العدد المطلوب خلال **{TEMP_EMBED_DELETE_AFTER // 60} دقيقة**.\n"
-                    f"> استخدم `{PREFIX}play 4v4` لبدء ماتش جديد."
+                    f"لم يكتمل العدد المطلوب خلال **{TEMP_EMBED_DELETE_AFTER // 60} دقيقة**.\n"
+                    f"💡 استخدم `{PREFIX}play 4v4` لبدء ماتش جديد."
                 ),
                 color=COLORS["warning"],
                 timestamp=discord.utils.utcnow()
@@ -3032,30 +3024,21 @@ async def auto_trigger_vote(lobby_id, guild):
         v2 = [p for p in voters if p in lobby["team2_players"]]
 
         mvp_embed = discord.Embed(
-            title=f"🗳️  تصويت MVP الجماعي — Match `#{lobby_id}`",
+            title=f"🗳️ تصويت MVP الجماعي — Match #{lobby_id}",
             description=(
-                f">Match finished — اختروا الـ MVPs معاً.\n"
-                f"> ⏱️  عندكم **{VOTE_TIMEOUT_SECONDS} ثانية** للتوصل لاتفاق.\n"
-                f"> 🎯  **الاتفاق المطلوب:**  `{MVP_CONSENSUS_NEEDED}` أصوات من `{len(voters)}`\n"
-                f"{separator()}\n"
-                f"> 🔴 **مصوّني Team 1 (أول 2):**  {' '.join(f'<@{p}>' for p in v1) or '*N/A*'}\n"
-                f"> 🟢 **مصوّني Team 2 (أول 2):**  {' '.join(f'<@{p}>' for p in v2) or '*N/A*'}\n"
-                f"> 💡  المصوّنين يدوّرون على  `🏆 MVP WINNER`  و  `✦ MVP LOSER`  من القوائم تحت.\n"
-                f"> ⚠️  **ما اتفقتم؟**  البوت ينقل أدمن لو حاضر بالفويسات، أو يتاغه مع الأوامر."
+                "الماتش انتهى — اختاروا الـ MVPs معاً.\n"
+                f"⏱️ عندكم **{VOTE_TIMEOUT_SECONDS} ثانية** للتوصل لاتفاق.\n"
+                f"🎯 الاتفاق المطلوب: `{MVP_CONSENSUS_NEEDED}` أصوات من `{len(voters)}`\n"
+                "\n"
+                f"🔴 مصوّتو Team 1 (أول 2): {' '.join(f'<@{p}>' for p in v1) or '*N/A*'}\n"
+                f"🟢 مصوّتو Team 2 (أول 2): {' '.join(f'<@{p}>' for p in v2) or '*N/A*'}"
             ),
             color=COLORS["vote"],
             timestamp=discord.utils.utcnow()
         )
-        mvp_embed.add_field(
-            name=f"🔴 Team 1 — `{len(lobby['team1_players'])}` players",
-            value=t1m or "*No players*",
-            inline=True
-        )
-        mvp_embed.add_field(
-            name=f"🟢 Team 2 — `{len(lobby['team2_players'])}` players",
-            value=t2m or "*No players*",
-            inline=True
-        )
+        mvp_embed.add_field(name=f"🔴 Team 1 — `{len(lobby['team1_players'])}` players", value=f"{t1m or '*No players*'}", inline=True)
+        mvp_embed.add_field(name=f"🟢 Team 2 — `{len(lobby['team2_players'])}` players", value=f"{t2m or '*No players*'}", inline=True)
+        mvp_embed.add_field(name="💡 كيف أصوّت؟", value="المصوّتون يدوّرون على `🏆 MVP WINNER` و `✦ MVP LOSER` من القوائم تحت.\n⚠️ **ما اتفقتم؟** البوت ينقل أدمن لو حاضر بالفويسات، أو يتاغه مع الأوامر.", inline=False)
         mvp_embed.set_author(name="MVP Voting", icon_url=None)
         mvp_embed.set_footer(text=f"{BOT_FOOTER}  •  Match #{lobby_id}")
         mvp_embed = apply_branding(mvp_embed, guild)
@@ -3119,10 +3102,10 @@ async def auto_lobby_timeout(lobby_id, guild):
         ch = guild.get_channel(lobby["channel_id"])
         if ch:
             timeout_embed = discord.Embed(
-                title="⏰  Lobby Timed Out",
+                title="⏰ Lobby Timed Out",
                 description=(
-                    f"> اللوبي `#{lobby_id}` تم إلغاؤه بسبب عدم النشاط.\n"
-                    f"> استخدم `{PREFIX}play 4v4` لبدء ماتش جديد."
+                    f"اللوبي `#{lobby_id}` تم إلغاؤه بسبب عدم النشاط.\n"
+                    f"💡 استخدم `{PREFIX}play 4v4` لبدء ماتش جديد."
                 ),
                 color=COLORS["warning"],
                 timestamp=discord.utils.utcnow()
@@ -3257,29 +3240,21 @@ async def process_match_result(guild, lobby_id, winner_team, channel=None):
         ]) or "*لا يوجد لاعبون*"
 
         embed = discord.Embed(
-            title=f"🏅 Match Result — `#{lobby_id}`",
+            title=f"🏅 Match Result — #{lobby_id}",
             description=(
-                f"## 🎉  {wd}  Wins!\n"
-                f"{separator()}\n"
-                f"> 🎮 Mode:  `{game_mode.upper()}`\n"
-                f"> 🏆 Winner MVP:  {f'<@{winner_mvp_id}>' if winner_mvp_id else '*N/A*'} → `+{WINNER_MVP_POINTS}` pts\n"
-                f"> ✦ Loser MVP:  {f'<@{loser_mvp_id}>' if loser_mvp_id else '*N/A*'} → `+{LOSER_MVP_POINTS}` pts"
+                f"## 🎉 {wd} Wins!\n"
+                f"🎮 Mode `{game_mode.upper()}`\n"
+                "\n"
+                f"🏆 MVP Winner: {f'<@{winner_mvp_id}>' if winner_mvp_id else '*N/A*'} → `+{WINNER_MVP_POINTS}` pts\n"
+                f"✦ MVP Loser: {f'<@{loser_mvp_id}>' if loser_mvp_id else '*N/A*'} → `+{LOSER_MVP_POINTS}` pts"
             ),
             color=COLORS["success"],
             timestamp=discord.utils.utcnow()
         )
-        embed.add_field(
-            name=f"🏆 Winners —  `{len(winner_details)}` players",
-            value=wt_mentions,
-            inline=True
-        )
-        embed.add_field(
-            name=f"☠️ Losers —  `{len(loser_details)}` players",
-            value=lt_mentions,
-            inline=True
-        )
+        embed.add_field(name=f"🏆 Winners — `{len(winner_details)}` players", value=f"{wt_mentions}", inline=True)
+        embed.add_field(name=f"☠️ Losers — `{len(loser_details)}` players", value=f"{lt_mentions}", inline=True)
         embed.set_author(name="Match Finished", icon_url=None)
-        embed.set_footer(text=f"{BOT_FOOTER}  •  GG WP!  •  Match #{lobby_id}")
+        embed.set_footer(text=f"{BOT_FOOTER}  •  Match #{lobby_id}  ·  GG WP!")
         embed = apply_branding(embed, guild)
         # 🆕 نتيجة الماتش → قناة النتائج المخصصة (match-results) فقط، وإلا القناة الأصلية
         await _post_match_result(guild, embed, channel)
@@ -3334,22 +3309,16 @@ class RoomInfoModal(discord.ui.Modal, title="📋 Enter Room Information"):
                 await interaction.response.send_message("❌ Only the host!", ephemeral=True)
                 return
             db.set_room_info(self.lobby_id, room_id, password, private_key if private_key else None)
-            await interaction.response.send_message(
-                embed=discord.Embed(
-                    title="✅  Room Info Saved",
-                    description=(
-                        f"> Room details stored successfully.\n"
-                        f"──────────────────────\n"
-                        f"🆔 Room ID:\n"
-                        f"```\n{room_id}\n```\n"
-                        f"🔑  **Code:**\n"
-                        f"```\n{password or 'N/A'}\n```"
-                        + (f"\n🔐  **Private Key:**\n```\n{private_key}\n```" if private_key else "")
-                    ),
-                    color=COLORS["success"]
-                ),
-                ephemeral=True
+            embed = discord.Embed(
+                title="✅ Room Info Saved",
+                description="Room details stored successfully.",
+                color=COLORS["success"]
             )
+            embed.add_field(name="🆔 Room ID", value=f"```\n{room_id}\n```", inline=True)
+            embed.add_field(name="🔑 Code", value=f"```\n{password or 'N/A'}\n```", inline=True)
+            if private_key:
+                embed.add_field(name="🔐 Private Key", value=f"```\n{private_key}\n```", inline=True)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
         except Exception as e:
             logger.exception(f"RoomInfoModal failed: {e}")
 
@@ -3373,10 +3342,10 @@ class JoinKeyModal(discord.ui.Modal, title="🔑 Enter Private Match Key"):
                 await self.view_ref._complete_join(interaction, self.team)
             else:
                 await interaction.response.send_message(embed=discord.Embed(
-                    title="❌  Wrong Key",
+                    title="❌ Wrong Key",
                     description=(
-                        f"> The private key you entered is incorrect.\n"
-                        f"> Please ask the host for the correct key."
+                        "The private key you entered is incorrect.\n"
+                        "Please ask the host for the correct key."
                     ),
                     color=COLORS["error"]
                 ), ephemeral=True)
@@ -3411,8 +3380,11 @@ class ReportReasonModal(discord.ui.Modal, title="⚠️  سبب البلاغ"):
             if not added:
                 await interaction.response.send_message(
                     embed=discord.Embed(
-                        title="⚠️  بلغت من قبل",
-                        description=f"> لقد بلّغت على <@{self.reported_id}> سابقاً.\n> لا يمكنك البلاغ مرتين على نفس اللاعب.",
+                        title="⚠️ بلغت من قبل",
+                        description=(
+                            f"لقد بلّغت على <@{self.reported_id}> سابقاً.\n"
+                            "لا يمكنك البلاغ مرتين على نفس اللاعب."
+                        ),
                         color=COLORS["warning"]
                     ), ephemeral=True
                 )
@@ -3421,17 +3393,18 @@ class ReportReasonModal(discord.ui.Modal, title="⚠️  سبب البلاغ"):
             # اعرض تأكيد البلاغ
             remaining = max(0, REPORT_THRESHOLD - total)
             report_embed = discord.Embed(
-                title="⚠️  تم تسجيل البلاغ",
+                title="⚠️ تم تسجيل البلاغ",
                 description=(
-                    f"> 👤  **اللاعب المُبلَّغ عنه:**  <@{self.reported_id}>\n"
-                    f"> 👮  **الـمُبلَّغ:**  <@{self.reporter_id}>\n"
-                    + (f"> 📝  **السبب:**  {reason}\n" if reason else "")
-                    + f"> 📊  **إجمالي البلاغات:**  `{total}/{REPORT_THRESHOLD}`\n"
-                    + (f"> ⚠️  **يتبقى:**  `{remaining}`  بلاغ للحظر التلقائي" if remaining > 0 else f"> ⚠️  **وصل للحد!**  سيتم الحظر تلقائياً")
+                    (f"⚠️ يتبقى `{remaining}` بلاغ للحظر التلقائي" if remaining > 0 else "⚠️ **وصل للحد!** سيتم الحظر تلقائياً")
                 ),
                 color=COLORS["warning"] if remaining > 0 else COLORS["error"],
                 timestamp=discord.utils.utcnow()
             )
+            report_embed.add_field(name="👤 المُبلَّغ عنه", value=f"<@{self.reported_id}>", inline=True)
+            report_embed.add_field(name="👮 المُبلِّغ", value=f"<@{self.reporter_id}>", inline=True)
+            report_embed.add_field(name="📊 البلاغات", value=f"`{total}/{REPORT_THRESHOLD}`", inline=True)
+            if reason:
+                report_embed.add_field(name="📝 السبب", value=f"{reason}", inline=False)
             report_embed.set_footer(text=f"{BOT_FOOTER}  •  Report #{total}")
             report_embed = apply_branding(report_embed, guild)
             await interaction.response.send_message(embed=report_embed, ephemeral=True)
@@ -3528,12 +3501,12 @@ class ReportButtonView(discord.ui.View):
             return
         await interaction.response.send_message(
             embed=discord.Embed(
-                title="⚠️  اختر اللاعب المُبلَّغ عنه",
+                title="⚠️ اختر اللاعب المُبلَّغ عنه",
                 description=(
-                    f"> اختر اللاعب الذي تريد البلاغ عنه من القائمة\n"
-                    f"> ⚠️  البلاغ جدّي — لا تبلغ بدون سبب"
+                    "اختر اللاعب الذي تريد البلاغ عنه من القائمة.\n"
+                    "⚠️ البلاغ جدّي — لا تبلّغ بدون سبب."
                 ),
-                color=COLORS["error"]
+                color=COLORS["warning"]
             ), view=view, ephemeral=True
         )
 
@@ -3609,10 +3582,10 @@ class LobbyButtonsView(discord.ui.View):
         # 🆕 FIX: رد على التفاعل أولاً قبل حذف القنوات (تجنب فشل الاستجابة)
         mode = lobby.get("game_mode", DEFAULT_MODE).upper()
         await interaction.response.send_message(embed=discord.Embed(
-            title="🛡️ Match Cancelled",
+            title="❌ Match Cancelled",
             description=(
-                f"> Match `#{self.lobby_id}` — `{mode}`  was cancelled by <@{uid}>.\n"
-                f"> Use `{PREFIX}play` to start a new match."
+                f"Match `#{self.lobby_id}` — `{mode}` was cancelled by <@{uid}>.\n"
+                f"Use `{PREFIX}play` to start a new match."
             ),
             color=COLORS["error"]
         ), delete_after=30)
@@ -3652,17 +3625,16 @@ class LobbyButtonsView(discord.ui.View):
         ban_info = db.is_player_banned(interaction.guild.id, uid)
         if ban_info:
             ban_embed = discord.Embed(
-                title="🚫  أنت محظور من اللعب",
+                title="🚫 أنت محظور من اللعب",
                 description=(
-                    f"> ⚠️  **السبب:**  `{ban_info.get('ban_reason') or 'غير محدد'}`\n"
-                    f"> 📊  **عدد البلاغات:**  `{ban_info.get('report_count', 0)}`\n"
-                    f"{separator()}\n"
-                    f"> 🔍  يتم توجيهك لفويس التفتيش\n"
-                    f"> 💡  لفك الحظر، تواصل مع الأدمن"
+                    "🔍 يتم توجيهك لفويس التفتيش\n"
+                    "💡 لفك الحظر، تواصل مع الأدمن"
                 ),
                 color=COLORS["error"],
                 timestamp=discord.utils.utcnow()
             )
+            ban_embed.add_field(name="⚠️ السبب", value=f"`{ban_info.get('ban_reason') or 'غير محدد'}`", inline=True)
+            ban_embed.add_field(name="📊 البلاغات", value=f"`{ban_info.get('report_count', 0)}`", inline=True)
             ban_embed.set_footer(text=f"{BOT_FOOTER}  •  Banned")
             ban_embed = apply_branding(ban_embed, interaction.guild)
             await interaction.response.send_message(embed=ban_embed, ephemeral=True)
@@ -3681,15 +3653,13 @@ class LobbyButtonsView(discord.ui.View):
                 if wr and wr.permissions_for(member).connect:
                     available.append(wr.mention)
             rooms_text = "\n".join([f"› {r}" for r in available[:10]]) if available else "> *None available*"
-            await interaction.response.send_message(embed=discord.Embed(
-                title="⏳  Join a Waiting Room",
-                description=(
-                    f"> You must be in a voice waiting room to join a match.\n"
-                    f"──────────────────────\n"
-                    f"🔊  **Available Rooms:**\n{rooms_text}"
-                ),
+            embed = discord.Embed(
+                title="⏳ Join a Waiting Room",
+                description="You must be in a voice waiting room to join a match.",
                 color=COLORS["warning"]
-            ), ephemeral=True)
+            )
+            embed.add_field(name="🔊 Available Rooms", value=f"{rooms_text}", inline=False)
+            await interaction.response.send_message(embed=embed, ephemeral=True)
             return
         else:
             waiting_rooms = db.get_waiting_rooms(interaction.guild.id)
@@ -3700,25 +3670,23 @@ class LobbyButtonsView(discord.ui.View):
                     if wr and wr.permissions_for(member).connect:
                         available.append(wr.mention)
                 rooms_text = "\n".join([f"› {r}" for r in available[:10]]) if available else "> *None*"
-                await interaction.response.send_message(embed=discord.Embed(
-                    title="⏳  Wrong Voice Channel",
-                    description=(
-                        f"> You're in `{member.voice.channel.name}` — that's not a waiting room.\n"
-                        f"──────────────────────\n"
-                        f"🔊  **Available Rooms:**\n{rooms_text}"
-                    ),
+                embed = discord.Embed(
+                    title="⏳ Wrong Voice Channel",
+                    description=f"You're in `{member.voice.channel.name}` — that's not a waiting room.",
                     color=COLORS["warning"]
-                ), ephemeral=True)
+                )
+                embed.add_field(name="🔊 Available Rooms", value=f"{rooms_text}", inline=False)
+                await interaction.response.send_message(embed=embed, ephemeral=True)
                 return
 
         existing = db.get_player_active_lobby(uid, interaction.guild.id)
         if existing and existing["id"] != self.lobby_id:
             if existing["status"] == "started" and not existing.get("room_id"):
                 await interaction.response.send_message(embed=discord.Embed(
-                    title="⏳  Pending Match",
+                    title="⏳ Pending Match",
                     description=(
-                        f"> You have a pending match that needs to be finished first.\n"
-                        f"> Complete or cancel it before joining a new one."
+                        "You have a pending match that needs to be finished first.\n"
+                        "Complete or cancel it before joining a new one."
                     ),
                     color=COLORS["warning"]
                 ), ephemeral=True)
@@ -3765,13 +3733,13 @@ class LobbyButtonsView(discord.ui.View):
             room_embed = discord.Embed(
                 title="ℹ️ Room Info",
                 description=(
-                    f"Join the room with these credentials:"
+                    "Join the room with these credentials:\n"
+                    "🔥 Join now and good luck!"
                 ),
-                color=COLORS["auto"]
+                color=COLORS["play"]
             )
             room_embed.add_field(name="🆔 Room ID", value=f"`{lobby['room_id']}`", inline=True)
             room_embed.add_field(name="🔑 Password", value=f"`{lobby.get('room_code') or 'N/A'}`", inline=True)
-            room_embed.add_field(name="", value="🔥 Join now and good luck!", inline=False)
             await interaction.followup.send(embed=room_embed, ephemeral=True)
 
         # ✅ MAX: لا تنقل اللاعب لـ waiting room بعد الانضمام للوبي
@@ -3817,10 +3785,10 @@ class LobbyButtonsView(discord.ui.View):
                 db.update_lobby_status(self.lobby_id, "cancelled")
                 cleanup_lobby_memory(self.lobby_id)
                 await interaction.channel.send(embed=discord.Embed(
-                    title="❌  Failed to Start",
+                    title="❌ Failed to Start",
                     description=(
-                        f"> Could not create match channels.\n"
-                        f"> Lobby `#{self.lobby_id}` has been cancelled."
+                        "Could not create match channels.\n"
+                        f"Lobby `#{self.lobby_id}` has been cancelled."
                     ),
                     color=COLORS["error"]
                 ), delete_after=15)
@@ -3831,10 +3799,10 @@ class LobbyButtonsView(discord.ui.View):
 
             try:
                 ready_msg = await interaction.channel.send(embed=discord.Embed(
-                    title="✅  Match Ready!",
+                    title="✅ Match Ready!",
                     description=(
-                        f"> Lobby is full — match is starting now!\n"
-                        f"> Moving players to their team voice channels..."
+                        "Lobby is full — match is starting now!\n"
+                        "Moving players to their team voice channels..."
                     ),
                     color=COLORS["success"],
                     timestamp=discord.utils.utcnow()
@@ -3869,42 +3837,30 @@ class LobbyButtonsView(discord.ui.View):
                     mentions = " ".join([f"<@{pid}>" for pid in all_players])
                     room_embed = discord.Embed(
                         title="ℹ️ Room Info",
-                        description="Join the room with these credentials:",
-                        color=COLORS["auto"]
+                        description=(
+                            "Join the room with these credentials:\n"
+                            "🔥 Join now and good luck!"
+                        ),
+                        color=COLORS["play"]
                     )
                     room_embed.add_field(name="🆔 Room ID", value=f"`{lobby['room_id']}`", inline=True)
                     room_embed.add_field(name="🔑 Password", value=f"`{lobby.get('room_code') or 'N/A'}`", inline=True)
-                    room_embed.add_field(name="", value="🔥 Join now and good luck!", inline=False)
                     try: await channels["team1_text"].send(mentions, embed=room_embed)
                     except: pass
 
                 start_vote_view = StartVoteView(self.lobby_id, interaction.guild.id, lobby["creator_id"])
                 start_embed = discord.Embed(
                     title="📻 Match Started!",
-                    description=(
-                        f"> Lobby: `#{self.lobby_id}`\n"
-                        f"> Mode: `{mode.upper()}` · Host: <@{lobby['creator_id']}>\n"
-                    ),
-                    color=COLORS["auto"],
+                    description=f"**Lobby** `#{self.lobby_id}`  ·  `{mode.upper()}`  ·  Host <@{lobby['creator_id']}>",
+                    color=COLORS["play"],
                     timestamp=discord.utils.utcnow()
                 )
-                # أضف معلومات الغرفة إذا موجودة
                 if lobby.get('room_id'):
-                    start_embed.add_field(
-                        name="📡 Room Info",
-                        value=(
-                            f"🆔 Room ID: `{lobby['room_id']}`\n"
-                            f"🔑 Password: `{lobby.get('room_code') or 'N/A'}`"
-                        ),
-                        inline=False
-                    )
+                    start_embed.add_field(name="🆔 Room ID", value=f"`{lobby['room_id']}`", inline=True)
+                    start_embed.add_field(name="🔑 Password", value=f"`{lobby.get('room_code') or 'N/A'}`", inline=True)
                 start_embed.add_field(
-                    name="",
-                    value=(
-                        f"🎮 Match started. Join the room now.\n"
-                        f"🔱 Host: press **Start Vote** when finished.\n"
-                        f"❌ Host: press **Cancel Match** to abort."
-                    ),
+                    name="📋 Next steps",
+                    value="🎮 Match started. Join the room now.\n🔱 Host: press **Start Vote** when finished.\n❌ Host: press **Cancel Match** to abort.",
                     inline=False
                 )
                 start_embed.set_author(name="Match Live", icon_url=None)
@@ -3921,13 +3877,14 @@ class LobbyButtonsView(discord.ui.View):
                     all_players = lobby["team1_players"] + lobby["team2_players"]
                     report_view = ReportButtonView(self.lobby_id, all_players, interaction.guild.id)
                     report_embed = discord.Embed(
-                        title="⚠️  نظام البلاغ",
+                        title="⚠️ نظام البلاغ",
                         description=(
-                            f"> لو لاحظت لاعب يغش أو يسيء، اضغط زر  **⚠️ إبلاغ**\n"
-                            f"> 📊  عند وصول البلاغات إلى  `{REPORT_THRESHOLD}`  → حظر تلقائي\n"
-                            f"> 🔍  اللاعب المحظور يُنقل لفويس التفتيش حتى يفك الأدمن الحظر"
+                            "لو لاحظت لاعب يغش أو يسيء، اضغط زر **⚠️ إبلاغ**\n"
+                            "\n"
+                            f"📊 عند وصول البلاغات إلى `{REPORT_THRESHOLD}` → حظر تلقائي\n"
+                            "🔍 اللاعب المحظور يُنقل لفويس التفتيش حتى يفك الأدمن الحظر"
                         ),
-                        color=COLORS["error"],
+                        color=COLORS["warning"],
                         timestamp=discord.utils.utcnow()
                     )
                     report_embed.set_footer(text=f"{BOT_FOOTER}  •  Match #{self.lobby_id}")
@@ -3999,8 +3956,11 @@ class StartVoteView(discord.ui.View):
                     remaining_min = remaining // 60
                     remaining_sec = remaining % 60
                     await interaction.response.send_message(embed=discord.Embed(
-                        title="⏳  لم يحن وقت التصويت بعد",
-                        description=f"> ⏱️  يجب انتظار **10 دقائق** من بدء الماتش\n> ⏳  المتبقي:  `{remaining_min} دقيقة و {remaining_sec} ثانية`",
+                        title="⏳ لم يحن وقت التصويت بعد",
+                        description=(
+                            "⏱️ يجب انتظار **10 دقائق** من بدء الماتش\n"
+                            f"⏳ المتبقي: `{remaining_min} دقيقة و {remaining_sec} ثانية`"
+                        ),
                         color=COLORS["warning"]
                     ), ephemeral=True)
                     return
@@ -4049,9 +4009,12 @@ class StartVoteView(discord.ui.View):
         remaining = required_votes - current_votes
         vote_embed = discord.Embed(
             title="🗳️ تصويت إلغاء الماتش",
-            description=f"> 👤 <@{uid}> صوّت لإلغاء الماتش\n> 📊 **التقدم:** `{current_votes}/{required_votes}`\n> ⏳ **يتبقى:** `{remaining}`",
-            color=COLORS["warning"], timestamp=discord.utils.utcnow()
+            description=f"👤 <@{uid}> صوّت لإلغاء الماتش",
+            color=COLORS["warning"],
+            timestamp=discord.utils.utcnow()
         )
+        vote_embed.add_field(name="📊 التقدم", value=f"`{current_votes}/{required_votes}`", inline=True)
+        vote_embed.add_field(name="⏳ يتبقى", value=f"`{remaining}`", inline=True)
         vote_embed.set_footer(text=f"{BOT_FOOTER}  •  Cancel Vote")
         await interaction.response.send_message(embed=vote_embed)
 
@@ -4059,16 +4022,19 @@ class StartVoteView(discord.ui.View):
         """🆕 ينفذ إلغاء الماتش فعلياً."""
         mode = lobby.get("game_mode", DEFAULT_MODE).upper()
         cancelled_embed = discord.Embed(
-            title="🛡️ Match Cancelled",
+            title="❌ Match Cancelled",
             description=(
-                f"> **Lobby:**  `#{self.lobby_id}`\n> **Mode:**  `{mode}`\n"
-                f"> **Cancelled by:**  <@{uid}> ({reason})\n{separator()}\n"
-                f"> 🔄  جارٍ إعادة اللاعبين...\n> 🗑️  جارٍ حذف القنوات...\n"
-                f"> 💡 Use  `{PREFIX}play`  لبدء ماتش جديد."
+                "🔄 جارٍ إعادة اللاعبين...\n"
+                "🗑️ جارٍ حذف القنوات...\n"
+                "\n"
+                f"💡 Use `{PREFIX}play` لبدء ماتش جديد."
             ),
-            color=COLORS["error"], timestamp=discord.utils.utcnow()
+            color=COLORS["error"],
+            timestamp=discord.utils.utcnow()
         )
-        cancelled_embed.set_author(name="Match Cancelled")
+        cancelled_embed.add_field(name="🏠 Lobby", value=f"`#{self.lobby_id}`", inline=True)
+        cancelled_embed.add_field(name="🎮 Mode", value=f"`{mode}`", inline=True)
+        cancelled_embed.add_field(name="👤 Cancelled by", value=f"<@{uid}> ({reason})", inline=True)
         cancelled_embed.set_footer(text=f"{BOT_FOOTER}  •  Lobby #{self.lobby_id}")
         cancelled_embed = apply_branding(cancelled_embed, guild)
         await interaction.response.send_message(embed=cancelled_embed)
@@ -4201,11 +4167,11 @@ class MvpSelectionView(discord.ui.View):
         except: pass
         await interaction.followup.send(
             embed=discord.Embed(
-                title="✅  تم تطبيق النقاط!",
+                title="✅ تم تطبيق النقاط!",
                 description=(
-                    f"> 🏆  **MVP الفائز:**  <@{self.winner_mvp_id}>\n"
-                    f"> ✦  **MVP الخاسر:**  <@{self.loser_mvp_id}>\n"
-                    f"> ⚡  جارٍ تطبيق النقاط وتحديث الرانك..."
+                    f"🏆 **MVP الفائز:** <@{self.winner_mvp_id}>\n"
+                    f"✦ **MVP الخاسر:** <@{self.loser_mvp_id}>\n"
+                    "⚡ جارٍ تطبيق النقاط وتحديث الرانك..."
                 ),
                 color=COLORS["success"],
                 timestamp=discord.utils.utcnow()
@@ -4402,32 +4368,20 @@ async def escalate_mvp_dispute(guild, lobby_id, reason_detail, *, team1_players=
             mentions = " ".join(m.mention for m, _ in moves)
             where = moves[0][1] if moves else None
             embed = discord.Embed(
-                title=f"🚨 تعذّر الاتفاق على MVP — الماتش `#{lobby_id}`",
+                title=f"🚨 تعذّر الاتفاق على MVP — الماتش #{lobby_id}",
                 description=(
                     f"{mentions}\n"
-                    f"> ⚠️  **ما في تفاهم بين المصوّنين** — نطلب تدخل أحد الأدمنز.\n"
-                    f"> 📌  **السبب:**  {reason_detail}\n"
-                    f"{separator()}\n"
-                    f"> 👥  **المصوّنين (أول 2 من كل فريق):**\n"
-                    f"> ─  Team 1 🔴:  {' '.join(f'<@{p}>' for p in (team1_players or [])[:MVP_VOTERS_PER_TEAM]) or '*N/A*'}\n"
-                    f"> ─  Team 2 🟢:  {' '.join(f'<@{p}>' for p in (team2_players or [])[:MVP_VOTERS_PER_TEAM]) or '*N/A*'}\n"
-                    f"> 🗳  **التصويت:**\n"
-                    f"> ─  🏆 Winner:  " + (", ".join(f"**{c}**×<@{p}>" for p, c in sorted(w_tally.items(), key=lambda x: -x[1])) or "*لا توجد أصوات*") + "\n"
-                    f"> ─  ✦ Loser:  " + (", ".join(f"**{c}**×<@{p}>" for p, c in sorted(l_tally.items(), key=lambda x: -x[1])) or "*لا توجد أصوات*")
+                    "⚠️ **ما في تفاهم بين المصوّتين** — نطلب تدخل أحد الأدمنز.\n"
+                    f"📌 **السبب:** {reason_detail}"
                 ),
                 color=COLORS["error"],
                 timestamp=discord.utils.utcnow()
             )
-            embed.add_field(
-                name="🔧  الأمر المطلوب منك",
-                value=(
-                    f"> `{PREFIX}w {lobby_id} @user`  —  عينِ MVPWINNER\n"
-                    f"> `{PREFIX}l {lobby_id} @user`  —  عينِ MVPLOSER\n"
-                    f"> 📌  لازم من فريقين مختلفين — بـ `!!w` + `!!l` بتُطبَّق النقاط تلقائياً"
-                ),
-                inline=False
-            )
-            embed.set_footer(text=f"{BOT_FOOTER}  • .Admin action required")
+            embed.add_field(name="🔴 Team 1 — المصوّتون", value=f"{' '.join(f'<@{p}>' for p in (team1_players or [])[:MVP_VOTERS_PER_TEAM]) or '*N/A*'}", inline=True)
+            embed.add_field(name="🟢 Team 2 — المصوّتون", value=f"{' '.join(f'<@{p}>' for p in (team2_players or [])[:MVP_VOTERS_PER_TEAM]) or '*N/A*'}", inline=True)
+            embed.add_field(name="🗳️ الأصوات", value=f"🏆 Winner: {', '.join(f'**{c}**×<@{p}>' for p, c in sorted(w_tally.items(), key=lambda x: -x[1])) or '*لا توجد أصوات*'}\n✦ Loser: {', '.join(f'**{c}**×<@{p}>' for p, c in sorted(l_tally.items(), key=lambda x: -x[1])) or '*لا توجد أصوات*'}", inline=False)
+            embed.add_field(name="🔧 الأمر المطلوب منك", value=f"`{PREFIX}w {lobby_id} @user` — عيّن MVP WINNER\n`{PREFIX}l {lobby_id} @user` — عيّن MVP LOSER\n📌 لازم من فريقين مختلفين — بـ `!!w` + `!!l` تُطبَّق النقاط تلقائياً", inline=False)
+            embed.set_footer(text=f"{BOT_FOOTER}  •  Action required")
             embed = apply_branding(embed, guild)
 
             # أرسل في قناة الفريق المرتبط بالفويس اللي وصله الأدمن
@@ -4575,20 +4529,18 @@ class MvpVoteView(discord.ui.View):
             return True
         t1_names = " ".join(f"<@{p}>" for p in self.voters if p in self.team1_players)
         t2_names = " ".join(f"<@{p}>" for p in self.voters if p in self.team2_players)
-        await interaction.response.send_message(
-            embed=discord.Embed(
-                title="⛔  ما أنت من المصوّنين",
-                description=(
-                    f"> ❌  موقعك ما يحسب تصويتاً في هذا النظام.\n"
-                    f"> 👥  المصوّنين هم **أول شخصين من كل فريق**:\n"
-                    f"> ─  🔴 Team 1:  {t1_names or '*N/A*'}\n"
-                    f"> ─  🟢 Team 2:  {t2_names or '*N/A*'}\n"
-                    f"> 📌  لو كنت من المصوّنين وبس، اختر MVP من القوائم بالأعلى."
-                ),
-                color=COLORS["error"]
+        embed = discord.Embed(
+            title="⛔ ما أنت من المصوّتين",
+            description=(
+                "❌ صوتك ما يُحسب في هذا النظام.\n"
+                "المصوّتون هم **أول شخصين من كل فريق**.\n"
+                "📌 لو كنت منهم، اختر MVP من القوائم بالأعلى."
             ),
-            ephemeral=True
+            color=COLORS["error"]
         )
+        embed.add_field(name="🔴 Team 1", value=f"{t1_names or '*N/A*'}", inline=True)
+        embed.add_field(name="🟢 Team 2", value=f"{t2_names or '*N/A*'}", inline=True)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         return False
 
     def _tally(self, key):
@@ -4647,34 +4599,29 @@ class MvpVoteView(discord.ui.View):
 
     async def status_callback(self, interaction):
         """🆕 زر محايد: يعرض الحالة الحالية بدون أي تصويت."""
-        await interaction.response.send_message(
-            embed=discord.Embed(
-                title=f"📊  حالة تصويت MVP — ماتش `#{self.lobby_id}`",
-                description=(
-                    f"> 👥  **المصوّنين (أول 2 من كل فريق):**  "
-                    f"{' '.join(f'<@{p}>' for p in self.voters) or '*N/A*'}\n"
-                    f"> ✅  **صوّتوا:**  `{self._voted_count()}` / `{len(self.voters)}`\n"
-                    f"{separator()}\n"
-                    f"{self._tally_line('winner', '🏆 MVP WINNER')}\n"
-                    f"{self._tally_line('loser', '✦ MVP LOSER')}\n"
-                    f"> 🎯  **الاتفاق المطلوب:**  `{MVP_CONSENSUS_NEEDED}` أصوات"
-                ),
-                color=COLORS["info"],
-                timestamp=discord.utils.utcnow()
+        embed = discord.Embed(
+            title=f"📊 حالة تصويت MVP — ماتش #{self.lobby_id}",
+            description=(
+                f"👥 المصوّتون: {' '.join(f'<@{p}>' for p in self.voters) or '*N/A*'}\n"
+                f"✅ صوّتوا: `{self._voted_count()}` / `{len(self.voters)}`   ·   🎯 المطلوب: `{MVP_CONSENSUS_NEEDED}` أصوات"
             ),
-            ephemeral=True
+            color=COLORS["vote"],
+            timestamp=discord.utils.utcnow()
         )
+        embed.add_field(name="🏆 MVP WINNER", value=f"{self._tally_line('winner', '🏆 MVP WINNER')}", inline=False)
+        embed.add_field(name="✦ MVP LOSER", value=f"{self._tally_line('loser', '✦ MVP LOSER')}", inline=False)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     async def tag_admin_callback(self, interaction):
         """🆕 زر يدوي: يطلب تدخل الأدمن (ينقله لو حاضر، وإلا يتاغه)."""
         await interaction.response.send_message(
             embed=discord.Embed(
-                title="⚠️  تم طلب تدخل الأدمن",
+                title="⚠️ تم طلب تدخل الأدمن",
                 description=(
-                    f"> 🚨  تم إبلاغ الأدمن بمشكلة في الماتش  `#{self.lobby_id}`\n"
-                    f"> 👤  **المبلّغ:**  {interaction.user.mention}\n"
-                    f"> 📌  لو فيه أدمن بالفويسات الخاصة باللاعبين، البوت نقله عندهم.\n"
-                    f"> 📌  وإلا، تم تاغ الأدمن مع الأوامر المناسبة."
+                    f"🚨 تم إبلاغ الأدمن بمشكلة في الماتش `#{self.lobby_id}`\n"
+                    f"👤 **المبلّغ:** {interaction.user.mention}\n"
+                    "📌 لو فيه أدمن بالفويسات الخاصة باللاعبين، البوت نقله عندهم.\n"
+                    "📌 وإلا، تم تاغ الأدمن مع الأوامر المناسبة."
                 ),
                 color=COLORS["warning"]
             ),
@@ -4784,12 +4731,13 @@ class MvpVoteView(discord.ui.View):
         try:
             await interaction.channel.send(
                 embed=discord.Embed(
-                    title="✅  تم الاتفاق على MVP!",
+                    title="✅ تم الاتفاق على MVP!",
                     description=(
-                        f"> 🤝  **اتفاق `{MVP_CONSENSUS_NEEDED}` أصوات من `{len(self.voters)}` مصوّنين**\n"
-                        f"> 🏆  **MVP WINNER:**  <@{winner_mvp}> → `+80` pts\n"
-                        f"> ✦  **MVP LOSER:**  <@{loser_mvp}> → `+30` pts\n"
-                        f"> ⚡  جارٍ تطبيق النقاط وتحديث الرانك..."
+                        f"🤝 اتفاق `{MVP_CONSENSUS_NEEDED}` أصوات من `{len(self.voters)}` مصوّتين\n"
+                        "\n"
+                        f"🏆 **MVP WINNER:** <@{winner_mvp}> → `+80` pts\n"
+                        f"✦ **MVP LOSER:** <@{loser_mvp}> → `+30` pts\n"
+                        "⚡ جارٍ تطبيق النقاط وتحديث الرانك..."
                     ),
                     color=COLORS["success"]
                 )
@@ -4963,29 +4911,21 @@ async def process_match_result_with_mvps(guild, lobby_id, winner_team, winner_mv
         ]) or "*لا يوجد لاعبون*"
 
         embed = discord.Embed(
-            title=f"🏅 Match Result — `#{lobby_id}`",
+            title=f"🏅 Match Result — #{lobby_id}",
             description=(
-                f"## 🎉  {wd}  Wins!\n"
-                f"{separator()}\n"
-                f"> 🎮 Mode:  `{game_mode.upper()}`\n"
-                f"> 🏆 Winner MVP:  {f'<@{winner_mvp_id}>' if winner_mvp_id else '*N/A*'} → `+{WINNER_MVP_POINTS}` pts\n"
-                f"> ✦ Loser MVP:  {f'<@{loser_mvp_id}>' if loser_mvp_id else '*N/A*'} → `+{LOSER_MVP_POINTS}` pts"
+                f"## 🎉 {wd} Wins!\n"
+                f"🎮 Mode `{game_mode.upper()}`\n"
+                "\n"
+                f"🏆 MVP Winner: {f'<@{winner_mvp_id}>' if winner_mvp_id else '*N/A*'} → `+{WINNER_MVP_POINTS}` pts\n"
+                f"✦ MVP Loser: {f'<@{loser_mvp_id}>' if loser_mvp_id else '*N/A*'} → `+{LOSER_MVP_POINTS}` pts"
             ),
             color=COLORS["success"],
             timestamp=discord.utils.utcnow()
         )
-        embed.add_field(
-            name=f"🏆 Winners —  `{len(winner_details)}` players",
-            value=wt_mentions,
-            inline=True
-        )
-        embed.add_field(
-            name=f"☠️ Losers —  `{len(loser_details)}` players",
-            value=lt_mentions,
-            inline=True
-        )
+        embed.add_field(name=f"🏆 Winners — `{len(winner_details)}` players", value=f"{wt_mentions}", inline=True)
+        embed.add_field(name=f"☠️ Losers — `{len(loser_details)}` players", value=f"{lt_mentions}", inline=True)
         embed.set_author(name="Match Finished", icon_url=None)
-        embed.set_footer(text=f"{BOT_FOOTER}  •  GG WP!  •  Match #{lobby_id}")
+        embed.set_footer(text=f"{BOT_FOOTER}  •  Match #{lobby_id}  ·  GG WP!")
         embed = apply_branding(embed, guild)
         # 🆕 نتيجة الماتش → قناة النتائج المخصصة (match-results) فقط، وإلا القناة الأصلية
         await _post_match_result(guild, embed, channel)
@@ -5060,16 +5000,13 @@ class VoteView(discord.ui.View):
                 no_votes_embed = discord.Embed(
                     title="⏰ Vote Ended — No Votes!",
                     description=(
-                        f"> ⚠️  لم يصوت أي لاعب في الماتش  `#{self.lobby_id}`\n"
-                        f"> 📊  **النتيجة:**  `0 — 0`\n"
-                        f"> ⚖️  الأدمن يجب أن يحل الماتش يدوياً:\n"
-                        f"> `{PREFIX}resolve {self.lobby_id} team1`\n"
-                        f"> `{PREFIX}resolve {self.lobby_id} team2`\n"
-                        f"> 💡  أو استخدم  `{PREFIX}resolve {self.lobby_id} team1`  لفوز Team 1"
+                        f"⚠️ لم يصوّت أي لاعب في الماتش `#{self.lobby_id}`\n"
+                        "📊 النتيجة `0 — 0`"
                     ),
                     color=COLORS["warning"],
                     timestamp=discord.utils.utcnow()
                 )
+                no_votes_embed.add_field(name="⚖️ الأدمن يحلّ الماتش يدوياً", value=f"`{PREFIX}resolve {self.lobby_id} team1` — فوز Team 1\n`{PREFIX}resolve {self.lobby_id} team2` — فوز Team 2", inline=False)
                 no_votes_embed.set_footer(text=f"{BOT_FOOTER}  •  Action required")
                 no_votes_embed = apply_branding(no_votes_embed, guild)
                 await result_ch.send(embed=no_votes_embed)
@@ -5095,17 +5032,15 @@ class VoteView(discord.ui.View):
             # 🆕 حالة التعادل (مع أصوات) — تاغ الأدمنز
             if result_ch:
                 tie_embed = discord.Embed(
-                    title="⏰  Vote Tied!",
+                    title="⏰ Vote Tied!",
                     description=(
-                        f"> 🤝  الماتش  `#{self.lobby_id}`  انتهى بالتعادل\n"
-                        f"> 📊  **النتيجة:**  `{t1v} — {t2v}`\n"
-                        f"> ⚖️  الأدمن يجب أن يحل الماتش:\n"
-                        f"> `{PREFIX}resolve {self.lobby_id} team1`\n"
-                        f"> `{PREFIX}resolve {self.lobby_id} team2`"
+                        f"🤝 الماتش `#{self.lobby_id}` انتهى بالتعادل\n"
+                        f"📊 النتيجة `{t1v} — {t2v}`"
                     ),
                     color=COLORS["warning"],
                     timestamp=discord.utils.utcnow()
                 )
+                tie_embed.add_field(name="⚖️ الأدمن يحلّ الماتش", value=f"`{PREFIX}resolve {self.lobby_id} team1` — فوز Team 1\n`{PREFIX}resolve {self.lobby_id} team2` — فوز Team 2", inline=False)
                 tie_embed.set_footer(text=f"{BOT_FOOTER}  •  Action required")
                 tie_embed = apply_branding(tie_embed, guild)
                 await result_ch.send(embed=tie_embed)
@@ -5123,10 +5058,10 @@ class VoteView(discord.ui.View):
         wd = "🔴  Team 1" if winner == "team1" else "🟢  Team 2"
         if result_ch:
             vote_close_embed = discord.Embed(
-                title="⏰  Vote Closed!",
+                title="⏰ Vote Closed!",
                 description=(
-                    f"> **{wd}**  wins the vote  `{t1v} — {t2v}`\n"
-                    f"> 🎯  اختر MVP لكل فريق الآن..."
+                    f"**{wd}** wins the vote  `{t1v} — {t2v}`\n"
+                    "🎯 اختر MVP لكل فريق الآن..."
                 ),
                 color=COLORS["success"],
                 timestamp=discord.utils.utcnow()
@@ -5144,20 +5079,16 @@ class VoteView(discord.ui.View):
                 guild=guild  # 🆕 مرّر الـ guild لجلب أسماء اللاعبين
             )
             mvp_embed = discord.Embed(
-                title="🎯  اختر MVP كل فريق",
+                title="🎯 اختر MVP كل فريق",
                 description=(
-                    f"> 🏆  **الفريق الفائز:**  {wd}\n"
-                    f"> 🔱  الهوست أو الأدمن يختار MVP لكل فريق\n"
-                    f"> ⏱️  لديك **3 دقائق** — وإلا سيُختار تلقائياً\n"
-                    f"{separator()}\n"
-                    f"> 💡  **تعليمات:**\n"
-                    f"> ─  استخدم القائمة الأولى لاختيار MVP الفريق الفائز  (`+80` pts)\n"
-                    f"> ─  استخدم القائمة الثانية لاختيار MVP الفريق الخاسر  (`+30` pts)\n"
-                    f"> ─  اضغط **تأكيد** لتطبيق النقاط"
+                    f"🏆 **الفريق الفائز:** {wd}\n"
+                    "🔱 الهوست أو الأدمن يختار MVP لكل فريق\n"
+                    "⏱️ لديك **3 دقائق** — وإلا سيُختار تلقائياً"
                 ),
                 color=COLORS["vote"],
                 timestamp=discord.utils.utcnow()
             )
+            mvp_embed.add_field(name="💡 تعليمات", value="1️⃣ القائمة الأولى → MVP الفريق الفائز (`+80` pts)\n2️⃣ القائمة الثانية → MVP الفريق الخاسر (`+30` pts)\n3️⃣ اضغط **تأكيد** لتطبيق النقاط", inline=False)
             mvp_embed.set_author(name="MVP Selection", icon_url=None)
             mvp_embed.set_footer(text=f"{BOT_FOOTER}  •  Match #{self.lobby_id}")
             mvp_embed = apply_branding(mvp_embed, guild)
@@ -5221,8 +5152,8 @@ class VoteView(discord.ui.View):
         t2v = sum(1 for v in votes if v["vote"] == "team2")
         await interaction.channel.send(embed=discord.Embed(
             description=(
-                f"> 🗳️  **Vote Progress:**  🟠 `{t1v}`  —  🟢 `{t2v}`\n"
-                f"> Cast: `{votes_count}/{total_voters}`  (Host + First Joiner)"
+                f"🗳️ **Vote Progress**  🔴 `{t1v}` — 🟢 `{t2v}`\n"
+                f"Cast `{votes_count}/{total_voters}` (Host + First Joiner)"
             ),
             color=COLORS["vote"]
         ))
@@ -5236,17 +5167,15 @@ class VoteView(discord.ui.View):
                 winner = "team2"
             else:
                 tie_embed = discord.Embed(
-                    title="⏰  Vote Tied!",
+                    title="⏰ Vote Tied!",
                     description=(
-                        f"> 🤝  الماتش  `#{lobby_id}`  انتهى بالتعادل\n"
-                        f"> 📊  **النتيجة:**  `{t1v} — {t2v}`\n"
-                        f"> ⚖️  الأدمن يجب أن يحل الماتش:\n"
-                        f"> `{PREFIX}resolve {lobby_id} team1`\n"
-                        f"> `{PREFIX}resolve {lobby_id} team2`"
+                        f"🤝 الماتش `#{lobby_id}` انتهى بالتعادل\n"
+                        f"📊 النتيجة `{t1v} — {t2v}`"
                     ),
                     color=COLORS["warning"],
                     timestamp=discord.utils.utcnow()
                 )
+                tie_embed.add_field(name="⚖️ الأدمن يحلّ الماتش", value=f"`{PREFIX}resolve {lobby_id} team1` — فوز Team 1\n`{PREFIX}resolve {lobby_id} team2` — فوز Team 2", inline=False)
                 tie_embed.set_footer(text=f"{BOT_FOOTER}  •  Action required")
                 tie_embed = apply_branding(tie_embed, interaction.guild)
                 await interaction.channel.send(embed=tie_embed)
@@ -5264,11 +5193,11 @@ class VoteView(discord.ui.View):
 
             wd = "🟠 Team 1" if winner == "team1" else "🟢 Team 2"
             vote_complete_embed = discord.Embed(
-                title="✅  Vote Complete!",
+                title="✅ Vote Complete!",
                 description=(
-                    f"> All participants voted!\n"
-                    f"> Winner: **{wd}**  `{t1v} — {t2v}`  🎉\n"
-                    f"> 🎯  اختر MVP لكل فريق الآن..."
+                    "All participants voted!\n"
+                    f"Winner: **{wd}**  `{t1v} — {t2v}` 🎉\n"
+                    "🎯 اختر MVP لكل فريق الآن..."
                 ),
                 color=COLORS["success"],
                 timestamp=discord.utils.utcnow()
@@ -5288,20 +5217,16 @@ class VoteView(discord.ui.View):
                     guild=interaction.guild  # 🆕 مرّر الـ guild لجلب أسماء اللاعبين
                 )
                 mvp_embed = discord.Embed(
-                    title="🎯  اختر MVP كل فريق",
+                    title="🎯 اختر MVP كل فريق",
                     description=(
-                        f"> 🏆  **الفريق الفائز:**  {wd}\n"
-                        f"> 🔱  الهوست أو الأدمن يختار MVP لكل فريق\n"
-                        f"> ⏱️  لديك **3 دقائق** — وإلا سيُختار تلقائياً\n"
-                        f"{separator()}\n"
-                        f"> 💡  **تعليمات:**\n"
-                        f"> ─  استخدم القائمة الأولى لاختيار MVP الفريق الفائز  (`+80` pts)\n"
-                        f"> ─  استخدم القائمة الثانية لاختيار MVP الفريق الخاسر  (`+30` pts)\n"
-                        f"> ─  اضغط **تأكيد** لتطبيق النقاط"
+                        f"🏆 **الفريق الفائز:** {wd}\n"
+                        "🔱 الهوست أو الأدمن يختار MVP لكل فريق\n"
+                        "⏱️ لديك **3 دقائق** — وإلا سيُختار تلقائياً"
                     ),
                     color=COLORS["vote"],
                     timestamp=discord.utils.utcnow()
                 )
+                mvp_embed.add_field(name="💡 تعليمات", value="1️⃣ القائمة الأولى → MVP الفريق الفائز (`+80` pts)\n2️⃣ القائمة الثانية → MVP الفريق الخاسر (`+30` pts)\n3️⃣ اضغط **تأكيد** لتطبيق النقاط", inline=False)
                 mvp_embed.set_author(name="MVP Selection", icon_url=None)
                 mvp_embed.set_footer(text=f"{BOT_FOOTER}  •  Match #{lobby_id}")
                 mvp_embed = apply_branding(mvp_embed, interaction.guild)
@@ -5331,10 +5256,10 @@ class CreateLobbyView(discord.ui.View):
         if self.ctx is None:
             await interaction.response.send_message(
                 embed=discord.Embed(
-                    title="⏳  انتهت صلاحية الرسالة",
+                    title="⏳ انتهت صلاحية الرسالة",
                     description=(
-                        "> 🔄  البوت أُعيد تشغيله — الرسالة دي ما عادتش صالحة anymore.\n"
-                        f"> 💡  أعد الأمر  `{PREFIX}play {self.mode.upper()}`  لإنشاء روم جديد."
+                        "🔄 البوت أُعيد تشغيله — الرسالة دي ما عادتش صالحة anymore.\n"
+                        f"💡 أعد الأمر `{PREFIX}play {self.mode.upper()}` لإنشاء روم جديد."
                     ),
                     color=COLORS["warning"]
                 ),
@@ -5405,11 +5330,11 @@ class LobbyCreateModal(discord.ui.Modal, title="🎮 Create Lobby — Enter Room
             _lobby_embed_hide_timers[lid] = asyncio.create_task(_auto_hide_idle_lobby_embed(lid, guild))
             await interaction.response.send_message(
                 embed=discord.Embed(
-                    title="✅  Lobby Created!",
+                    title="✅ Lobby Created!",
                     description=(
-                        f"> Lobby `#{lid}` is now live!\n"
-                        f"> Players can press **Join Team 1 / 2** to enter.\n"
-                        + (f"> 🔐  **Private Key** required to join." if private_key else "")
+                        f"Lobby `#{lid}` is now live!\n"
+                        "Players can press **Join Team 1 / 2** to enter.\n"
+                        + ("🔐 **Private Key** required to join." if private_key else "")
                     ),
                     color=COLORS["success"]
                 ),
@@ -5547,29 +5472,25 @@ async def blacklist_global_check(ctx):
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandOnCooldown):
         await ctx.send(embed=discord.Embed(
-            title="⏳  Cooldown",
-            description=(
-                f"> Please wait  `{error.retry_after:.1f}s`  before using this command again."
-            ),
+            title="⏳ Cooldown",
+            description=f"Please wait `{error.retry_after:.1f}s` before using this command again.",
             color=COLORS["warning"]
         ))
     elif isinstance(error, commands.CheckFailure):
         if ctx.guild and db.is_player_blacklisted(ctx.guild.id, ctx.author.id):
             await ctx.send(embed=discord.Embed(
-                title="🔇  أنت في البلاك ليست",
+                title="🔇 أنت في البلاك ليست",
                 description=(
-                    f"> لا يمكنك استخدام البوت حالياً.\n"
-                    f"> أنت في قائمة البلاك ليست لمدة 10 دقائق.\n"
-                    f"> ⏱️  انتظر حتى انتهاء المدة."
+                    "لا يمكنك استخدام البوت حالياً.\n"
+                    "أنت في قائمة البلاك ليست لمدة 10 دقائق.\n"
+                    "⏱️ انتظر حتى انتهاء المدة."
                 ),
                 color=COLORS["error"]
             ), delete_after=15)
         else:
             await ctx.send(embed=discord.Embed(
-                title="❌  No Permission",
-                description=(
-                    f"> You don't have permission to use this command."
-                ),
+                title="⛔ No Permission",
+                description="You don't have permission to use this command.",
                 color=COLORS["error"]
             ))
     elif isinstance(error, commands.CommandNotFound):
@@ -5660,23 +5581,20 @@ async def on_ready():
                 success_embed = discord.Embed(
                     title="✅ AUTO-DETECT Complete",
                     description=(
-                        f"> 🤖  **Bot:**  Free Fire Bot V3 MAX\n"
-                        f"> 🏠  **Server:**  {guild.name}\n"
-                        f"> 📅  **Time:**  {discord.utils.format_dt(discord.utils.utcnow(), 'F')}\n"
-                        f"{separator()}\n"
-                        f"> 📊  **Channels detected:**\n"
-                        f"> ─  📝  Commands:  `{cmd_channels_count}`\n"
-                        f"> ─  🎮  Play:  `{play_channels_count}`\n"
-                        f"> ─  🔊  Waiting rooms:  `{len(waiting_rooms)}`\n"
-                        f"> ─  🔍  Under check:  `{len(report_channels)}`\n"
-                        f"{separator()}\n"
-                        f"> ✅  كل القنوات الموجودة تم تسجيلها تلقائياً\n"
-                        f"> ✅  البوت جاهز للعمل بدون أي إعداد يدوي\n"
-                        f"> 💡 Use  `{PREFIX}help`  لعرض الأوامر"
+                        "✅ كل القنوات الموجودة تم تسجيلها تلقائياً\n"
+                        "✅ البوت جاهز للعمل بدون أي إعداد يدوي\n"
+                        f"💡 Use `{PREFIX}help` لعرض الأوامر"
                     ),
                     color=COLORS["success"],
                     timestamp=discord.utils.utcnow()
                 )
+                success_embed.add_field(name="🤖 Bot", value="Free Fire Bot V3 MAX", inline=True)
+                success_embed.add_field(name="🏠 Server", value=f"{guild.name}", inline=True)
+                success_embed.add_field(name="📅 Time", value=f"{discord.utils.format_dt(discord.utils.utcnow(), 'F')}", inline=True)
+                success_embed.add_field(name="📝 Commands", value=f"`{cmd_channels_count}`", inline=True)
+                success_embed.add_field(name="🎮 Play", value=f"`{play_channels_count}`", inline=True)
+                success_embed.add_field(name="🔊 Waiting rooms", value=f"`{len(waiting_rooms)}`", inline=True)
+                success_embed.add_field(name="🔍 Under check", value=f"`{len(report_channels)}`", inline=True)
                 success_embed.set_footer(text=f"{BOT_FOOTER}  •  V3 MAX AUTO-DETECT")
                 # V0: لا صور
                 await success_ch.send(embed=success_embed)
@@ -6167,11 +6085,11 @@ async def on_message(message):
             await bot.process_commands(message)
             return
         await message.channel.send(embed=discord.Embed(
-            title="📡  الأوامر داخل السيرفر فقط",
+            title="📡 الأوامر داخل السيرفر فقط",
             description=(
-                f"> هذه الرسالة خاصة (DM) — أوامر البوت كلها تحتاج قناة داخل السيرفر.\n"
-                f"> 💡  افتح قناة الأوامر واكتب  `{PREFIX}help`  لعرض كل الأوامر.\n"
-                f"> 📌  أوامر تعمل هنا:  `{PREFIX}serverleave`"
+                "هذه الرسالة خاصة (DM) — أوامر البوت كلها تحتاج قناة داخل السيرفر.\n"
+                f"💡 افتح قناة الأوامر واكتب `{PREFIX}help` لعرض كل الأوامر.\n"
+                f"📌 أوامر تعمل هنا: `{PREFIX}serverleave`"
             ),
             color=COLORS["info"]
         ), delete_after=20)
@@ -6205,11 +6123,11 @@ async def on_message(message):
                 return
             try:
                 await message.reply(embed=discord.Embed(
-                    title="❌  Not Allowed Here",
+                    title="❌ Not Allowed Here",
                     description=(
-                        f"> Commands can only be used in play channels.\n"
-                        f"> Allowed:  `apostada-play`  •  `highlight-play`  •  `zelika-play`\n"
-                        f"> 💡  Use  `{PREFIX}general`  for help."
+                        "Commands can only be used in play channels.\n"
+                        "Allowed: `apostada-play` • `highlight-play` • `zelika-play`\n"
+                        f"💡 Use `{PREFIX}general` for help."
                     ),
                     color=COLORS["error"]
                 ), delete_after=10)
@@ -6229,18 +6147,17 @@ async def create_mode_lobby(ctx, mode):
     ban_info = db.is_player_banned(guild.id, user.id)
     if ban_info:
         ban_embed = discord.Embed(
-            title="🚫  أنت محظور من اللعب",
+            title="🚫 أنت محظور من اللعب",
             description=(
-                f"> ⚠️  **السبب:**  `{ban_info.get('ban_reason') or 'غير محدد'}`\n"
-                f"> 📊  **عدد البلاغات:**  `{ban_info.get('report_count', 0)}`\n"
-                f"> 📅  **تاريخ الحظر:**  `{ban_info.get('banned_at', 'N/A')[:19]}`\n"
-                f"{separator()}\n"
-                f"> 🔍  يتم توجيهك لفويس التفتيش\n"
-                f"> 💡  لفك الحظر، تواصل مع الأدمن"
+                "🔍 يتم توجيهك لفويس التفتيش\n"
+                "💡 لفك الحظر، تواصل مع الأدمن"
             ),
             color=COLORS["error"],
             timestamp=discord.utils.utcnow()
         )
+        ban_embed.add_field(name="⚠️ السبب", value=f"`{ban_info.get('ban_reason') or 'غير محدد'}`", inline=True)
+        ban_embed.add_field(name="📊 البلاغات", value=f"`{ban_info.get('report_count', 0)}`", inline=True)
+        ban_embed.add_field(name="📅 تاريخ الحظر", value=f"`{ban_info.get('banned_at', 'N/A')[:19]}`", inline=True)
         ban_embed.set_footer(text=f"{BOT_FOOTER}  •  Banned")
         ban_embed = apply_branding(ban_embed, ctx.guild)
         await ctx.send(embed=ban_embed, delete_after=20)
@@ -6250,10 +6167,10 @@ async def create_mode_lobby(ctx, mode):
         return
     if not db.is_bot_allowed_channel(guild.id, ctx.channel.id):
         await ctx.send(embed=discord.Embed(
-            title="❌  Not Allowed Here",
+            title="❌ Not Allowed Here",
             description=(
-                f"> This command can only be used in play channels.\n"
-                f"> Allowed:  `apostada-play`  •  `highlight-play`  •  `zelika-play`"
+                "This command can only be used in play channels.\n"
+                "Allowed: `apostada-play` • `highlight-play` • `zelika-play`"
             ),
             color=COLORS["error"]
         ), delete_after=15)
@@ -6262,38 +6179,34 @@ async def create_mode_lobby(ctx, mode):
         waiting_rooms = db.get_waiting_rooms(guild.id)
         available = [guild.get_channel(wr).mention for wr in waiting_rooms if guild.get_channel(wr) and guild.get_channel(wr).permissions_for(member).connect]
         rooms_text = "\n".join([f"› {r}" for r in available[:10]]) if available else "> *None*"
-        await ctx.send(embed=discord.Embed(
-            title="⏳  Must Be in a Waiting Room",
-            description=(
-                f"> You need to be in a voice waiting room to create a lobby.\n"
-                f"──────────────────────\n"
-                f"🔊  **Available Rooms:**\n{rooms_text}"
-            ),
+        embed = discord.Embed(
+            title="⏳ Must Be in a Waiting Room",
+            description="You need to be in a voice waiting room to create a lobby.",
             color=COLORS["warning"]
-        ), delete_after=20)
+        )
+        embed.add_field(name="🔊 Available Rooms", value=f"{rooms_text}", inline=False)
+        await ctx.send(embed=embed, delete_after=20)
         return
     else:
         waiting_rooms = db.get_waiting_rooms(guild.id)
         if member.voice.channel.id not in waiting_rooms:
             available = [guild.get_channel(wr).mention for wr in waiting_rooms if guild.get_channel(wr) and guild.get_channel(wr).permissions_for(member).connect]
             rooms_text = "\n".join([f"› {r}" for r in available[:10]]) if available else "> *None*"
-            await ctx.send(embed=discord.Embed(
-                title="⏳  Wrong Voice Channel",
-                description=(
-                    f"> You're in `{member.voice.channel.name}` — that's not a waiting room.\n"
-                    f"──────────────────────\n"
-                    f"🔊  **Available Rooms:**\n{rooms_text}"
-                ),
+            embed = discord.Embed(
+                title="⏳ Wrong Voice Channel",
+                description=f"You're in `{member.voice.channel.name}` — that's not a waiting room.",
                 color=COLORS["warning"]
-            ), delete_after=20)
+            )
+            embed.add_field(name="🔊 Available Rooms", value=f"{rooms_text}", inline=False)
+            await ctx.send(embed=embed, delete_after=20)
             return
     existing = db.get_player_active_lobby(user.id, guild.id)
     if existing:
         await ctx.send(embed=discord.Embed(
-            title="❌  Already in Lobby",
+            title="❌ Already in Lobby",
             description=(
-                f"> You're already in a lobby. Leave it first.\n"
-                f"> Use  `{PREFIX}leave`  to leave."
+                "You're already in a lobby. Leave it first.\n"
+                f"Use `{PREFIX}leave` to leave."
             ),
             color=COLORS["error"]
         ), delete_after=10)
@@ -6316,22 +6229,14 @@ async def create_mode_lobby(ctx, mode):
             ))
         logger.info(f"🧹 Removed stale 'Create Lobby' message {pid} for user {user.id}")
 
-    prompt = await ctx.send(embed=discord.Embed(
-        title=f"🎮  Create  {mode.upper()}  Lobby",
-        description=(
-            f"> اضغط الزر تحت لإدخال بيانات الغرفة وإنشاء اللوبي.\n"
-            f"──────────────────────\n"
-            f"> 💡  **تحتاج:**\n"
-            f"> ›  Room ID  (أرقام)\n"
-            f"> ›  Password  (اختياري)\n"
-            f"> ›  Private Key  (اختياري)\n"
-            f"{separator()}\n"
-            f"> ⏱️  **تختفي هذه الرسالة تلقائياً بعد `{CREATE_PROMPT_DELETE_AFTER}` ثانية**"
-            f" إذا ما ضغطت الزر.\n"
-            f"> ✅  وإذا أنشأت الغرفة — تنحذف مع انتهاء الروم."
-        ),
-        color=COLORS["info"]
-    ), view=create_view)
+    create_embed = discord.Embed(
+        title=f"🎮 Create {mode.upper()} Lobby",
+        description="اضغط الزر تحت لإدخال بيانات الغرفة وإنشاء اللوبي.",
+        color=COLORS["play"]
+    )
+    create_embed.add_field(name="💡 تحتاج", value="• Room ID (أرقام)\n• Password (اختياري)\n• Private Key (اختياري)", inline=False)
+    create_embed.add_field(name="⏱️ ملاحظة", value=f"تختفي هذه الرسالة تلقائياً بعد `{CREATE_PROMPT_DELETE_AFTER}` ثانية إذا ما ضغطت الزر.\n✅ وإذا أنشأت الغرفة — تنحذف مع انتهاء الروم.", inline=False)
+    prompt = await ctx.send(embed=create_embed, view=create_view)
 
     _create_prompt_msgs[prompt.id] = {
         "guild_id": guild.id, "channel_id": prompt.channel.id, "user_id": user.id
@@ -6356,21 +6261,15 @@ async def play_cmd(ctx, mode: str = None):
     if mode is None:
         # ✅ إصلاح: بناء embed كمتغير بشكل صحيح
         no_mode_embed = discord.Embed(
-            title="❌  أمر غير صحيح",
+            title="❌ أمر غير صحيح",
             description=(
-                f"> الأمر  `{PREFIX}play`  غير صالح.\n"
-                f"> يجب تحديد نوع الماتش بوضوح.\n"
-                f"{separator()}\n"
-                f"> 🎮  **الأوامر الصحيحة:**\n"
-                f"> ─  `{PREFIX}play1v1`  —  ماتش 1 ضد 1  🔒  (للـ roles العالية)\n"
-                f"> ─  `{PREFIX}play2v2`  —  ماتش 2 ضد 2\n"
-                f"> ─  `{PREFIX}play3v3`  —  ماتش 3 ضد 3\n"
-                f"> ─  `{PREFIX}play4v4`  —  ماتش 4 ضد 4  (الافتراضي)\n"
-                f"> 💡  مثال:  `{PREFIX}play4v4`"
+                f"الأمر `{PREFIX}play` غير صالح — يجب تحديد نوع الماتش بوضوح.\n"
+                f"💡 مثال: `{PREFIX}play4v4`"
             ),
             color=COLORS["error"],
             timestamp=discord.utils.utcnow()
         )
+        no_mode_embed.add_field(name="🎮 الأوامر الصحيحة", value=f"`{PREFIX}play1v1` — ماتش 1 ضد 1 🔒 (للـ roles العالية)\n`{PREFIX}play2v2` — ماتش 2 ضد 2\n`{PREFIX}play3v3` — ماتش 3 ضد 3\n`{PREFIX}play4v4` — ماتش 4 ضد 4 (الافتراضي)", inline=False)
         no_mode_embed.set_footer(text=f"{BOT_FOOTER}  •  Specify the game mode")
         no_mode_embed = apply_branding(no_mode_embed, ctx.guild)
         await ctx.send(embed=no_mode_embed, delete_after=15)
@@ -6385,21 +6284,15 @@ async def play_cmd(ctx, mode: str = None):
     if mode not in valid_modes:
         # ✅ إصلاح: بناء embed كمتغير بشكل صحيح
         invalid_mode_embed = discord.Embed(
-            title="❌  مود غير صحيح",
+            title="❌ مود غير صحيح",
             description=(
-                f"> المود  `{mode}`  غير صالح.\n"
-                f"> يجب استخدام أحد المودات التالية:\n"
-                f"{separator()}\n"
-                f"> 🎮  **المودات الصحيحة:**\n"
-                f"> ─  `{PREFIX}play 1v1`  أو  `{PREFIX}play1v1`  🔒\n"
-                f"> ─  `{PREFIX}play 2v2`  أو  `{PREFIX}play2v2`\n"
-                f"> ─  `{PREFIX}play 3v3`  أو  `{PREFIX}play3v3`\n"
-                f"> ─  `{PREFIX}play 4v4`  أو  `{PREFIX}play4v4`\n"
-                f"> 💡  مثال:  `{PREFIX}play 4v4`"
+                f"المود `{mode}` غير صالح — استخدم أحد المودات التالية:\n"
+                f"💡 مثال: `{PREFIX}play 4v4`"
             ),
             color=COLORS["error"],
             timestamp=discord.utils.utcnow()
         )
+        invalid_mode_embed.add_field(name="🎮 المودات الصحيحة", value=f"`{PREFIX}play 1v1` أو `{PREFIX}play1v1` 🔒\n`{PREFIX}play 2v2` أو `{PREFIX}play2v2`\n`{PREFIX}play 3v3` أو `{PREFIX}play3v3`\n`{PREFIX}play 4v4` أو `{PREFIX}play4v4`", inline=False)
         invalid_mode_embed.set_footer(text=f"{BOT_FOOTER}  •  Invalid mode")
         invalid_mode_embed = apply_branding(invalid_mode_embed, ctx.guild)
         await ctx.send(embed=invalid_mode_embed, delete_after=15)
@@ -6415,21 +6308,16 @@ async def play_cmd(ctx, mode: str = None):
         member_top = member.top_role.position if member.top_role else 0
         # ✅ إصلاح: بناء embed كمتغير بشكل صحيح
         restricted_embed = discord.Embed(
-            title="🔒  أمر محمي",
+            title="🔒 أمر محمي",
             description=(
-                f"> **الأمر:**  `{PREFIX}play 1v1`\n"
-                f"> هذا الأمر مخصص فقط للأعضاء ذوي **الـ roles العالية** في السيرفر.\n"
-                f"{separator()}\n"
-                f"> 🎯  **شروط الاستخدام:**  تحقق أحد الشروط التالية:\n"
-                f"> ─  صلاحية  `Administrator`  في السيرفر\n"
-                f"> ─  صلاحية  `Manage Guild`  (إدارة السيرفر)\n"
-                f"> ─  role تبعك في النصف العلوي من الهرم\n"
-                f">    (مطلوب position  `≥ {threshold}`  —  أنت حالياً  `{member_top}`)\n"
-                f"> 💡 Use  `{PREFIX}play 4v4`  للعب العادي  (متاح للجميع)."
+                f"**الأمر:** `{PREFIX}play 1v1`\n"
+                "مخصص فقط للأعضاء ذوي **الـ roles العالية** في السيرفر.\n"
+                f"💡 Use `{PREFIX}play 4v4` للعب العادي (متاح للجميع)."
             ),
             color=COLORS["error"],
             timestamp=discord.utils.utcnow()
         )
+        restricted_embed.add_field(name="🎯 شروط الاستخدام (يكفي أحدها)", value=f"• صلاحية `Administrator` في السيرفر\n• صلاحية `Manage Guild` (إدارة السيرفر)\n• role في النصف العلوي من الهرم — مطلوب position `≥ {threshold}` وأنت حالياً `{member_top}`", inline=False)
         restricted_embed.set_footer(text=f"{BOT_FOOTER}  •  Restricted Command")
         restricted_embed = apply_branding(restricted_embed, ctx.guild)
         await ctx.send(embed=restricted_embed, delete_after=20)
@@ -6450,21 +6338,16 @@ async def play1v1_cmd(ctx):
         member_top = member.top_role.position if member.top_role else 0
         # ✅ إصلاح: بناء embed كمتغير بشكل صحيح
         restricted_embed = discord.Embed(
-            title="🔒  أمر محمي",
+            title="🔒 أمر محمي",
             description=(
-                f"> **الأمر:**  `{PREFIX}play1v1`\n"
-                f"> هذا الأمر مخصص فقط للأعضاء ذوي **الـ roles العالية** في السيرفر.\n"
-                f"{separator()}\n"
-                f"> 🎯  **شروط الاستخدام:**  تحقق أحد الشروط التالية:\n"
-                f"> ─  صلاحية  `Administrator`  في السيرفر\n"
-                f"> ─  صلاحية  `Manage Guild`  (إدارة السيرفر)\n"
-                f"> ─  role تبعك في النصف العلوي من الهرم\n"
-                f">    (مطلوب position  `≥ {threshold}`  —  أنت حالياً  `{member_top}`)\n"
-                f"> 💡 Use  `{PREFIX}play`  للعب 4v4 العادي  (متاح للجميع)."
+                f"**الأمر:** `{PREFIX}play1v1`\n"
+                "مخصص فقط للأعضاء ذوي **الـ roles العالية** في السيرفر.\n"
+                f"💡 Use `{PREFIX}play` للعب 4v4 العادي (متاح للجميع)."
             ),
             color=COLORS["error"],
             timestamp=discord.utils.utcnow()
         )
+        restricted_embed.add_field(name="🎯 شروط الاستخدام (يكفي أحدها)", value=f"• صلاحية `Administrator` في السيرفر\n• صلاحية `Manage Guild` (إدارة السيرفر)\n• role في النصف العلوي من الهرم — مطلوب position `≥ {threshold}` وأنت حالياً `{member_top}`", inline=False)
         restricted_embed.set_footer(text=f"{BOT_FOOTER}  •  Restricted Command")
         restricted_embed = apply_branding(restricted_embed, ctx.guild)
         await ctx.send(embed=restricted_embed, delete_after=20)
@@ -6510,12 +6393,11 @@ async def points_cmd(ctx, member: discord.Member = None):
     wr_bar = make_winrate_bar(wr, length=10)
 
     embed = discord.Embed(
-        title=f"💰  نقاط اللاعب",
+        title="💰 نقاط اللاعب",
         description=(
-            f"> 👤  **اللاعب:**  {target.mention}\n"
-            f"> 🏅  **الرانك:**  {rank_emoji}  `{rank_title}`  —  `#{level}`\n"
-            f"> 💰  **النقاط:**  `{points:,}`  pts\n"
-            f"{separator()}"
+            f"👤 {target.mention}\n"
+            f"🏅 {rank_emoji} **{rank_title}**  `#{level}`\n"
+            f"💰 `{points:,}` pts"
         ),
         color=rank_color,
         timestamp=discord.utils.utcnow()
@@ -6523,37 +6405,29 @@ async def points_cmd(ctx, member: discord.Member = None):
     # التقدم نحو المركز الأول
     if pts_to_next > 0:
         embed.add_field(
-            name=f"📈  التقدم نحو المركز الأول",
-            value=(
-                f"`{progress_bar}`  `{progress_pct}%`\n"
-                f"> 💎  **نقاطك:**  `{points:,}`\n"
-                f"> 🏆  **القمة:**  `{top_pts:,}`\n"
-                f"> ⏭️  **يتبقى:**  `{pts_to_next:,}`  نقطة للوصول للقمة"
-            ),
+            name="📈 التقدم نحو المركز الأول",
+            value=f"`{progress_bar}`  `{progress_pct}%`\n💎 نقاطك `{points:,}`  ·  🏆 القمة `{top_pts:,}`  ·  ⏭️ يتبقى `{pts_to_next:,}` نقطة للوصول للقمة",
             inline=False
         )
     else:
         embed.add_field(
-            name="🔱  أنت الأول!",
-            value=(
-                f"> 🎉  أنت في القمة بـ `{points:,}` نقطة!\n"
-                f"> 🚀  حافظ على مركزك بالفوز بالمزيد من المباريات!"
-            ),
+            name="🔱 أنت الأول!",
+            value=f"🎉 أنت في القمة بـ `{points:,}` نقطة!\n🚀 حافظ على مركزك بالفوز بالمزيد من المباريات!",
             inline=False
         )
 
     # إحصائيات سريعة
-    embed.add_field(name="🏆  Wins", value=f"```fix\n{player['wins']}\n```", inline=True)
-    embed.add_field(name="☠️  Losses", value=f"```fix\n{player['losses']}\n```", inline=True)
-    embed.add_field(name="🔱  MVPs", value=f"```fix\n{player['mvps']}\n```", inline=True)
+    embed.add_field(name="🏆 Wins", value=f"`{player['wins']}`", inline=True)
+    embed.add_field(name="☠️ Losses", value=f"`{player['losses']}`", inline=True)
+    embed.add_field(name="🔱 MVPs", value=f"`{player['mvps']}`", inline=True)
 
     embed.add_field(
-        name=f"📊  Win Rate  —  `{wr}%`",
-        value=f"`{wr_bar}`  `{player['wins']}/{player['matches_played']}`",
+        name=f"📊 Win Rate — `{wr}%`",
+        value=f"`{wr_bar}` `{player['wins']}/{player['matches_played']}`",
         inline=False
     )
     embed.set_author(name="Player Points", icon_url=None)
-    embed.set_footer(text=f"{BOT_FOOTER}  •  {rank_title} #{level}")
+    embed.set_footer(text=f"{BOT_FOOTER}")
     embed = apply_branding(embed, ctx.guild)
     await ctx.send(embed=embed)
 
@@ -6575,17 +6449,16 @@ async def top_cmd(ctx):
     lb = [p for p in lb if p["user_id"] not in blacklisted_ids][:10]
     if not lb:
         await ctx.send(embed=discord.Embed(
-            title="🏆  Leaderboard",
+            title="🏆 Leaderboard",
             description=(
-                f"> No players yet!\n"
-                f"> Use `{PREFIX}play` to start your first match.\n"
-                f"{separator()}"
+                "No players yet!\n"
+                f"Use `{PREFIX}play` to start your first match."
             ),
             color=COLORS["leaderboard"]
         ))
         return
     embed = discord.Embed(
-        title="🏆  Free Fire  —  Top 10 Leaderboard",
+        title="🏆 Free Fire — Top 10 Players",
         color=COLORS["leaderboard"],
         timestamp=discord.utils.utcnow()
     )
@@ -6619,10 +6492,10 @@ async def leave_cmd(ctx):
     lobby = db.get_player_active_lobby(ctx.author.id, ctx.guild.id)
     if not lobby:
         await ctx.send(embed=discord.Embed(
-            title="❌  Not in Lobby",
+            title="❌ Not in Lobby",
             description=(
-                f"> You're not currently in any lobby.\n"
-                f"> Use `{PREFIX}play` to create one."
+                "You're not currently in any lobby.\n"
+                f"Use `{PREFIX}play` to create one."
             ),
             color=COLORS["error"]
         ))
@@ -6633,10 +6506,8 @@ async def leave_cmd(ctx):
             db.update_lobby_status(lobby["id"], "cancelled")
             cleanup_lobby_memory(lobby["id"])
             await ctx.send(embed=discord.Embed(
-                title="🗑️  Lobby Cancelled",
-                description=(
-                    f"> Lobby `#{lobby['id']}` was cancelled."
-                ),
+                title="🗑️ Lobby Cancelled",
+                description=f"Lobby `#{lobby['id']}` was cancelled.",
                 color=COLORS["warning"]
             ))
             return
@@ -6645,10 +6516,8 @@ async def leave_cmd(ctx):
             db.reassign_creator(lobby["id"], remaining[0])
     db.remove_player_from_lobby(lobby["id"], ctx.author.id)
     await ctx.send(embed=discord.Embed(
-        title="✅  Left Lobby",
-        description=(
-            f"> You left lobby `#{lobby['id']}`."
-        ),
+        title="✅ Left Lobby",
+        description=f"You left lobby `#{lobby['id']}`.",
         color=COLORS["success"]
     ))
 
@@ -6658,23 +6527,23 @@ async def matches_cmd(ctx):
     lobbies = db.get_active_lobbies(ctx.guild.id)
     if not lobbies:
         await ctx.send(embed=discord.Embed(
-            title="🎮  Active Lobbies",
+            title="🎮 Active Lobbies",
             description=(
-                f"> No active lobbies right now.\n"
-                f"> Use `{PREFIX}play` to start one."
+                "No active lobbies right now.\n"
+                f"Use `{PREFIX}play` to start one."
             ),
             color=COLORS["info"]
         ))
         return
-    embed = discord.Embed(title="🎮  Active Lobbies", color=COLORS["match"])
+    embed = discord.Embed(title="🎮 Active Lobbies", color=COLORS["play"])
     for l in lobbies[:5]:
         mode = l.get("game_mode", DEFAULT_MODE)
         mi = GAME_MODES.get(mode, GAME_MODES[DEFAULT_MODE])
         t1c = len(l["team1_players"]); t2c = len(l["team2_players"])
         se = {"waiting": "⏳", "started": "🎮", "voting": "🗳️"}.get(l["status"], "❓")
         embed.add_field(
-            name=f"`#{l['id']}`  {mi['emoji']}  {mode.upper()}  —  {se}",
-            value=f"> 🟠 `{t1c}/{mi['team_size']}`  •  🟢 `{t2c}/{mi['team_size']}`",
+            name=f"`#{l['id']}` {mi['emoji']} {mode.upper()} — {se}",
+            value=f"🔴 `{t1c}/{mi['team_size']}`  ·  🟢 `{t2c}/{mi['team_size']}`",
             inline=False
         )
     await ctx.send(embed=embed)
@@ -6694,25 +6563,20 @@ async def mylevel_cmd(ctx, member: discord.Member = None):
     kd_diff = player["wins"] - player["losses"]
     kd_sign = "+" if kd_diff >= 0 else ""
     embed = discord.Embed(
-        title=f"{rank_emoji}  RANK  —  {target.display_name}",
+        title=f"{rank_emoji} RANK — {target.display_name}",
         description=(
-            f"> 🏅  **Rank:**  `{rank_title}`  —  `#{level}`\n"
-            f"> 💰  **Points:**  `{player['points']:,}`  pts\n"
-            f"{separator()}"
+            f"🏅 **{rank_title}**  `#{level}`\n"
+            f"💰 `{player['points']:,}` pts"
         ),
         color=rank_color,
         timestamp=discord.utils.utcnow()
     )
-    embed.add_field(name="✅  Wins", value=f"```fix\n{player['wins']}\n```", inline=True)
-    embed.add_field(name="❌  Losses", value=f"```fix\n{player['losses']}\n```", inline=True)
-    embed.add_field(name="⚖️  W/L Diff", value=f"```fix\n{kd_sign}{kd_diff}\n```", inline=True)
-    embed.add_field(
-        name=f"📊  Win Rate  —  `{wr}%`",
-        value=f"`{wr_bar}`  `{player['wins']}/{player['matches_played']}`",
-        inline=False
-    )
+    embed.add_field(name="🏆 Wins", value=f"`{player['wins']}`", inline=True)
+    embed.add_field(name="☠️ Losses", value=f"`{player['losses']}`", inline=True)
+    embed.add_field(name="⚖️ W/L", value=f"`{kd_sign}{kd_diff}`", inline=True)
+    embed.add_field(name=f"📊 Win Rate — `{wr}%`", value=f"`{wr_bar}` `{player['wins']}/{player['matches_played']}`", inline=False)
     embed.set_author(name="Player Rank", icon_url=None)
-    embed.set_footer(text=f"{BOT_FOOTER}  •  {rank_title} #{level}")
+    embed.set_footer(text=f"{BOT_FOOTER}")
     embed = apply_branding(embed, ctx.guild)
     await ctx.send(embed=embed)
 
@@ -6726,18 +6590,15 @@ async def myrank_cmd(ctx):
     target_nick = build_nickname_with_level(original, level)
     is_owner = (target.id == ctx.guild.owner_id)
     embed = discord.Embed(
-        title="📝  Your Rank",
-        description=(
-            f"> 👤  **Member:**  {target.mention}\n"
-            f"> 🏅  **RANK:**  `#{level}`\n"
-            f"──────────────────────\n"
-            f"📝  **Current Nickname:**  `{target.display_name}`\n"
-            f"🎯  **Target Nickname:**  `{target_nick}`"
-        ),
+        title="📝 Your Rank",
+        description=f"👤 {target.mention}",
         color=COLORS["profile"]
     )
+    embed.add_field(name="🏅 Rank", value=f"`#{level}`", inline=True)
+    embed.add_field(name="📝 Current Nickname", value=f"`{target.display_name}`", inline=True)
+    embed.add_field(name="🎯 Target Nickname", value=f"`{target_nick}`", inline=True)
     if is_owner:
-        embed.add_field(name="🔱  Server Owner", value="> Bot can't change your nickname. Apply manually.", inline=False)
+        embed.add_field(name="🔱 Server Owner", value="Bot can't change your nickname. Apply manually.", inline=False)
     await ctx.send(embed=embed)
 
 
@@ -6750,22 +6611,19 @@ async def fixrank_cmd(ctx, member: discord.Member = None):
         original = player.get("original_nickname") or extract_original_nickname(target.display_name)
         target_nick = build_nickname_with_level(original, level)
         await ctx.send(embed=discord.Embed(
-            title="🔱  Server Owner",
+            title="🔱 Server Owner",
             description=(
-                f"> {target.mention} → **RANK `#{level}`**\n"
-                f"──────────────────────\n"
-                f"> 📝  **Target Nickname:**  `{target_nick}`\n"
-                f"> Apply manually:  *Right-click → Edit Profile → Nickname*"
+                f"{target.mention} → **RANK `#{level}`**\n"
+                f"🎯 Target Nickname: `{target_nick}`\n"
+                "Apply manually: *Right-click → Edit Profile → Nickname*"
             ),
             color=COLORS["warning"]
         ))
         return
     await update_member_nickname(target, level)
     await ctx.send(embed=discord.Embed(
-        title="🔧  Rank Applied",
-        description=(
-            f"> {target.mention} → **RANK `#{level}`**"
-        ),
+        title="✅ Rank Applied",
+        description=f"{target.mention} → **RANK `#{level}`**",
         color=COLORS["success"]
     ))
 
@@ -6774,10 +6632,10 @@ async def fixrank_cmd(ctx, member: discord.Member = None):
 async def matchinfo_cmd(ctx, lobby_id: int = None):
     if lobby_id is None:
         await ctx.send(embed=discord.Embed(
-            title="❌  Missing ID",
+            title="❌ Missing ID",
             description=(
-                f"> Please provide a lobby ID.\n"
-                f"> Usage:  `{PREFIX}matchinfo <id>`"
+                "Please provide a lobby ID.\n"
+                f"Usage: `{PREFIX}matchinfo <id>`"
             ),
             color=COLORS["error"]
         ))
@@ -6785,26 +6643,20 @@ async def matchinfo_cmd(ctx, lobby_id: int = None):
     lobby = db.get_lobby(lobby_id)
     if not lobby:
         await ctx.send(embed=discord.Embed(
-            title="❌  Not Found",
-            description=(
-                f"> Lobby `#{lobby_id}` doesn't exist."
-            ),
+            title="❌ Not Found",
+            description=f"Lobby `#{lobby_id}` doesn't exist.",
             color=COLORS["error"]
         ))
         return
     embed = discord.Embed(
-        title=f"📋  Match  —  `#{lobby_id}`",
-        description=(
-            f"> 📊  **Status:**  `{lobby['status']}`\n"
-            f"> 🎮 Mode:  `{lobby.get('game_mode', DEFAULT_MODE).upper()}`\n"
-            f"──────────────────────"
-        ),
+        title=f"📋 Match — #{lobby_id}",
+        description=f"📊 Status `{lobby['status']}`   ·   🎮 Mode `{lobby.get('game_mode', DEFAULT_MODE).upper()}`",
         color=COLORS["info"]
     )
     t1m = "\n".join([f"› <@{p}>" for p in lobby["team1_players"]]) or "> *Empty*"
     t2m = "\n".join([f"› <@{p}>" for p in lobby["team2_players"]]) or "> *Empty*"
-    embed.add_field(name=f"🔴  Team 1  —  `{len(lobby['team1_players'])}`", value=t1m, inline=True)
-    embed.add_field(name=f"🟢  Team 2  —  `{len(lobby['team2_players'])}`", value=t2m, inline=True)
+    embed.add_field(name=f"🔴 Team 1 — `{len(lobby['team1_players'])}`", value=f"{t1m}", inline=True)
+    embed.add_field(name=f"🟢 Team 2 — `{len(lobby['team2_players'])}`", value=f"{t2m}", inline=True)
     await ctx.send(embed=embed)
 
 
@@ -6819,31 +6671,20 @@ def build_rules_embed(guild_name):
     """🆕 يبني embed القواعد — يستخدمه  !!setup  و  !!autosetup  و  !!rules.
     ✅ مصدر واحد للنص: أي تعديل على القواعد يتم هنا فقط بدل 3 نسخ مكرّرة."""
     embed = discord.Embed(
-        title="🛡️  قواعد السيرفر",
+        title="🛡️ قواعد السيرفر",
         description=(
-            f"> مرحباً بك في  **{guild_name}**  🔥\n"
-            f"> يرجى الالتزام بالقواعد التالية:\n"
-            f"{separator()}\n"
-            f"> **1️⃣  الاحترام المتبادل**\n"
-            f"> ─  احترم جميع اللاعبين والأدمنز.\n"
-            f"> ─  ممنوع السب، الشتم، أو الإساءة.\n\n"
-            f"> **2️⃣  قواعد اللعب**\n"
-            f"> ─  ادخل غرفة انتظار قبل اللعب.\n"
-            f"> ─  استخدم  `{PREFIX}play 4v4`  لبدء ماتش.\n"
-            f"> ─  التزم بنتيجة التصويت.\n\n"
-            f"> **3️⃣  عدم الغش**\n"
-            f"> ─  ممنوع التلاعب بالتصويت.\n"
-            f"> ─  ممنوع مغادرة الماتش في المنتصف.\n\n"
-            f"> **4️⃣  استخدام الأوامر**\n"
-            f"> ─  الأوامر تعمل فقط في قنوات play.\n\n"
-            f"> **5️⃣  العقوبات**\n"
-            f"> ─  مخالفة القواعد = تحذير / كتم / طرد.\n"
-            f"> ─  القرار النهائي للأدمن.\n\n"
-            f"> 💬  لأي استفسار، تواصل مع الأدمن."
+            f"مرحباً بك في **{guild_name}** 🔥\n"
+            "يرجى الالتزام بالقواعد التالية:"
         ),
-        color=COLORS["warning"],
+        color=COLORS["info"],
         timestamp=discord.utils.utcnow()
     )
+    embed.add_field(name="1️⃣ الاحترام المتبادل", value="• احترم جميع اللاعبين والأدمنز.\n• ممنوع السب، الشتم، أو الإساءة.", inline=False)
+    embed.add_field(name="2️⃣ قواعد اللعب", value=f"• ادخل غرفة انتظار قبل اللعب.\n• استخدم `{PREFIX}play 4v4` لبدء ماتش.\n• التزم بنتيجة التصويت.", inline=False)
+    embed.add_field(name="3️⃣ عدم الغش", value="• ممنوع التلاعب بالتصويت.\n• ممنوع مغادرة الماتش في المنتصف.", inline=False)
+    embed.add_field(name="4️⃣ استخدام الأوامر", value="• الأوامر تعمل فقط في قنوات play.", inline=False)
+    embed.add_field(name="5️⃣ العقوبات", value="• مخالفة القواعد = تحذير / كتم / طرد.\n• القرار النهائي للأدمن.", inline=False)
+    embed.add_field(name="💬 استفسار", value="لأي استفسار، تواصل مع الأدمن.", inline=False)
     embed.set_author(name="Server Rules")
     embed.set_footer(text=f"{BOT_FOOTER}  •  Read carefully")
     return embed
@@ -6956,17 +6797,14 @@ async def setup_cmd(ctx):
         logger.warning(f"setup_blacklist_role failed: {e}")
     # ✅ إصلاح: بناء embed النجاح كمتغير بشكل صحيح
     setup_embed = discord.Embed(
-        title="✅  Setup Complete!",
-        description=(
-            f"> Created  `{len(created)}`  channels successfully.\n"
-            f"{separator()}\n"
-            f"> 🛡️  **Rules channel:**  `{RULES_CHANNEL_NAME}`  — للقراءة فقط، وإن لم تُنشأ استخدم  `{PREFIX}rules`\n"
-            f"> 🔇  **Blacklist Role:**  `{BLACKLIST_ROLE_NAME}`\n"
-            f"> 🎮  Use  `{PREFIX}play4v4`  in play channels to start."
-        ),
+        title="✅ Setup Complete!",
+        description=f"Created `{len(created)}` channels successfully.",
         color=COLORS["success"],
         timestamp=discord.utils.utcnow()
     )
+    setup_embed.add_field(name="🛡️ Rules channel", value=f"`{RULES_CHANNEL_NAME}` — للقراءة فقط، وإن لم تُنشأ استخدم `{PREFIX}rules`", inline=False)
+    setup_embed.add_field(name="🔇 Blacklist Role", value=f"`{BLACKLIST_ROLE_NAME}`", inline=True)
+    setup_embed.add_field(name="🎮 Next", value=f"Use `{PREFIX}play4v4` in play channels to start.", inline=False)
     setup_embed.set_footer(text=f"{BOT_FOOTER}  •  Setup complete")
     setup_embed = apply_branding(setup_embed, ctx.guild)
     await ctx.send(embed=setup_embed)
@@ -6978,11 +6816,11 @@ async def autosetup_cmd(ctx):
     """🔄 !!autosetup — فحص السيرفر وإصلاح أي شيء ناقص تلقائياً"""
     # ✅ إصلاح: بناء الـ embed كمتغير، ثم set_footer، ثم apply_branding
     progress_embed = discord.Embed(
-        title="🔄  جارٍ فحص السيرفر...",
+        title="🔄 جارٍ فحص السيرفر...",
         description=(
-            f"> 🔍  البحث عن القنوات والكاتيجوريات الناقصة...\n"
-            f"> 🔧  إنشاء Roles + JAIL لو غير موجودة...\n"
-            f"> ⏳  انتظر..."
+            "🔍 البحث عن القنوات والكاتيجوريات الناقصة...\n"
+            "🔧 إنشاء Roles + JAIL لو غير موجودة...\n"
+            "⏳ انتظر..."
         ),
         color=COLORS["warning"],
         timestamp=discord.utils.utcnow()
@@ -6995,18 +6833,17 @@ async def autosetup_cmd(ctx):
         await auto_setup_guild(ctx.guild)
         # ✅ إصلاح: بناء embed النجاح كمتغير بشكل صحيح
         success_embed = discord.Embed(
-            title="✅  تم الفحص والإصلاح!",
+            title="✅ تم الفحص والإصلاح!",
             description=(
-                f"> 🔍  تم فحص السيرفر بالكامل\n"
-                f"> ✅  كل القنوات الناقصة أُنشئت\n"
-                f"> ✅  كل الكاتيجوريات مُحدثة (TEXT + VOICE منفصلين)\n"
-                f"> ✅  Rank Roles مُحدثة\n"
-                f"> ✅  نظام JAIL مُفعّل\n"
-                f"> ✅  Blacklist Role `{BLACKLIST_ROLE_NAME}`\n"
-                f"> ✅  Leaderboard مُحدث\n"
-                f"{separator()}\n"
-                f"> 💡  لم تُمسح أي بيانات موجودة\n"
-                f"> 💡  النقاط والرانك والفويسات كما هي"
+                "🔍 تم فحص السيرفر بالكامل\n"
+                "✅ كل القنوات الناقصة أُنشئت\n"
+                "✅ كل الكاتيجوريات مُحدثة (TEXT + VOICE منفصلين)\n"
+                "✅ Rank Roles مُحدثة\n"
+                "✅ نظام JAIL مُفعّل\n"
+                f"✅ Blacklist Role `{BLACKLIST_ROLE_NAME}`\n"
+                "✅ Leaderboard مُحدث\n"
+                "\n"
+                "💡 لم تُمسح أي بيانات موجودة — النقاط والرانك والفويسات كما هي"
             ),
             color=COLORS["success"],
             timestamp=discord.utils.utcnow()
@@ -7017,8 +6854,8 @@ async def autosetup_cmd(ctx):
     except Exception as e:
         # ✅ إصلاح: بناء embed الخطأ كمتغير بشكل صحيح
         error_embed = discord.Embed(
-            title="❌  فشل Auto-setup",
-            description=f"> 🐛  **الخطأ:**  `{str(e)[:200]}`",
+            title="❌ فشل Auto-setup",
+            description=f"🐛 **الخطأ:** `{str(e)[:200]}`",
             color=COLORS["error"],
             timestamp=discord.utils.utcnow()
         )
@@ -7040,10 +6877,8 @@ async def cleanup_cmd(ctx):
             try: await cat.delete(); deleted += 1
             except: pass
     await ctx.send(embed=discord.Embed(
-        title="🧹  Cleanup Complete!",
-        description=(
-            f"> Deleted  `{deleted}`  match categories."
-        ),
+        title="🧹 Cleanup Complete!",
+        description=f"Deleted `{deleted}` match categories.",
         color=COLORS["success"]
     ))
 
@@ -7067,13 +6902,10 @@ async def scan_cmd(ctx, page: int = 1):
     no_cat_voice = [ch for ch in guild.voice_channels if ch.category is None]
 
     embed = discord.Embed(
-        title=f"🔍  Server Scan  —  `{len(categories)}`  Categories",
+        title=f"🔍 Server Scan — {len(categories)} Categories",
         description=(
-            f"> 🏠  **Server:**  {guild.name}\n"
-            f"> 📝  **Text Channels:**  `{len(guild.text_channels)}`\n"
-            f"> 🔊  **Voice Channels:**  `{len(guild.voice_channels)}`\n"
-            f"> 📄  **Page:**  `{page}/{total_pages}`\n"
-            f"──────────────────────"
+            f"🏠 **{guild.name}**\n"
+            f"📝 `{len(guild.text_channels)}` text   ·   🔊 `{len(guild.voice_channels)}` voice   ·   📄 Page `{page}/{total_pages}`"
         ),
         color=COLORS["info"]
     )
@@ -7099,8 +6931,8 @@ async def scan_cmd(ctx, page: int = 1):
             detail = "> *Empty category*"
 
         embed.add_field(
-            name=f"📁  `{i}.`  {cat.name}",
-            value=detail,
+            name=f"📁 `{i}.` {cat.name}",
+            value=f"{detail}",
             inline=False
         )
 
@@ -7115,9 +6947,9 @@ async def scan_cmd(ctx, page: int = 1):
             detail += "**🔊  Voice (no category):**\n"
             for ch in no_cat_voice:
                 detail += f"›  🔊 {ch.name}\n"
-        embed.add_field(name="📂  No Category", value=detail or "> *None*", inline=False)
+        embed.add_field(name="📂 No Category", value=f"{detail or '*None*'}", inline=False)
 
-    embed.set_footer(text=f"Page {page}/{total_pages}  •  {PREFIX}scan <page>  •  {PREFIX}deletecat <name>  •  {PREFIX}confirmcat <name>")
+    embed.set_footer(text=f"{BOT_FOOTER}  •  Page {page}/{total_pages}  ·  {PREFIX}scan <page>  ·  {PREFIX}deletecat <name>  ·  {PREFIX}confirmcat <name>")
     embed = apply_branding(embed, ctx.guild)
     await ctx.send(embed=embed)
 
@@ -7128,11 +6960,11 @@ async def deletecat_cmd(ctx, *, category_name: str = None):
     """🗑️ !!deletecat <name> — حذف كاتيجوري بكل قنواتها"""
     if not category_name:
         await ctx.send(embed=discord.Embed(
-            title="❌  Missing Name",
+            title="❌ Missing Name",
             description=(
-                f"> Please provide a category name.\n"
-                f"> Usage:  `{PREFIX}deletecat <category name>`\n"
-                f"> Use  `{PREFIX}scan`  to see all categories."
+                "Please provide a category name.\n"
+                f"Usage: `{PREFIX}deletecat <category name>`\n"
+                f"Use `{PREFIX}scan` to see all categories."
             ),
             color=COLORS["error"]
         ))
@@ -7153,10 +6985,10 @@ async def deletecat_cmd(ctx, *, category_name: str = None):
 
     if not target:
         await ctx.send(embed=discord.Embed(
-            title="❌  Not Found",
+            title="❌ Not Found",
             description=(
-                f"> No category matching  `{category_name}`.\n"
-                f"> Use  `{PREFIX}scan`  to see all categories."
+                f"No category matching `{category_name}`.\n"
+                f"Use `{PREFIX}scan` to see all categories."
             ),
             color=COLORS["error"]
         ))
@@ -7168,16 +7000,15 @@ async def deletecat_cmd(ctx, *, category_name: str = None):
     total_channels = text_count + voice_count
 
     confirm_embed = discord.Embed(
-        title="⚠️  Confirm Deletion",
+        title="⚠️ Confirm Deletion",
         description=(
-            f"> 📁  **Category:**  `{target.name}`\n"
-            f"> 📊  **Channels:**  `{total_channels}`  (`{text_count}` text  +  `{voice_count}` voice)\n"
-            f"──────────────────────\n"
-            f"> ⚠️  **This will delete ALL channels inside!**\n"
-            f"> Type  `{PREFIX}confirmcat {target.name}`  to confirm."
+            "⚠️ **This will delete ALL channels inside!**\n"
+            f"Type `{PREFIX}confirmcat {target.name}` to confirm."
         ),
         color=COLORS["warning"]
     )
+    confirm_embed.add_field(name="📁 Category", value=f"`{target.name}`", inline=True)
+    confirm_embed.add_field(name="📊 Channels", value=f"`{total_channels}` (`{text_count}` text + `{voice_count}` voice)", inline=True)
     await ctx.send(embed=confirm_embed)
 
 
@@ -7187,10 +7018,8 @@ async def confirmcat_cmd(ctx, *, category_name: str = None):
     """✅ !!confirmcat <name> — تأكيد حذف الكاتيجوري"""
     if not category_name:
         await ctx.send(embed=discord.Embed(
-            title="❌  Missing Name",
-            description=(
-                f"> Usage:  `{PREFIX}confirmcat <name>`"
-            ),
+            title="❌ Missing Name",
+            description=f"Usage: `{PREFIX}confirmcat <name>`",
             color=COLORS["error"]
         ))
         return
@@ -7204,10 +7033,8 @@ async def confirmcat_cmd(ctx, *, category_name: str = None):
 
     if not target:
         await ctx.send(embed=discord.Embed(
-            title="❌  Not Found",
-            description=(
-                f"> No category matching  `{category_name}`."
-            ),
+            title="❌ Not Found",
+            description=f"No category matching `{category_name}`.",
             color=COLORS["error"]
         ))
         return
@@ -7229,22 +7056,20 @@ async def confirmcat_cmd(ctx, *, category_name: str = None):
     cat_name = target.name
     try:
         await target.delete()
-        await ctx.send(embed=discord.Embed(
-            title="🗑️  Category Deleted!",
-            description=(
-                f"> **{cat_name}** has been deleted.\n"
-                f"──────────────────────\n"
-                f"> ✅  **Channels deleted:**  `{deleted}`\n"
-                f"> ❌  **Errors:**  `{errors}`"
-            ),
+        embed = discord.Embed(
+            title="✅ Category Deleted!",
+            description=f"**{cat_name}** has been deleted.",
             color=COLORS["success"]
-        ))
+        )
+        embed.add_field(name="✅ Channels deleted", value=f"`{deleted}`", inline=True)
+        embed.add_field(name="❌ Errors", value=f"`{errors}`", inline=True)
+        await ctx.send(embed=embed)
     except (discord.NotFound, discord.Forbidden) as e:
         await ctx.send(embed=discord.Embed(
-            title="⚠️  Partial Delete",
+            title="⚠️ Partial Delete",
             description=(
-                f"> Deleted  `{deleted}`  channels but couldn't delete the category itself.\n"
-                f"> Error:  `{e}`"
+                f"Deleted `{deleted}` channels but couldn't delete the category itself.\n"
+                f"Error: `{e}`"
             ),
             color=COLORS["warning"]
         ))
@@ -7255,10 +7080,10 @@ async def confirmcat_cmd(ctx, *, category_name: str = None):
 async def fixrankall_cmd(ctx):
     guild = ctx.guild
     progress = await ctx.send(embed=discord.Embed(
-        title="🚀  Applying Ranks...",
+        title="🚀 Applying Ranks...",
         description=(
-            f"> Processing  `{len(guild.members)}`  members.\n"
-            f"> Please wait..."
+            f"Processing `{len(guild.members)}` members.\n"
+            "Please wait..."
         ),
         color=COLORS["warning"]
     ))
@@ -7272,10 +7097,8 @@ async def fixrankall_cmd(ctx):
             await asyncio.sleep(0.3)
         except: pass
     await progress.edit(embed=discord.Embed(
-        title="✅  Done!",
-        description=(
-            f"> Updated  `{updated}`  members successfully."
-        ),
+        title="✅ Done!",
+        description=f"Updated `{updated}` members successfully.",
         color=COLORS["success"]
     ))
 
@@ -7289,40 +7112,22 @@ async def botinfo_cmd(ctx):
     embed = discord.Embed(
         title="🤖 Bot Info",
         description=(
-            f"> 🔥  **Free Fire Matchmaking Bot**\n"
-            f"> نظام ماتشмейكنج متكامل لإدارة مباريات Free Fire\n"
-            f"{separator()}"
+            "🔥 **Free Fire Matchmaking Bot**\n"
+            "نظام ماتش ميكنج متكامل لإدارة مباريات Free Fire"
         ),
         color=COLORS["info"],
         timestamp=discord.utils.utcnow()
     )
-    embed.add_field(name="📛  Name", value=f"```fix\n{bot.user.name}\n```", inline=True)
-    embed.add_field(name="🏷️  Version", value=f"```fix\nv4.1 MVP-COLLECTIVE\n```", inline=True)
-    embed.add_field(name="🔨  Build", value=f"```fix\n{BUILD_SHA}\n```", inline=True)
-    embed.add_field(name="⌨️  Prefix", value=f"```fix\n{PREFIX}\n```", inline=True)
-    embed.add_field(name="🏠  Servers", value=f"```fix\n{len(bot.guilds)}\n```", inline=True)
-    embed.add_field(name="👥  Users", value=f"```fix\n{total_members:,}\n```", inline=True)
-    embed.add_field(name="🔱  Owner", value=f"```fix\n{BOT_OWNER_NAME}\n```", inline=True)
-    embed.add_field(
-        name="📡  Channels Coverage",
-        value=(
-            f"> 📝  **Text Channels:**  `{total_text_channels}`\n"
-            f"> 🔊  **Voice Channels:**  `{total_voice_channels}`"
-        ),
-        inline=False
-    )
-    embed.add_field(
-        name="🎮  Features",
-        value=(
-            f"> 🏆  4 Game Modes (1v1, 2v2, 3v3, 4v4)\n"
-            f"> 🗳️  Group MVP Voting (4 voters, `{MVP_CONSENSUS_NEEDED}` consensus)\n"
-            f"> 🏅  Dynamic Rank System\n"
-            f"> 📊  Live Leaderboard\n"
-            f"> 🛡️  Auto Rules Channel (`{RULES_CHANNEL_NAME}`)\n"
-            f"> ⏱️  Auto-hide 'Create Lobby' after `{CREATE_PROMPT_DELETE_AFTER}s`"
-        ),
-        inline=False
-    )
+    embed.add_field(name="📛 Name", value=f"`{bot.user.name}`", inline=True)
+    embed.add_field(name="🏷️ Version", value="`v4.1 MVP-COLLECTIVE`", inline=True)
+    embed.add_field(name="🔨 Build", value=f"`{BUILD_SHA}`", inline=True)
+    embed.add_field(name="⌨️ Prefix", value=f"`{PREFIX}`", inline=True)
+    embed.add_field(name="🏠 Servers", value=f"`{len(bot.guilds)}`", inline=True)
+    embed.add_field(name="👥 Users", value=f"`{total_members:,}`", inline=True)
+    embed.add_field(name="🔱 Owner", value=f"`{BOT_OWNER_NAME}`", inline=True)
+    embed.add_field(name="📝 Text Channels", value=f"`{total_text_channels}`", inline=True)
+    embed.add_field(name="🔊 Voice Channels", value=f"`{total_voice_channels}`", inline=True)
+    embed.add_field(name="🎮 Features", value=f"• 🏆 4 Game Modes (1v1, 2v2, 3v3, 4v4)\n• 🗳️ Group MVP Voting (4 voters, `{MVP_CONSENSUS_NEEDED}` consensus)\n• 🏅 Dynamic Rank System\n• 📊 Live Leaderboard\n• 🛡️ Auto Rules Channel (`{RULES_CHANNEL_NAME}`)\n• ⏱️ Auto-hide 'Create Lobby' after `{CREATE_PROMPT_DELETE_AFTER}s`", inline=False)
     embed.set_author(name="Bot Information", icon_url=bot.user.display_avatar.url)
     embed.set_footer(text=f"{BOT_FOOTER}  •  Online & Ready")
     embed = apply_branding(embed, ctx.guild)
@@ -7336,19 +7141,15 @@ async def setcommandschannel_cmd(ctx, channel: discord.TextChannel = None):
     if channel.id in db.get_commands_channels(ctx.guild.id):
         db.remove_commands_channel(ctx.guild.id, channel.id)
         await ctx.send(embed=discord.Embed(
-            title="✅  Channel Removed",
-            description=(
-                f"> {channel.mention}  has been removed from allowed command channels."
-            ),
+            title="✅ Channel Removed",
+            description=f"{channel.mention} has been removed from allowed command channels.",
             color=COLORS["success"]
         ))
     else:
         db.add_commands_channel(ctx.guild.id, channel.id)
         await ctx.send(embed=discord.Embed(
-            title="✅  Channel Added",
-            description=(
-                f"> {channel.mention}  has been added to allowed command channels."
-            ),
+            title="✅ Channel Added",
+            description=f"{channel.mention} has been added to allowed command channels.",
             color=COLORS["success"]
         ))
 
@@ -7359,10 +7160,10 @@ async def setleaderboard_cmd(ctx):
     db.set_guild_setting(ctx.guild.id, "leaderboard_channel_id", ctx.channel.id)
     await update_leaderboard_channel(ctx.guild)
     await ctx.send(embed=discord.Embed(
-        title="✅  Leaderboard Set",
+        title="✅ Leaderboard Set",
         description=(
-            f"> {ctx.channel.mention}  is now the leaderboard channel.\n"
-            f"> It will update automatically."
+            f"{ctx.channel.mention} is now the leaderboard channel.\n"
+            "It will update automatically."
         ),
         color=COLORS["success"]
     ))
@@ -7377,23 +7178,23 @@ async def report_cmd(ctx, member: discord.Member = None, *, reason: str = None):
     """⚠️ !!report @user [reason] — بلّغ عن لاعب"""
     if not member:
         await ctx.send(embed=discord.Embed(
-            title="❌  Missing User",
+            title="❌ Missing User",
             description=(
-                f"> Usage:  `{PREFIX}report @user [reason]`\n"
-                f"> مثال:  `{PREFIX}report @user يستخدم هاك`"
+                f"Usage: `{PREFIX}report @user [reason]`\n"
+                f"مثال: `{PREFIX}report @user يستخدم هاك`"
             ),
             color=COLORS["error"]
         ), delete_after=15)
         return
     if member.id == ctx.author.id:
         await ctx.send(embed=discord.Embed(
-            title="❌  لا يمكنك البلاغ عن نفسك",
+            title="❌ لا يمكنك البلاغ عن نفسك",
             color=COLORS["error"]
         ), delete_after=10)
         return
     if member.bot:
         await ctx.send(embed=discord.Embed(
-            title="❌  لا يمكنك البلاغ عن بوت",
+            title="❌ لا يمكنك البلاغ عن بوت",
             color=COLORS["error"]
         ), delete_after=10)
         return
@@ -7404,24 +7205,25 @@ async def report_cmd(ctx, member: discord.Member = None, *, reason: str = None):
     added, total = db.add_report(ctx.guild.id, ctx.author.id, member.id, reason=reason)
     if not added:
         await ctx.send(embed=discord.Embed(
-            title="⚠️  بلغت من قبل",
-            description=f"> لقد بلّغت على {member.mention} سابقاً.",
+            title="⚠️ بلغت من قبل",
+            description=f"لقد بلّغت على {member.mention} سابقاً.",
             color=COLORS["warning"]
         ), delete_after=10)
         return
     remaining = max(0, REPORT_THRESHOLD - total)
     report_embed = discord.Embed(
-        title="⚠️  تم تسجيل البلاغ",
+        title="⚠️ تم تسجيل البلاغ",
         description=(
-            f"> 👤  **اللاعب المُبلَّغ عنه:**  {member.mention}\n"
-            f"> 👮  **الـمُبلَّغ:**  {ctx.author.mention}\n"
-            + (f"> 📝  **السبب:**  {reason}\n" if reason else "")
-            + f"> 📊  **إجمالي البلاغات:**  `{total}/{REPORT_THRESHOLD}`\n"
-            + (f"> ⚠️  **يتبقى:**  `{remaining}`  بلاغ للحظر التلقائي" if remaining > 0 else f"> ⚠️  **وصل للحد!**  سيتم الحظر تلقائياً")
+            (f"⚠️ يتبقى `{remaining}` بلاغ للحظر التلقائي" if remaining > 0 else "⚠️ **وصل للحد!** سيتم الحظر تلقائياً")
         ),
         color=COLORS["warning"] if remaining > 0 else COLORS["error"],
         timestamp=discord.utils.utcnow()
     )
+    report_embed.add_field(name="👤 المُبلَّغ عنه", value=f"{member.mention}", inline=True)
+    report_embed.add_field(name="👮 المُبلِّغ", value=f"{ctx.author.mention}", inline=True)
+    report_embed.add_field(name="📊 البلاغات", value=f"`{total}/{REPORT_THRESHOLD}`", inline=True)
+    if reason:
+        report_embed.add_field(name="📝 السبب", value=f"{reason}", inline=False)
     report_embed.set_footer(text=f"{BOT_FOOTER}  •  Report #{total}")
     report_embed = apply_branding(report_embed, ctx.guild)
     await ctx.send(embed=report_embed)
@@ -7446,12 +7248,10 @@ async def reports_cmd(ctx, member: discord.Member = None):
     reports = db.get_reports_for_player(ctx.guild.id, target.id)
     count = len(reports)
     embed = discord.Embed(
-        title=f"⚠️  بلاغات اللاعب  —  {target.display_name}",
+        title=f"⚠️ بلاغات اللاعب — {target.display_name}",
         description=(
-            f"> 👤  **اللاعب:**  {target.mention}\n"
-            f"> 📊  **إجمالي البلاغات:**  `{count}/{REPORT_THRESHOLD}`\n"
-            + (f"> ⚠️  **محظور تلقائياً**" if count >= REPORT_THRESHOLD else f"> ⚠️  **يتبقى:**  `{REPORT_THRESHOLD - count}`  بلاغ للحظر")
-            + f"\n{separator()}"
+            f"👤 {target.mention}   ·   📊 `{count}/{REPORT_THRESHOLD}`\n"
+            + ("⚠️ **محظور تلقائياً**" if count >= REPORT_THRESHOLD else f"⚠️ **يتبقى:** `{REPORT_THRESHOLD - count}` بلاغ للحظر")
         ),
         color=COLORS["error"] if count >= REPORT_THRESHOLD else COLORS["warning"],
         timestamp=discord.utils.utcnow()
@@ -7464,12 +7264,12 @@ async def reports_cmd(ctx, member: discord.Member = None):
             reason = r.get("reason") or "بدون سبب"
             timestamp = r.get("created_at", "N/A")[:19] if r.get("created_at") else "N/A"
             embed.add_field(
-                name=f"#{i}  —  {reporter_name}",
-                value=f"> 📝  `{reason}`\n> 📅  `{timestamp}`",
+                name=f"#{i} — {reporter_name}",
+                value=f"📝 `{reason}`\n📅 `{timestamp}`",
                 inline=False
             )
         if count > 10:
-            embed.set_footer(text=f"... و {count - 10} بلاغ آخر")
+            embed.set_footer(text=f"{BOT_FOOTER}  •  و {count - 10} بلاغ آخر")
     else:
         embed.description = f"> ✅  لا توجد بلاغات على {target.mention}"
         embed.color = COLORS["success"]
@@ -7485,8 +7285,8 @@ async def banplayer_cmd(ctx, target: Union[discord.Member, int] = None, *, reaso
     """🚫 !!banplayer @user أو ID [reason] — حظر لاعب يدوياً"""
     if not target:
         await ctx.send(embed=discord.Embed(
-            title="❌  Missing User",
-            description=f"> Usage:  `{PREFIX}banplayer @user أو ID [reason]`",
+            title="❌ Missing User",
+            description=f"Usage: `{PREFIX}banplayer @user أو ID [reason]`",
             color=COLORS["error"]
         ), delete_after=15)
         return
@@ -7508,17 +7308,17 @@ async def banplayer_cmd(ctx, target: Union[discord.Member, int] = None, *, reaso
                 assigned_channel = ch
                 db.set_banned_voice(ctx.guild.id, user_id, ch.id)
     ban_embed = discord.Embed(
-        title="🚫  تم حظر اللاعب",
-        description=(
-            f"> 👤  **اللاعب:**  <@{user_id}>\n"
-            f"> 👮  **حظره:**  {ctx.author.mention}\n"
-            + (f"> 📝  **السبب:**  `{reason}`\n" if reason else "")
-            + f"> 📊  **عدد البلاغات السابقة:**  `{report_count}`\n"
-            + (f"> 🔍  **فويس التفتيش:**  {assigned_channel.mention}\n> 🔒  **مقيّد:**  لا يمكنه مغادرة هذا الفويس" if assigned_channel else "")
-        ),
+        title="🚫 تم حظر اللاعب",
         color=COLORS["error"],
         timestamp=discord.utils.utcnow()
     )
+    ban_embed.add_field(name="👤 اللاعب", value=f"<@{user_id}>", inline=True)
+    ban_embed.add_field(name="👮 حظره", value=f"{ctx.author.mention}", inline=True)
+    ban_embed.add_field(name="📊 البلاغات السابقة", value=f"`{report_count}`", inline=True)
+    if reason:
+        ban_embed.add_field(name="📝 السبب", value=f"`{reason}`", inline=False)
+    if assigned_channel:
+        ban_embed.add_field(name="🔍 فويس التفتيش", value=f"{assigned_channel.mention}\n🔒 **مقيّد:** لا يمكنه مغادرة هذا الفويس", inline=False)
     ban_embed.set_footer(text=f"{BOT_FOOTER}  •  Banned")
     ban_embed = apply_branding(ban_embed, ctx.guild)
     await ctx.send(embed=ban_embed)
@@ -7530,8 +7330,8 @@ async def unbanplayer_cmd(ctx, target: Union[discord.User, int] = None):
     """✅ !!unbanplayer @user أو ID — فك حظر لاعب"""
     if not target:
         await ctx.send(embed=discord.Embed(
-            title="❌  Missing User",
-            description=f"> Usage:  `{PREFIX}unbanplayer @user أو ID`",
+            title="❌ Missing User",
+            description=f"Usage: `{PREFIX}unbanplayer @user أو ID`",
             color=COLORS["error"]
         ), delete_after=15)
         return
@@ -7539,24 +7339,24 @@ async def unbanplayer_cmd(ctx, target: Union[discord.User, int] = None):
     ban_info = db.is_player_banned(ctx.guild.id, user_id)
     if not ban_info:
         await ctx.send(embed=discord.Embed(
-            title="ℹ️  اللاعب غير محظور",
-            description=f"> <@{user_id}>  غير محظور أصلاً.",
+            title="ℹ️ اللاعب غير محظور",
+            description=f"<@{user_id}> غير محظور أصلاً.",
             color=COLORS["info"]
         ), delete_after=10)
         return
     db.unban_player(ctx.guild.id, user_id)
     db.clear_reports(ctx.guild.id, user_id)
     unban_embed = discord.Embed(
-        title="✅  تم فك الحظر",
+        title="✅ تم فك الحظر",
         description=(
-            f"> 👤  **اللاعب:**  <@{user_id}>\n"
-            f"> 👮  **فك الحظر:**  {ctx.author.mention}\n"
-            f"> 📊  **تم مسح كل البلاغات السابقة**\n"
-            f"> 🎮  اللاعب يستطيع اللعب الآن"
+            "📊 تم مسح كل البلاغات السابقة\n"
+            "🎮 اللاعب يستطيع اللعب الآن"
         ),
         color=COLORS["success"],
         timestamp=discord.utils.utcnow()
     )
+    unban_embed.add_field(name="👤 اللاعب", value=f"<@{user_id}>", inline=True)
+    unban_embed.add_field(name="👮 فك الحظر", value=f"{ctx.author.mention}", inline=True)
     unban_embed.set_footer(text=f"{BOT_FOOTER}  •  Unbanned")
     unban_embed = apply_branding(unban_embed, ctx.guild)
     await ctx.send(embed=unban_embed)
@@ -7568,11 +7368,8 @@ async def banned_cmd(ctx):
     """📋 !!banned — قائمة اللاعبين المحظورين"""
     banned = db.get_banned_players(ctx.guild.id)
     embed = discord.Embed(
-        title="📋  قائمة المحظورين",
-        description=(
-            f"> 📊  **إجمالي المحظورين:**  `{len(banned)}`\n"
-            f"{separator()}"
-        ),
+        title="📋 قائمة المحظورين",
+        description=f"📊 **إجمالي المحظورين:** `{len(banned)}`",
         color=COLORS["error"] if banned else COLORS["success"],
         timestamp=discord.utils.utcnow()
     )
@@ -7588,16 +7385,12 @@ async def banned_cmd(ctx):
             report_count = b.get("report_count", 0)
             banned_at = b.get("banned_at", "N/A")[:19] if b.get("banned_at") else "N/A"
             embed.add_field(
-                name=f"#{i}  —  {name}",
-                value=(
-                    f"> 👤  {mention}\n"
-                    f"> 📝  `{reason}`\n"
-                    f"> 📊  `{report_count}` reports  •  📅  `{banned_at}`"
-                ),
+                name=f"#{i} — {name}",
+                value=f"👤 {mention}\n📝 `{reason}`\n📊 `{report_count}` reports · 📅 `{banned_at}`",
                 inline=False
             )
         if len(banned) > 15:
-            embed.set_footer(text=f"... و {len(banned) - 15} لاعب آخر")
+            embed.set_footer(text=f"{BOT_FOOTER}  •  و {len(banned) - 15} لاعب آخر")
     # ✅ إصلاح: apply_branding يجب أن يطبّق دائمًا، ليس فقط لو تجاوز عدد المحظورين 15
     embed = apply_branding(embed, ctx.guild)
     await ctx.send(embed=embed)
@@ -7609,11 +7402,11 @@ async def setreportchannel_cmd(ctx, channel: discord.VoiceChannel = None):
     """🎤 !!setreportchannel #voice — إضافة فويس لقائمة فويسات التفتيش"""
     if not channel:
         await ctx.send(embed=discord.Embed(
-            title="❌  Missing Voice Channel",
+            title="❌ Missing Voice Channel",
             description=(
-                f"> Usage:  `{PREFIX}setreportchannel <#voice_channel>`\n"
-                f"> مثال:  `{PREFIX}setreportchannel #Investigation-Room`\n\n"
-                f"> 💡  اذكر فويس صوتي (Voice Channel) موجود"
+                f"Usage: `{PREFIX}setreportchannel <#voice_channel>`\n"
+                f"مثال: `{PREFIX}setreportchannel #Investigation-Room`\n"
+                "💡 اذكر فويس صوتي (Voice Channel) موجود"
             ),
             color=COLORS["error"]
         ), delete_after=15)
@@ -7621,8 +7414,11 @@ async def setreportchannel_cmd(ctx, channel: discord.VoiceChannel = None):
     # تأكد إنه فويس صوتي
     if not isinstance(channel, discord.VoiceChannel):
         await ctx.send(embed=discord.Embed(
-            title="❌  Not a Voice Channel",
-            description=f"> {channel.mention}  ليس فويس صوتي.\n> استخدم فويس صوتي (Voice Channel).",
+            title="❌ Not a Voice Channel",
+            description=(
+                f"{channel.mention} ليس فويس صوتي.\n"
+                "استخدم فويس صوتي (Voice Channel)."
+            ),
             color=COLORS["error"]
         ), delete_after=10)
         return
@@ -7633,14 +7429,15 @@ async def setreportchannel_cmd(ctx, channel: discord.VoiceChannel = None):
         for cid in all_channels
     ]) or "> *لا توجد فويسات*"
     embed = discord.Embed(
-        title="🎤  فويسات التفتيش",
+        title="🎤 فويسات التفتيش",
         description=(
-            f"> 🎤  **الفويس:**  {channel.mention}\n"
-            + (f"> ✅  **تمت الإضافة** لقائمة فويسات التفتيش\n" if added else f"> ⚠️  **موجود مسبقاً** في القائمة\n")
-            + f"{separator()}\n"
-            f"> 📊  **إجمالي الفويسات:**  `{len(all_channels)}`\n"
+            f"🎤 {channel.mention}\n"
+            + ("✅ **تمت الإضافة** لقائمة فويسات التفتيش\n" if added else "⚠️ **موجود مسبقاً** في القائمة\n")
+            + "\n"
+            f"📊 **إجمالي الفويسات:** `{len(all_channels)}`\n"
             f"{channels_list}\n"
-            f"> 💡  اللاعبون المحظورون سيُنقلون لهذه الفويسات تلقائياً"
+            "\n"
+            "💡 اللاعبون المحظورون سيُنقلون لهذه الفويسات تلقائياً"
         ),
         color=COLORS["success"] if added else COLORS["warning"],
         timestamp=discord.utils.utcnow()
@@ -7657,8 +7454,8 @@ async def removereportchannel_cmd(ctx, channel: discord.VoiceChannel = None):
     """🗑️ !!removereportchannel #voice — حذف فويس من قائمة التفتيش"""
     if not channel:
         await ctx.send(embed=discord.Embed(
-            title="❌  Missing Voice Channel",
-            description=f"> Usage:  `{PREFIX}removereportchannel <#voice_channel>`",
+            title="❌ Missing Voice Channel",
+            description=f"Usage: `{PREFIX}removereportchannel <#voice_channel>`",
             color=COLORS["error"]
         ), delete_after=15)
         return
@@ -7669,12 +7466,12 @@ async def removereportchannel_cmd(ctx, channel: discord.VoiceChannel = None):
         for cid in all_channels
     ]) or "> *لا توجد فويسات — سيتم إنشاء فويسات تلقائية عند الحظر*"
     embed = discord.Embed(
-        title="🗑️  حذف فويس التفتيش",
+        title="🗑️ حذف فويس التفتيش",
         description=(
-            f"> 🎤  **الفويس:**  {channel.mention}\n"
-            + (f"> ✅  **تم الحذف** من القائمة\n" if removed else f"> ⚠️  **غير موجود** في القائمة\n")
-            + f"{separator()}\n"
-            f"> 📊  **الفويسات المتبقية:**  `{len(all_channels)}`\n"
+            f"🎤 {channel.mention}\n"
+            + ("✅ **تم الحذف** من القائمة\n" if removed else "⚠️ **غير موجود** في القائمة\n")
+            + "\n"
+            f"📊 **الفويسات المتبقية:** `{len(all_channels)}`\n"
             f"{channels_list}"
         ),
         color=COLORS["success"] if removed else COLORS["warning"],
@@ -7692,11 +7489,10 @@ async def reportchannels_cmd(ctx):
     """📋 !!reportchannels — عرض كل فويسات التفتيش المحددة"""
     all_channels = db.get_report_channels(ctx.guild.id)
     embed = discord.Embed(
-        title="📋  فويسات التفتيش المحددة",
+        title="📋 فويسات التفتيش المحددة",
         description=(
-            f"> 📊  **إجمالي الفويسات:**  `{len(all_channels)}`\n"
-            + (f"> ⚠️  **لا توجد فويسات محددة** — سيتم إنشاء فويسات تلقائية عند الحظر\n" if not all_channels else "")
-            + f"{separator()}"
+            f"📊 **إجمالي الفويسات:** `{len(all_channels)}`\n"
+            + ("⚠️ **لا توجد فويسات محددة** — سيتم إنشاء فويسات تلقائية عند الحظر" if not all_channels else "")
         ),
         color=COLORS["info"],
         timestamp=discord.utils.utcnow()
@@ -7708,14 +7504,14 @@ async def reportchannels_cmd(ctx):
             if ch:
                 members_count = len(ch.members) if hasattr(ch, 'members') else 0
                 embed.add_field(
-                    name=f"#{i}  —  {ch.name}",
-                    value=f"> 🎤  {ch.mention}\n> 📊  `{members_count}` members",
+                    name=f"#{i} — {ch.name}",
+                    value=f"🎤 {ch.mention}\n📊 `{members_count}` members",
                     inline=False
                 )
             else:
                 embed.add_field(
-                    name=f"#{i}  —  ⚠️ محذوف",
-                    value=f"> ❌  Channel ID:  `{cid}`  غير موجود\n> 💡 Use  `{PREFIX}removereportchannel`  لتنظيف القائمة",
+                    name=f"#{i} — ⚠️ محذوف",
+                    value=f"❌ Channel ID: `{cid}` غير موجود\n💡 Use `{PREFIX}removereportchannel` لتنظيف القائمة",
                     inline=False
                 )
     embed.set_footer(text=f"{BOT_FOOTER}  •  Use !!setreportchannel to add")
@@ -7795,11 +7591,19 @@ async def delete_jail_voice_for_player(guild, member):
 async def jail_cmd(ctx, target: Union[discord.Member, int] = None, *, reason: str = None):
     """🔒 !!jail <@user أو ID> [سبب] — إرسال لاعب للسجن"""
     if not target:
-        await ctx.send(embed=discord.Embed(title="❌ Missing User", description=f"> Usage: `{PREFIX}jail <@user أو ID> [سبب]`", color=COLORS["error"]), delete_after=15); return
+        await ctx.send(embed=discord.Embed(
+            title="❌ Missing User",
+            description=f"Usage: `{PREFIX}jail <@user أو ID> [سبب]`",
+            color=COLORS["error"]
+        ), delete_after=15); return
     user_id = target.id if isinstance(target, discord.Member) else target
     member = target if isinstance(target, discord.Member) else ctx.guild.get_member(user_id)
     if not member:
-        await ctx.send(embed=discord.Embed(title="❌ اللاعب غير موجود في السيرفر", description=f"> <@{user_id}>  ليس عضو في هذا السيرفر.", color=COLORS["error"]), delete_after=10)
+        await ctx.send(embed=discord.Embed(
+            title="❌ اللاعب غير موجود في السيرفر",
+            description=f"<@{user_id}> ليس عضو في هذا السيرفر.",
+            color=COLORS["error"]
+        ), delete_after=10)
         return
     if member.bot: await ctx.send("❌ لا يمكنك سجن بوت!", delete_after=10); return
     jail_role = await setup_jail_system(ctx.guild)
@@ -7813,14 +7617,41 @@ async def jail_cmd(ctx, target: Union[discord.Member, int] = None, *, reason: st
         if jail_voice and member.voice and member.voice.channel:
             try: await member.move_to(jail_voice)
             except: pass
-    jail_embed = discord.Embed(title="🔒  تم إرسال اللاعب للسجن", description=(f"> 👤  **اللاعب:**  {member.mention}\n> 👮  **الأدمن:**  {ctx.author.mention}\n" + (f"> 📝  **السبب:**  `{reason}`\n" if reason else "") + f"{separator()}\n> 🔒  اللاعب الآن في السجن\n> 💬  يمكنه الكتابة في `{JAIL_CHAT_NAME}` و `{JAIL_PROUVES_NAME}`\n" + (f"> 🎤  فويس السجن: `{jail_voice.name}`\n" if jail_voice else "") + f"> ✅  لفك السجن:  `{PREFIX}unjail @user`"), color=COLORS["error"], timestamp=discord.utils.utcnow())
-    jail_embed.set_author(name="JAIL System"); jail_embed.set_footer(text=f"{BOT_FOOTER}  •  Jailed")
+    jail_embed = discord.Embed(
+        title="🔒 تم إرسال اللاعب للسجن",
+        description=(
+            "🔒 اللاعب الآن في السجن\n"
+            f"💬 يمكنه الكتابة في `{JAIL_CHAT_NAME}` و `{JAIL_PROUVES_NAME}`\n"
+            + (f"🎤 فويس السجن: `{jail_voice.name}`\n" if jail_voice else "")
+            + f"✅ لفك السجن: `{PREFIX}unjail @user`"
+        ),
+        color=COLORS["error"],
+        timestamp=discord.utils.utcnow()
+    )
+    jail_embed.add_field(name="👤 اللاعب", value=f"{member.mention}", inline=True)
+    jail_embed.add_field(name="👮 الأدمن", value=f"{ctx.author.mention}", inline=True)
+    if reason:
+        jail_embed.add_field(name="📝 السبب", value=f"`{reason}`", inline=False)
+    jail_embed.set_author(name="JAIL System")
+    jail_embed.set_footer(text=f"{BOT_FOOTER}  •  Jailed")
     jail_embed = apply_branding(jail_embed, ctx.guild)
     await ctx.send(embed=jail_embed)
     jail_chat = discord.utils.get(ctx.guild.text_channels, name=JAIL_CHAT_NAME)
     if jail_chat:
         try:
-            welcome = discord.Embed(title="🔒  مرحباً بك في السجن", description=(f"> {member.mention}  تم إرسالك للسجن\n" + (f"> 📝  **السبب:**  {reason}\n" if reason else "") + f"{separator()}\n> 💬  يمكنك الكلام هنا فقط\n> 📸  ارفع أدلتك في  `#{JAIL_PROUVES_NAME}`\n> ⏳  انتظر قرار الأدمن"), color=COLORS["warning"], timestamp=discord.utils.utcnow())
+            welcome = discord.Embed(
+                title="🔒 مرحباً بك في السجن",
+                description=(
+                    f"{member.mention} تم إرسالك للسجن\n"
+                    + (f"📝 **السبب:** {reason}\n" if reason else "")
+                    + "\n"
+                    "💬 يمكنك الكلام هنا فقط\n"
+                    f"📸 ارفع أدلتك في `#{JAIL_PROUVES_NAME}`\n"
+                    "⏳ انتظر قرار الأدمن"
+                ),
+                color=COLORS["warning"],
+                timestamp=discord.utils.utcnow()
+            )
             welcome.set_footer(text=f"{BOT_FOOTER}  •  JAIL")
             await jail_chat.send(content=member.mention, embed=welcome)
         except: pass
@@ -7831,19 +7662,35 @@ async def jail_cmd(ctx, target: Union[discord.Member, int] = None, *, reason: st
 async def unjail_cmd(ctx, target: Union[discord.Member, int] = None):
     """✅ !!unjail <@user أو ID> — فك سجن لاعب"""
     if not target:
-        await ctx.send(embed=discord.Embed(title="❌ Missing User", description=f"> Usage: `{PREFIX}unjail <@user أو ID>`", color=COLORS["error"]), delete_after=15); return
+        await ctx.send(embed=discord.Embed(
+            title="❌ Missing User",
+            description=f"Usage: `{PREFIX}unjail <@user أو ID>`",
+            color=COLORS["error"]
+        ), delete_after=15); return
     user_id = target.id if isinstance(target, discord.Member) else target
     member = target if isinstance(target, discord.Member) else ctx.guild.get_member(user_id)
     if not member:
-        await ctx.send(embed=discord.Embed(title="ℹ️  اللاعب غير موجود", description=f"> <@{user_id}>  ليس في السيرفر.", color=COLORS["info"]), delete_after=10); return
+        await ctx.send(embed=discord.Embed(
+            title="ℹ️ اللاعب غير موجود",
+            description=f"<@{user_id}> ليس في السيرفر.",
+            color=COLORS["info"]
+        ), delete_after=10); return
     jail_role = discord.utils.get(ctx.guild.roles, name=JAIL_ROLE_NAME)
     if not jail_role: await ctx.send("❌ نظام السجن غير مُفعّل!", delete_after=10); return
     if jail_role not in member.roles: await ctx.send(f"ℹ️ {member.mention} ليس في السجن!", delete_after=10); return
     try: await member.remove_roles(jail_role, reason=f"Unjailed by {ctx.author.name}")
     except Exception as e: await ctx.send(f"❌ لم أستطع إزالة الـ role! ({e})", delete_after=15); return
     await delete_jail_voice_for_player(ctx.guild, member)
-    unjail_embed = discord.Embed(title="✅  تم فك السجن", description=f"> 👤  **اللاعب:**  {member.mention}\n> 👮  **الأدمن:**  {ctx.author.mention}\n> 🎮  اللاعب حر الآن", color=COLORS["success"], timestamp=discord.utils.utcnow())
-    unjail_embed.set_author(name="JAIL System"); unjail_embed.set_footer(text=f"{BOT_FOOTER}  •  Released")
+    unjail_embed = discord.Embed(
+        title="✅ تم فك السجن",
+        description="🎮 اللاعب حر الآن",
+        color=COLORS["success"],
+        timestamp=discord.utils.utcnow()
+    )
+    unjail_embed.add_field(name="👤 اللاعب", value=f"{member.mention}", inline=True)
+    unjail_embed.add_field(name="👮 الأدمن", value=f"{ctx.author.mention}", inline=True)
+    unjail_embed.set_author(name="JAIL System")
+    unjail_embed.set_footer(text=f"{BOT_FOOTER}  •  Released")
     unjail_embed = apply_branding(unjail_embed, ctx.guild)
     await ctx.send(embed=unjail_embed)
 
@@ -7954,8 +7801,8 @@ async def blacklist_cmd(ctx, target: Union[discord.Member, int] = None, *, reaso
     """🔇 !!blacklist @user أو ID [سبب] — إضافة لاعب للبلاك ليست يدوياً"""
     if not target:
         await ctx.send(embed=discord.Embed(
-            title="❌  Missing User",
-            description=f"> Usage:  `{PREFIX}blacklist @user أو ID [reason]`",
+            title="❌ Missing User",
+            description=f"Usage: `{PREFIX}blacklist @user أو ID [reason]`",
             color=COLORS["error"]
         ), delete_after=15)
         return
@@ -7974,22 +7821,21 @@ async def blacklist_cmd(ctx, target: Union[discord.Member, int] = None, *, reaso
         success = True
     if not success:
         await ctx.send(embed=discord.Embed(
-            title="❌  فشل",
-            description="> لم أستطع تطبيق البلاك ليست.",
+            title="❌ فشل",
+            description="لم أستطع تطبيق البلاك ليست.",
             color=COLORS["error"]
         ), delete_after=10)
         return
     embed = discord.Embed(
-        title="🔇  تمت إضافة اللاعب للبلاك ليست",
-        description=(
-            f"> 👤  **اللاعب:**  <@{user_id}>\n"
-            f"> 👮  **بواسطة:**  {ctx.author.mention}\n"
-            + (f"> 📝  **السبب:**  `{reason}`\n" if reason else "")
-            + f"> ⏱️  **المدة:**  10 دقائق"
-        ),
+        title="🔇 تمت إضافة اللاعب للبلاك ليست",
         color=COLORS["warning"],
         timestamp=discord.utils.utcnow()
     )
+    embed.add_field(name="👤 اللاعب", value=f"<@{user_id}>", inline=True)
+    embed.add_field(name="👮 بواسطة", value=f"{ctx.author.mention}", inline=True)
+    embed.add_field(name="⏱️ المدة", value="10 دقائق", inline=True)
+    if reason:
+        embed.add_field(name="📝 السبب", value=f"`{reason}`", inline=False)
     embed.set_footer(text=f"{BOT_FOOTER}  •  Blacklisted")
     embed = apply_branding(embed, ctx.guild)
     await ctx.send(embed=embed)
@@ -8006,8 +7852,8 @@ async def unblacklist_cmd(ctx, target: Union[discord.User, int] = None):
     """✅ !!unblacklist @user أو ID — إزالة لاعب من البلاك ليست"""
     if not target:
         await ctx.send(embed=discord.Embed(
-            title="❌  Missing User",
-            description=f"> Usage:  `{PREFIX}unblacklist @user أو ID`",
+            title="❌ Missing User",
+            description=f"Usage: `{PREFIX}unblacklist @user أو ID`",
             color=COLORS["error"]
         ), delete_after=15)
         return
@@ -8018,15 +7864,13 @@ async def unblacklist_cmd(ctx, target: Union[discord.User, int] = None):
     else:
         db.remove_blacklist(ctx.guild.id, user_id)
     embed = discord.Embed(
-        title="✅  تمت إزالة البلاك ليست",
-        description=(
-            f"> 👤  **اللاعب:**  <@{user_id}>\n"
-            f"> 👮  **بواسطة:**  {ctx.author.mention}\n"
-            f"> 🎮  يمكنه استخدام البوت الآن"
-        ),
+        title="✅ تمت إزالة البلاك ليست",
+        description="🎮 يمكنه استخدام البوت الآن",
         color=COLORS["success"],
         timestamp=discord.utils.utcnow()
     )
+    embed.add_field(name="👤 اللاعب", value=f"<@{user_id}>", inline=True)
+    embed.add_field(name="👮 بواسطة", value=f"{ctx.author.mention}", inline=True)
     embed.set_footer(text=f"{BOT_FOOTER}  •  Unblacklisted")
     embed = apply_branding(embed, ctx.guild)
     await ctx.send(embed=embed)
@@ -8043,11 +7887,8 @@ async def blacklisted_cmd(ctx):
     """📋 !!blacklisted — قائمة اللاعبين في البلاك ليست"""
     blacklisted = db.get_blacklisted_players(ctx.guild.id)
     embed = discord.Embed(
-        title="📋  قائمة البلاك ليست",
-        description=(
-            f"> 📊  **إجمالي:**  `{len(blacklisted)}`\n"
-            f"{separator()}"
-        ),
+        title="📋 قائمة البلاك ليست",
+        description=f"📊 **إجمالي:** `{len(blacklisted)}`",
         color=COLORS["warning"] if blacklisted else COLORS["success"],
         timestamp=discord.utils.utcnow()
     )
@@ -8062,16 +7903,12 @@ async def blacklisted_cmd(ctx):
             reason = b.get("reason") or "غير محدد"
             expires = b.get("expires_at", "N/A")[:19] if b.get("expires_at") else "N/A"
             embed.add_field(
-                name=f"#{i}  —  {name}",
-                value=(
-                    f"> 👤  {mention}\n"
-                    f"> 📝  `{reason}`\n"
-                    f"> ⏱️  ينتهي:  `{expires}`"
-                ),
+                name=f"#{i} — {name}",
+                value=f"👤 {mention}\n📝 `{reason}`\n⏱️ ينتهي: `{expires}`",
                 inline=False
             )
         if len(blacklisted) > 15:
-            embed.set_footer(text=f"... و {len(blacklisted) - 15} لاعب آخر")
+            embed.set_footer(text=f"{BOT_FOOTER}  •  و {len(blacklisted) - 15} لاعب آخر")
     embed = apply_branding(embed, ctx.guild)
     await ctx.send(embed=embed)
 
@@ -8090,8 +7927,8 @@ async def winner_mvp_cmd(ctx, lobby_id: int = None, target: Union[discord.User, 
     """🏆 !!w <lobby_id> <@user/ID> — تعيين MVP WINNER يدوياً"""
     if lobby_id is None or target is None:
         await ctx.send(embed=discord.Embed(
-            title="❌  Missing",
-            description=f"> Usage:  `{PREFIX}w <lobby_id> <@user/ID>`",
+            title="❌ Missing",
+            description=f"Usage: `{PREFIX}w <lobby_id> <@user/ID>`",
             color=COLORS["error"]
         ))
         return
@@ -8099,16 +7936,16 @@ async def winner_mvp_cmd(ctx, lobby_id: int = None, target: Union[discord.User, 
     lobby = db.get_lobby(lobby_id)
     if not lobby or lobby["status"] not in ("voting", "started"):
         await ctx.send(embed=discord.Embed(
-            title="❌  Lobby not active",
-            description=f"> Lobby `#{lobby_id}` ليس في حالة تصويت.",
+            title="❌ Lobby not active",
+            description=f"Lobby `#{lobby_id}` ليس في حالة تصويت.",
             color=COLORS["error"]
         ))
         return
     all_players = lobby["team1_players"] + lobby["team2_players"]
     if user_id not in all_players:
         await ctx.send(embed=discord.Embed(
-            title="❌  لاعب غير موجود في الماتش",
-            description=f"> <@{user_id}>  ليس من لاعبي هذا الماتش.",
+            title="❌ لاعب غير موجود في الماتش",
+            description=f"<@{user_id}> ليس من لاعبي هذا الماتش.",
             color=COLORS["error"]
         ))
         return
@@ -8116,8 +7953,11 @@ async def winner_mvp_cmd(ctx, lobby_id: int = None, target: Union[discord.User, 
         _admin_mvp_results[lobby_id] = {}
     _admin_mvp_results[lobby_id]["winner"] = user_id
     await ctx.send(embed=discord.Embed(
-        title="✅  تم تعيين MVP WINNER",
-        description=f"> 🏆  **MVP WINNER:**  <@{user_id}>\n> 📌  **Lobby:**  `#{lobby_id}`",
+        title="✅ تم تعيين MVP WINNER",
+        description=(
+            f"🏆 **MVP WINNER:** <@{user_id}>\n"
+            f"📌 **Lobby:** `#{lobby_id}`"
+        ),
         color=COLORS["success"]
     ))
     # لو الـ loser محدد مسبقاً — طبق النتيجة
@@ -8131,8 +7971,8 @@ async def loser_mvp_cmd(ctx, lobby_id: int = None, target: Union[discord.User, i
     """✦ !!l <lobby_id> <@user/ID> — تعيين MVP LOSER يدوياً"""
     if lobby_id is None or target is None:
         await ctx.send(embed=discord.Embed(
-            title="❌  Missing",
-            description=f"> Usage:  `{PREFIX}l <lobby_id> <@user/ID>`",
+            title="❌ Missing",
+            description=f"Usage: `{PREFIX}l <lobby_id> <@user/ID>`",
             color=COLORS["error"]
         ))
         return
@@ -8140,16 +7980,16 @@ async def loser_mvp_cmd(ctx, lobby_id: int = None, target: Union[discord.User, i
     lobby = db.get_lobby(lobby_id)
     if not lobby or lobby["status"] not in ("voting", "started"):
         await ctx.send(embed=discord.Embed(
-            title="❌  Lobby not active",
-            description=f"> Lobby `#{lobby_id}` ليس في حالة تصويت.",
+            title="❌ Lobby not active",
+            description=f"Lobby `#{lobby_id}` ليس في حالة تصويت.",
             color=COLORS["error"]
         ))
         return
     all_players = lobby["team1_players"] + lobby["team2_players"]
     if user_id not in all_players:
         await ctx.send(embed=discord.Embed(
-            title="❌  لاعب غير موجود في الماتش",
-            description=f"> <@{user_id}>  ليس من لاعبي هذا الماتش.",
+            title="❌ لاعب غير موجود في الماتش",
+            description=f"<@{user_id}> ليس من لاعبي هذا الماتش.",
             color=COLORS["error"]
         ))
         return
@@ -8157,8 +7997,11 @@ async def loser_mvp_cmd(ctx, lobby_id: int = None, target: Union[discord.User, i
         _admin_mvp_results[lobby_id] = {}
     _admin_mvp_results[lobby_id]["loser"] = user_id
     await ctx.send(embed=discord.Embed(
-        title="✅  تم تعيين MVP LOSER",
-        description=f"> ✦  **MVP LOSER:**  <@{user_id}>\n> 📌  **Lobby:**  `#{lobby_id}`",
+        title="✅ تم تعيين MVP LOSER",
+        description=(
+            f"✦ **MVP LOSER:** <@{user_id}>\n"
+            f"📌 **Lobby:** `#{lobby_id}`"
+        ),
         color=COLORS["success"]
     ))
     # لو الـ winner محدد مسبقاً — طبق النتيجة
@@ -8182,20 +8025,20 @@ async def _apply_admin_mvp(ctx, lobby_id):
     l_team = "team1" if loser_id in lobby["team1_players"] else "team2"
     if w_team == l_team:
         await ctx.send(embed=discord.Embed(
-            title="❌  MVP من نفس الفريق!",
-            description="> MVP WINNER و MVP LOSER يجب أن يكونا من فريقين مختلفين.",
-            color=COLORS.get("danger", COLORS.get("error", 0xE74C3C))
+            title="❌ MVP من نفس الفريق!",
+            description="MVP WINNER و MVP LOSER يجب أن يكونا من فريقين مختلفين.",
+            color=COLORS["error"]
         ))
         _admin_mvp_results.pop(lobby_id, None)
         return
     await ctx.send(embed=discord.Embed(
-        title="⚙️  جارٍ تطبيق النقاط...",
+        title="⚙️ جارٍ تطبيق النقاط...",
         description=(
-            f"> 🏆  **Winner Team:**  {w_team}\n"
-            f"> 🔱  **MVP WINNER:**  <@{winner_id}>\n"
-            f"> ✦  **MVP LOSER:**  <@{loser_id}>"
+            f"🏆 **Winner Team:** {w_team}\n"
+            f"🔱 **MVP WINNER:** <@{winner_id}>\n"
+            f"✦ **MVP LOSER:** <@{loser_id}>"
         ),
-        color=COLORS["success"]
+        color=COLORS["warning"]
     ))
     guild = ctx.guild
     # ✅ إصلاح: لا تحدّث الحالة هنا — process_match_result_with_mvps يفعل ذلك
@@ -8218,8 +8061,11 @@ async def _apply_admin_mvp(ctx, lobby_id):
         except:
             pass
         await ctx.send(embed=discord.Embed(
-            title="❌  فشل تطبيق النقاط",
-            description=f"> 🐛  **الخطأ:**  `{str(e)[:200]}`\n> ✅  تم إنهاء الماتش وحذف القنوات",
+            title="❌ فشل تطبيق النقاط",
+            description=(
+                f"🐛 **الخطأ:** `{str(e)[:200]}`\n"
+                "✅ تم إنهاء الماتش وحذف القنوات"
+            ),
             color=COLORS["error"]
         ))
 
@@ -8236,11 +8082,11 @@ async def startvote_cmd(ctx, lobby_id: int = None):
             lobby_id = lobby["id"]
         else:
             await ctx.send(embed=discord.Embed(
-                title="❌  Missing Lobby ID",
+                title="❌ Missing Lobby ID",
                 description=(
-                    f"> Usage:  `{PREFIX}startvote <lobby_id>`\n"
-                    f"> أو استخدم  `{PREFIX}startvote`  لو فيه ماتش نشط\n"
-                    f"> 💡 Use  `{PREFIX}matches`  لعرض الماتشات النشطة"
+                    f"Usage: `{PREFIX}startvote <lobby_id>`\n"
+                    f"أو استخدم `{PREFIX}startvote` لو فيه ماتش نشط\n"
+                    f"💡 Use `{PREFIX}matches` لعرض الماتشات النشطة"
                 ),
                 color=COLORS["error"]
             ), delete_after=15)
@@ -8248,31 +8094,34 @@ async def startvote_cmd(ctx, lobby_id: int = None):
     lobby = db.get_lobby(lobby_id)
     if not lobby:
         await ctx.send(embed=discord.Embed(
-            title="❌  Not Found",
-            description=f"> اللوبي `#{lobby_id}` غير موجود",
+            title="❌ Not Found",
+            description=f"اللوبي `#{lobby_id}` غير موجود",
             color=COLORS["error"]
         ), delete_after=10)
         return
     if lobby["status"] != "started":
         await ctx.send(embed=discord.Embed(
-            title="❌  Not Active",
-            description=f"> اللوبي `#{lobby_id}` حالته: `{lobby['status']}`\n> يجب أن يكون `started`",
+            title="❌ Not Active",
+            description=(
+                f"اللوبي `#{lobby_id}` حالته: `{lobby['status']}`\n"
+                "يجب أن يكون `started`"
+            ),
             color=COLORS["error"]
         ), delete_after=10)
         return
     guild = ctx.guild
     # ✅ ابدأ التصويت فوراً بدون cooldown
     embed = discord.Embed(
-        title="🗳️  تم بدء التصويت!",
+        title="🗳️ تم بدء التصويت!",
         description=(
-            f"> 🏠  **Lobby:**  `#{lobby_id}`\n"
-            f"> 👮  **Started by:**  {ctx.author.mention}\n"
-            f"> ⚡  تم تجاوز cooldown الـ 10 دقائق\n"
-            f"> 🗳️  الهوست وأول داخل يصوتان الآن!"
+            "⚡ تم تجاوز cooldown الـ 10 دقائق\n"
+            "🗳️ الهوست وأول داخل يصوتان الآن!"
         ),
         color=COLORS["success"],
         timestamp=discord.utils.utcnow()
     )
+    embed.add_field(name="🏠 Lobby", value=f"`#{lobby_id}`", inline=True)
+    embed.add_field(name="👮 Started by", value=f"{ctx.author.mention}", inline=True)
     embed.set_footer(text=f"{BOT_FOOTER}  •  Force Start Vote")
     embed = apply_branding(embed, guild)
     await ctx.send(embed=embed)
@@ -8285,38 +8134,32 @@ async def startvote_cmd(ctx, lobby_id: int = None):
 async def resolve_cmd(ctx, lobby_id: int = None, winner: str = None):
     if lobby_id is None or winner is None:
         await ctx.send(embed=discord.Embed(
-            title="❌  Missing",
-            description=(
-                f"> Usage:  `{PREFIX}resolve <id> <team1|team2>`"
-            ),
+            title="❌ Missing",
+            description=f"Usage: `{PREFIX}resolve <id> <team1|team2>`",
             color=COLORS["error"]
         ))
         return
     winner = winner.lower()
     if winner not in ["team1", "team2"]:
         await ctx.send(embed=discord.Embed(
-            title="❌  Invalid",
-            description=(
-                f"> Winner must be  `team1`  or  `team2`."
-            ),
+            title="❌ Invalid",
+            description="Winner must be `team1` or `team2`.",
             color=COLORS["error"]
         ))
         return
     lobby = db.get_lobby(lobby_id)
     if not lobby or lobby["status"] != "voting":
         await ctx.send(embed=discord.Embed(
-            title="❌  No Dispute",
-            description=(
-                f"> Lobby `#{lobby_id}` is not in voting status."
-            ),
+            title="❌ No Dispute",
+            description=f"Lobby `#{lobby_id}` is not in voting status.",
             color=COLORS["error"]
         ))
         return
     await ctx.send(embed=discord.Embed(
-        title="⚖️  Resolved!",
+        title="⚖️ Resolved!",
         description=(
-            f"> **{ctx.author.mention}**  decided the winner:\n"
-            f"> **{'🟠 Team 1' if winner=='team1' else '🟢 Team 2'}**"
+            f"{ctx.author.mention} decided the winner:\n"
+            f"**{'🔴 Team 1' if winner=='team1' else '🟢 Team 2'}**"
         ),
         color=COLORS["success"]
     ))
@@ -8328,10 +8171,8 @@ async def resolve_cmd(ctx, lobby_id: int = None, winner: str = None):
 async def resetstats_cmd(ctx, target: Union[discord.User, int] = None):
     if not target:
         await ctx.send(embed=discord.Embed(
-            title="❌  Missing User",
-            description=(
-                f"> Usage:  `{PREFIX}resetstats @user أو ID`"
-            ),
+            title="❌ Missing User",
+            description=f"Usage: `{PREFIX}resetstats @user أو ID`",
             color=COLORS["error"]
         ))
         return
@@ -8341,10 +8182,10 @@ async def resetstats_cmd(ctx, target: Union[discord.User, int] = None):
     if member:
         await update_member_nickname(member, STARTING_LEVEL)
     await ctx.send(embed=discord.Embed(
-        title="✅  Stats Reset",
+        title="✅ Stats Reset",
         description=(
-            f"> <@{user_id}>  —  RANK  `#{STARTING_LEVEL}`\n"
-            f"> All stats have been reset to default."
+            f"<@{user_id}> — RANK `#{STARTING_LEVEL}`\n"
+            "All stats have been reset to default."
         ),
         color=COLORS["success"]
     ))
@@ -8358,16 +8199,16 @@ async def resetrankall_cmd(ctx):
     guild = ctx.guild
     # ✅ إصلاح: بناء embed التقدّم كمتغير بشكل صحيح
     progress_embed = discord.Embed(
-        title="🚀  جارٍ تصفير النقاط والرانك...",
+        title="🚀 جارٍ تصفير النقاط والرانك...",
         description=(
-            f"> 📊  **عدد الأعضاء:**  `{len(guild.members)}`\n"
-            f"> 💰  **سيتم تصفير:**  النقاط + الرانك\n"
-            f"> 🏅  **الرانك المستهدف:**  `#{STARTING_LEVEL}`  (نقاط = 0)\n"
-            f"> ⏳  **انتظر...**"
+            "💰 **سيتم تصفير:** النقاط + الرانك\n"
+            f"🏅 **الرانك المستهدف:** `#{STARTING_LEVEL}` (نقاط = 0)\n"
+            "⏳ **انتظر...**"
         ),
         color=COLORS["warning"],
         timestamp=discord.utils.utcnow()
     )
+    progress_embed.add_field(name="📊 عدد الأعضاء", value=f"`{len(guild.members)}`", inline=True)
     progress_embed.set_footer(text=f"{BOT_FOOTER}  •  Server-wide reset")
     progress_embed = apply_branding(progress_embed, ctx.guild)
     progress = await ctx.send(embed=progress_embed)
@@ -8405,18 +8246,17 @@ async def resetrankall_cmd(ctx):
             failed += 1
     # ✅ إصلاح: بناء embed النجاح كمتغير بشكل صحيح
     success_embed = discord.Embed(
-        title="✅  تم تصفير كل البيانات!",
+        title="✅ تم تصفير كل البيانات!",
         description=(
-            f"> 🏅  كل الأعضاء تم تصفيرهم إلى  `RANK #{STARTING_LEVEL}`  (نقاط = 0)\n"
-            f"{separator()}\n"
-            f"> ✅  **تم التصفير:**  `{reset_count}`\n"
-            f"> 🤖  **تم تخطي البوتات:**  `{skipped_bots}`\n"
-            f"> ⚠️  **فشل:**  `{failed}`\n"
-            f"> 💡  كل الستاتس (نقاط/فوز/خسارة/MVPs) صفرت أيضاً"
+            f"🏅 كل الأعضاء تم تصفيرهم إلى `RANK #{STARTING_LEVEL}` (نقاط = 0)\n"
+            "💡 كل الستاتس (نقاط/فوز/خسارة/MVPs) صفرت أيضاً"
         ),
         color=COLORS["success"],
         timestamp=discord.utils.utcnow()
     )
+    success_embed.add_field(name="✅ تم التصفير", value=f"`{reset_count}`", inline=True)
+    success_embed.add_field(name="🤖 تم تخطي البوتات", value=f"`{skipped_bots}`", inline=True)
+    success_embed.add_field(name="⚠️ فشل", value=f"`{failed}`", inline=True)
     success_embed.set_footer(text=f"{BOT_FOOTER}  •  Reset complete")
     success_embed = apply_branding(success_embed, ctx.guild)
     # ✅ إصلاح V5:زامن الـ Roles بعد التصفير (كانت تتأخر حتى الـ periodic sync)
@@ -8435,19 +8275,15 @@ async def resetrankall_cmd(ctx):
 async def setlevel_cmd(ctx, target: Union[discord.User, int] = None, level: int = None):
     if not target or level is None:
         await ctx.send(embed=discord.Embed(
-            title="❌  Missing",
-            description=(
-                f"> Usage:  `{PREFIX}setlevel @user أو ID <level>`"
-            ),
+            title="❌ Missing",
+            description=f"Usage: `{PREFIX}setlevel @user أو ID <level>`",
             color=COLORS["error"]
         ))
         return
     if level < 1 or level > 9999:
         await ctx.send(embed=discord.Embed(
-            title="❌  Invalid Level",
-            description=(
-                f"> Level must be between  `1`  and  `9999`."
-            ),
+            title="❌ Invalid Level",
+            description="Level must be between `1` and `9999`.",
             color=COLORS["error"]
         ))
         return
@@ -8464,10 +8300,8 @@ async def setlevel_cmd(ctx, target: Union[discord.User, int] = None, level: int 
         except Exception as e:
             logger.warning(f"⚠️ Role sync after setlevel failed: {e}")
     await ctx.send(embed=discord.Embed(
-        title="✅  Level Updated",
-        description=(
-            f"> <@{user_id}> → **RANK  `#{level}`**"
-        ),
+        title="✅ Level Updated",
+        description=f"<@{user_id}> → **RANK `#{level}`**",
         color=COLORS["success"]
     ))
 
@@ -8477,19 +8311,15 @@ async def setlevel_cmd(ctx, target: Union[discord.User, int] = None, level: int 
 async def setpoints_cmd(ctx, target: Union[discord.User, int] = None, points: int = None):
     if not target or points is None:
         await ctx.send(embed=discord.Embed(
-            title="❌  Missing",
-            description=(
-                f"> Usage:  `{PREFIX}setpoints @user أو ID <points>`"
-            ),
+            title="❌ Missing",
+            description=f"Usage: `{PREFIX}setpoints @user أو ID <points>`",
             color=COLORS["error"]
         ))
         return
     if points < -99999 or points > 99999:
         await ctx.send(embed=discord.Embed(
-            title="❌  Invalid Points",
-            description=(
-                f"> Points must be between  `-99999`  and  `99999`."
-            ),
+            title="❌ Invalid Points",
+            description="Points must be between `-99999` and `99999`.",
             color=COLORS["error"]
         ))
         return
@@ -8504,10 +8334,8 @@ async def setpoints_cmd(ctx, target: Union[discord.User, int] = None, points: in
     if member:
         await update_member_nickname(member, new_level)
     await ctx.send(embed=discord.Embed(
-        title="✅  Points Updated",
-        description=(
-            f"> <@{user_id}> → **`{points}` points**  (RANK `#{new_level}`)"
-        ),
+        title="✅ Points Updated",
+        description=f"<@{user_id}> → **`{points}` points** (RANK `#{new_level}`)",
         color=COLORS["success"]
     ))
 
@@ -8524,10 +8352,8 @@ async def syncnicknames_cmd(ctx):
         updated += 1
         await asyncio.sleep(0.3)
     await ctx.send(embed=discord.Embed(
-        title="✅  Synced",
-        description=(
-            f"> Synced  `{updated}`  members' nicknames successfully."
-        ),
+        title="✅ Synced",
+        description=f"Synced `{updated}` members' nicknames successfully.",
         color=COLORS["success"]
     ))
 
@@ -8537,10 +8363,10 @@ async def syncnicknames_cmd(ctx):
 async def syncroles_cmd(ctx):
     """🔄 !!syncroles — مزامنة الـ Roles لكل اللاعبين حسب ترتيبهم"""
     progress = await ctx.send(embed=discord.Embed(
-        title="🔄  جارٍ مزامنة الـ Roles...",
+        title="🔄 جارٍ مزامنة الـ Roles...",
         description=(
-            f"> 📊  جاري تحديث ألقاب كل اللاعبين حسب ترتيبهم...\n"
-            f"> ⏳  انتظر..."
+            "📊 جاري تحديث ألقاب كل اللاعبين حسب ترتيبهم...\n"
+            "⏳ انتظر..."
         ),
         color=COLORS["warning"],
         timestamp=discord.utils.utcnow()
@@ -8551,18 +8377,12 @@ async def syncroles_cmd(ctx):
     await sync_all_players_roles(ctx.guild)
     # ✅ إصلاح: بناء embed النجاح كمتغير بشكل صحيح
     synced_embed = discord.Embed(
-        title="✅  تمت مزامنة الـ Roles!",
-        description=(
-            f"> 🔄  كل اللاعبين تم تحديث ألقابهم حسب ترتيبهم.\n"
-            f"{separator()}\n"
-            f"> 🏆  **#1:**  Best Player\n"
-            f"> 💎  **#2-10:**  Goated Players  (SoundBoard + Waiting Prv)\n"
-            f"> ⭐  **#11-50:**  Skilled Players  (SoundBoard)\n"
-            f"> 🎯  **#51-100:**  Efficient Players"
-        ),
+        title="✅ تمت مزامنة الـ Roles!",
+        description="🔄 كل اللاعبين تم تحديث ألقابهم حسب ترتيبهم.",
         color=COLORS["success"],
         timestamp=discord.utils.utcnow()
     )
+    synced_embed.add_field(name="🏅 Roles", value="🏆 **#1:** Best Player\n💎 **#2-10:** Goated Players (SoundBoard + Waiting Prv)\n⭐ **#11-50:** Skilled Players (SoundBoard)\n🎯 **#51-100:** Efficient Players", inline=False)
     synced_embed.set_footer(text=f"{BOT_FOOTER}  •  Roles synced")
     synced_embed = apply_branding(synced_embed, ctx.guild)
     await progress.edit(embed=synced_embed)
@@ -8575,50 +8395,16 @@ async def syncroles_cmd(ctx):
 @bot.command(name="general")
 async def general_cmd(ctx):
     embed = discord.Embed(
-        title="🎮  Player Commands",
-        description=(
-            f"> 📌  **Prefix:**  `{PREFIX}`\n"
-            f"──────────────────────"
-        ),
-        color=0xFF6B00
+        title="🎮 Player Commands",
+        description=f"📌 **Prefix:** `{PREFIX}`",
+        color=COLORS["play"]
     )
-    embed.add_field(name="🚀  Play", value=(
-        f"›  `{PREFIX}play 4v4`  أو  `{PREFIX}play4v4`  —  4v4  (الافتراضي)\n"
-        f"›  `{PREFIX}play 2v2`  أو  `{PREFIX}play2v2`  —  2v2\n"
-        f"›  `{PREFIX}play 3v3`  أو  `{PREFIX}play3v3`  —  3v3\n"
-        f"›  `{PREFIX}play 1v1`  أو  `{PREFIX}play1v1`  🔒  (للـ roles العالية)\n"
-        f"›  ⚠️  `{PREFIX}play`  بدون مود → رسالة خطأ"
-    ), inline=False)
-    embed.add_field(name="📊  Stats", value=(
-        f"›  `{PREFIX}p`  —  Profile (full stats)\n"
-        f"›  `{PREFIX}points`  —  💰 نقاطك + تقدم الرانك\n"
-        f"›  `{PREFIX}card`  —  Card  (zelika-play)\n"
-        f"›  `{PREFIX}top`  —  Leaderboard (Top 10)\n"
-        f"›  `{PREFIX}mylevel`  —  Your rank\n"
-        f"›  `{PREFIX}matches`  —  Active lobbies"
-    ), inline=False)
-    embed.add_field(name="🎮  Control", value=(
-        f"›  `{PREFIX}leave`  —  Leave lobby\n"
-        f"›  `{PREFIX}fixrank`  —  Apply rank"
-    ), inline=False)
-    embed.add_field(name="🤖  How to Play", value=(
-        f"> 1️⃣  Join a ⏳ waiting room\n"
-        f"> 2️⃣  `{PREFIX}play 4v4`  in a play channel  (حدد المود!)\n"
-        f"> 3️⃣  Press **Create Lobby** → Enter Room Info\n"
-        f"> 4️⃣  Players press **Join Team 1 / 2**\n"
-        f"> 5️⃣  Lobby fills → Match starts\n"
-        f"> 6️⃣  Host presses **Start Vote**  (or **Cancel Match** to abort)\n"
-        f"> 7️⃣  Vote → Result → Points + RANK updates\n"
-        f"> 8️⃣  Players return to waiting rooms\n"
-        f"\n"
-        f"> 💰  **نظام النقاط:**\n"
-        f"> ─  🔱  Winner MVP:  `+80` pts\n"
-        f"> ─  ✅  Winners:  `+30` pts\n"
-        f"> ─  ✦  Loser MVP:  `+30` pts\n"
-        f"> ─  ☠️  Losers:  `-30` pts\n"
-        f"> ─  📈  كل `50` نقطة = `+1` رانك"
-    ), inline=False)
-    embed.set_footer(text=f"Free Fire Bot v4.0  •  {PREFIX}help (admin)")
+    embed.add_field(name="🚀 Play", value=f"• `{PREFIX}play 4v4` أو `{PREFIX}play4v4` — 4v4 (الافتراضي)\n• `{PREFIX}play 2v2` أو `{PREFIX}play2v2` — 2v2\n• `{PREFIX}play 3v3` أو `{PREFIX}play3v3` — 3v3\n• `{PREFIX}play 1v1` أو `{PREFIX}play1v1` 🔒 (للـ roles العالية)\n• ⚠️ `{PREFIX}play` بدون مود → رسالة خطأ", inline=False)
+    embed.add_field(name="📊 Stats", value=f"• `{PREFIX}p` — Profile (full stats)\n• `{PREFIX}points` — 💰 نقاطك + تقدم الرانك\n• `{PREFIX}card` — Card (zelika-play)\n• `{PREFIX}top` — Leaderboard (Top 10)\n• `{PREFIX}mylevel` — Your rank\n• `{PREFIX}matches` — Active lobbies", inline=False)
+    embed.add_field(name="🎮 Control", value=f"• `{PREFIX}leave` — Leave lobby\n• `{PREFIX}fixrank` — Apply rank", inline=False)
+    embed.add_field(name="🤖 How to Play", value=f"1️⃣ Join a ⏳ waiting room\n2️⃣ `{PREFIX}play 4v4` in a play channel (حدد المود!)\n3️⃣ Press **Create Lobby** → Enter Room Info\n4️⃣ Players press **Join Team 1 / 2**\n5️⃣ Lobby fills → Match starts\n6️⃣ Host presses **Start Vote** (or **Cancel Match** to abort)\n7️⃣ Vote → Result → Points + RANK updates\n8️⃣ Players return to waiting rooms", inline=False)
+    embed.add_field(name="💰 نظام النقاط", value="🔱 Winner MVP: `+80` pts\n✅ Winners: `+30` pts\n✦ Loser MVP: `+30` pts\n☠️ Losers: `-30` pts\n📈 كل `50` نقطة = `+1` رانك", inline=False)
+    embed.set_footer(text=f"{BOT_FOOTER}  •  v4.0  ·  {PREFIX}help (admin)")
     embed = apply_branding(embed, ctx.guild)
     await ctx.send(embed=embed)
 
@@ -8627,116 +8413,40 @@ async def general_cmd(ctx):
 async def help_cmd(ctx):
     # 📄 رسالة 1: أوامر اللاعبين
     embed1 = discord.Embed(
-        title="🔥  Free Fire Bot v4.0  —  أوامر اللاعبين",
+        title="🔥 Free Fire Bot v4.0 — أوامر اللاعبين",
         description=(
-            f"> 📌  **Prefix:**  `{PREFIX}`\n"
-            f"> 🎮  جميع الأوامر تعمل في قنوات play\n"
-            f"{separator()}"
+            f"📌 **Prefix:** `{PREFIX}`\n"
+            "🎮 جميع الأوامر تعمل في قنوات play"
         ),
-        color=0xFF6B00,
+        color=COLORS["play"],
         timestamp=discord.utils.utcnow()
     )
-    embed1.add_field(name="🎮  اللعب (9 أوامر)", value=(
-        f"›  `{PREFIX}play 4v4`  أو  `{PREFIX}play4v4`  —  4v4\n"
-        f"›  `{PREFIX}play 3v3`  أو  `{PREFIX}play3v3`  —  3v3\n"
-        f"›  `{PREFIX}play 2v2`  أو  `{PREFIX}play2v2`  —  2v2\n"
-        f"›  `{PREFIX}play 1v1`  أو  `{PREFIX}play1v1`  🔒  (للـ roles العالية)\n"
-        f"›  `{PREFIX}play`  —  رسالة خطأ (حدد المود)\n"
-        f"›  `{PREFIX}leave`  —  مغادرة اللوبي\n"
-        f"›  `{PREFIX}matches`  —  الماتشات النشطة\n"
-        f"›  `{PREFIX}matchinfo <id>`  —  تفاصيل ماتش"
-    ), inline=False)
-    embed1.add_field(name="📊  الإحصائيات (7 أوامر)", value=(
-        f"›  `{PREFIX}p`  أو  `{PREFIX}p @user`  —  البروفايل\n"
-        f"›  `{PREFIX}points`  أو  `{PREFIX}points @user`  —  النقاط + تقدم الرانك\n"
-        f"›  `{PREFIX}card`  أو  `{PREFIX}card @user`  —  بطاقة اللاعب\n"
-        f"›  `{PREFIX}top`  —  Leaderboard Top 10\n"
-        f"›  `{PREFIX}mylevel`  أو  `{PREFIX}mylevel @user`  —  الرانك\n"
-        f"›  `{PREFIX}myrank`  —  النك نيم المستهدف\n"
-        f"›  `{PREFIX}fixrank`  أو  `{PREFIX}fixrank @user`  —  تطبيق الرانك"
-    ), inline=False)
-    embed1.add_field(name="⚠️  البلاغات (3 أوامر)", value=(
-        f"›  `{PREFIX}report @user [سبب]`  —  بلّغ عن لاعب (6 = حظر)\n"
-        f"›  `{PREFIX}reports`  أو  `{PREFIX}reports @user`  —  عرض البلاغات\n"
-        f"›  ⚠️  زر البلاغ متاح داخل كل ماتش"
-    ), inline=False)
-    embed1.add_field(name="🛡️  المساعدة (4 أوامر)", value=(
-        f"›  `{PREFIX}rules`  —  عرض قواعد السيرفر (بدون قناة مخصصة)\n"
-        f"›  `{PREFIX}general`  —  دليل اللاعب\n"
-        f"›  `{PREFIX}help`  —  هذه القائمة\n"
-        f"›  `{PREFIX}botinfo`  —  معلومات البوت"
-    ), inline=False)
-    embed1.set_footer(text=f"صفحة 1/2  •  أوامر الأدمن في الصفحة التالية")
+    embed1.add_field(name="🎮 اللعب (9 أوامر)", value=f"• `{PREFIX}play 4v4` أو `{PREFIX}play4v4` — 4v4\n• `{PREFIX}play 3v3` أو `{PREFIX}play3v3` — 3v3\n• `{PREFIX}play 2v2` أو `{PREFIX}play2v2` — 2v2\n• `{PREFIX}play 1v1` أو `{PREFIX}play1v1` 🔒 (للـ roles العالية)\n• `{PREFIX}play` — رسالة خطأ (حدد المود)\n• `{PREFIX}leave` — مغادرة اللوبي\n• `{PREFIX}matches` — الماتشات النشطة\n• `{PREFIX}matchinfo <id>` — تفاصيل ماتش", inline=False)
+    embed1.add_field(name="📊 الإحصائيات (7 أوامر)", value=f"• `{PREFIX}p` أو `{PREFIX}p @user` — البروفايل\n• `{PREFIX}points` أو `{PREFIX}points @user` — النقاط + تقدم الرانك\n• `{PREFIX}card` أو `{PREFIX}card @user` — بطاقة اللاعب\n• `{PREFIX}top` — Leaderboard Top 10\n• `{PREFIX}mylevel` أو `{PREFIX}mylevel @user` — الرانك\n• `{PREFIX}myrank` — النك نيم المستهدف\n• `{PREFIX}fixrank` أو `{PREFIX}fixrank @user` — تطبيق الرانك", inline=False)
+    embed1.add_field(name="⚠️ البلاغات (3 أوامر)", value=f"• `{PREFIX}report @user [سبب]` — بلّغ عن لاعب (6 = حظر)\n• `{PREFIX}reports` أو `{PREFIX}reports @user` — عرض البلاغات\n• ⚠️ زر البلاغ متاح داخل كل ماتش", inline=False)
+    embed1.add_field(name="🛡️ المساعدة (4 أوامر)", value=f"• `{PREFIX}rules` — عرض قواعد السيرفر (بدون قناة مخصصة)\n• `{PREFIX}general` — دليل اللاعب\n• `{PREFIX}help` — هذه القائمة\n• `{PREFIX}botinfo` — معلومات البوت", inline=False)
+    embed1.set_footer(text=f"{BOT_FOOTER}  •  صفحة 1/2  ·  أوامر الأدمن في الصفحة التالية")
     embed1 = apply_branding(embed1, ctx.guild)
     await ctx.send(embed=embed1)
 
     # 📄 رسالة 2: أوامر الأدمن
     embed2 = discord.Embed(
-        title="🔧  Free Fire Bot v4.0  —  أوامر الأدمن",
+        title="🔧 Free Fire Bot v4.0 — أوامر الأدمن",
         description=(
-            f"> 📌  **Prefix:**  `{PREFIX}`\n"
-            f"> 🔒  جميع الأوامر التالية للأدمن فقط\n"
-            f"{separator()}"
+            f"📌 **Prefix:** `{PREFIX}`\n"
+            "🔒 جميع الأوامر التالية للأدمن فقط"
         ),
-        color=0xE74C3C,
+        color=COLORS["admin"],
         timestamp=discord.utils.utcnow()
     )
-    embed2.add_field(name="🔧  القنوات والـ Setup (8 أوامر)", value=(
-        f"›  `{PREFIX}setup`  —  إنشاء كل القنوات + Roles + JAIL\n"
-        f"›  `{PREFIX}autosetup`  —  فحص وإصلاح الناقص تلقائياً (آمن على البيانات)\n"
-        f"›  `{PREFIX}cleanup`  —  حذف كاتيجوريات الماتش المنتهية\n"
-        f"›  `{PREFIX}scan [page]`  —  عرض كل القنوات\n"
-        f"›  `{PREFIX}deletecat <name>`  —  تحديد كاتيجوري للحذف\n"
-        f"›  `{PREFIX}confirmcat <name>`  —  تأكيد حذف كاتيجوري\n"
-        f"›  `{PREFIX}setcommandschannel #ch`  —  إضافة/إزالة قناة أوامر\n"
-        f"›  `{PREFIX}setleaderboard`  —  تعيين قناة Leaderboard"
-    ), inline=False)
-    embed2.add_field(name="🏅  الرانك والنقاط والـ Roles (8 أوامر)", value=(
-        f"›  `{PREFIX}fixrankall`  —  تطبيق الرانك على كل الأعضاء\n"
-        f"›  `{PREFIX}syncnicknames`  —  مزامنة كل النكات\n"
-        f"›  `{PREFIX}syncroles`  —  مزامنة الـ Roles حسب الترتيب\n"
-        f"›  `{PREFIX}setlevel @user/ID <n>`  —  تعيين رانك لاعب\n"
-        f"›  `{PREFIX}setpoints @user/ID <n>`  —  تعيين نقاط لاعب (يُحدّث الرانك تلقائياً)\n"
-        f"›  `{PREFIX}resetstats @user/ID`  —  تصفير ستاتس لاعب\n"
-        f"›  `{PREFIX}resetrankall`  —  تصفير كل البيانات لكل السيرفر"
-    ), inline=False)
-    embed2.add_field(name="⚠️  البلاغات والحظر (5 أوامر)", value=(
-        f"›  `{PREFIX}banplayer @user/ID [سبب]`  —  حظر لاعب + نقله لفويس التفتيش\n"
-        f"›  `{PREFIX}unbanplayer @user/ID`  —  فك حظر لاعب\n"
-        f"›  `{PREFIX}banned`  —  قائمة المحظورين\n"
-        f"›  `{PREFIX}setreportchannel #voice`  —  إضافة فويس تفتيش\n"
-        f"›  `{PREFIX}removereportchannel #voice`  —  حذف فويس تفتيش"
-    ), inline=False)
-    embed2.add_field(name="🔒  نظام السجن JAIL (2 أمر)", value=(
-        f"›  `{PREFIX}jail @user/ID [سبب]`  —  إرسال لاعب للسجن + فويس خاص\n"
-        f"›  `{PREFIX}unjail @user/ID`  —  فك السجن"
-    ), inline=False)
-    embed2.add_field(name="🔇  نظام البلاك ليست (3 أوامر)", value=(
-        f"›  `{PREFIX}blacklist @user/ID [سبب]`  —  إضافة لاعب للبلاك ليست\n"
-        f"›  `{PREFIX}unblacklist @user/ID`  —  إزالة لاعب من البلاك ليست\n"
-        f"›  `{PREFIX}blacklisted`  —  قائمة البلاك ليست"
-    ), inline=False)
-    embed2.add_field(name="📋  معلومات إضافية (6 أوامر)", value=(
-        f"›  `{PREFIX}reportchannels`  —  عرض فويسات التفتيش\n"
-        f"›  `{PREFIX}startvote [id]`  —  🗳️ بدء التصويت فوراً (يتجاوز cooldown 10 دقائق)\n"
-        f"›  `{PREFIX}resolve <id> <team1|team2>`  —  حل نزاع التصويت\n"
-        f"›  `{PREFIX}w <id> <@user/ID>`  —  تعيين MVP WINNER يدوياً\n"
-        f"›  `{PREFIX}l <id> <@user/ID>`  —  تعيين MVP LOSER يدوياً\n"
-        f"›  `{PREFIX}botinfo`  —  معلومات البوت"
-    ), inline=False)
-    embed2.add_field(name="💡  معلومات النظام", value=(
-        f"> 💰  **النقاط:**  MVP فائز +80  •  فائز +30  •  MVP خاسر +30  •  خاسر -30\n"
-        f"> 🏅  **الرانك:**  ترتيب الـ leaderboard (1 = الأفضل)\n"
-        f"> 🗳️  **تصويت MVP:**  أول 2 من كل فريق (4 مصوّنين) يختارون WINNER و LOSER — يحتاج `{MVP_CONSENSUS_NEEDED}` أصوات\n"
-        f"> 🚨  **ما في تفاهم:**  البوت ينقل أدمن لو حاضر بالفويسات الخاصة، وإلا يتاغه مع `!!w` و `!!l`\n"
-        f"> 🏆  **Roles:**  #1 Best Player  •  #2-10 Goated  •  #11-50 Skilled  •  #51-100 Efficient\n"
-        f"> ⚠️  **البلاغات:**  6 بلاغات = حظر تلقائي\n"
-        f"> 🔒  **JAIL:**  فويس خاص + شاتات مخصصة فقط\n"
-        f"> 🔇  **BLACKLIST:**  3 دق غياب أو 5 خروج/دخول = منع 10 دقائق\n"
-        f"> 🗳️  **Cancel Match:**  أغلبية اللاعبين (5 من 8)\n"
-        f"> 🛡️  **Rules channel:**  `{RULES_CHANNEL_NAME}`  — للقراءة فقط (ينشئها `!!setup`)، أو `{PREFIX}rules` في أي قناة"
-    ), inline=False)
-    embed2.set_footer(text=f"صفحة 2/2  •  Free Fire Bot v4.0  •  51 أمر إجمالي")
+    embed2.add_field(name="🔧 القنوات والـ Setup (8 أوامر)", value=f"• `{PREFIX}setup` — إنشاء كل القنوات + Roles + JAIL\n• `{PREFIX}autosetup` — فحص وإصلاح الناقص تلقائياً (آمن على البيانات)\n• `{PREFIX}cleanup` — حذف كاتيجوريات الماتش المنتهية\n• `{PREFIX}scan [page]` — عرض كل القنوات\n• `{PREFIX}deletecat <name>` — تحديد كاتيجوري للحذف\n• `{PREFIX}confirmcat <name>` — تأكيد حذف كاتيجوري\n• `{PREFIX}setcommandschannel #ch` — إضافة/إزالة قناة أوامر\n• `{PREFIX}setleaderboard` — تعيين قناة Leaderboard", inline=False)
+    embed2.add_field(name="🏅 الرانك والنقاط والـ Roles (8 أوامر)", value=f"• `{PREFIX}fixrankall` — تطبيق الرانك على كل الأعضاء\n• `{PREFIX}syncnicknames` — مزامنة كل النكات\n• `{PREFIX}syncroles` — مزامنة الـ Roles حسب الترتيب\n• `{PREFIX}setlevel @user/ID <n>` — تعيين رانك لاعب\n• `{PREFIX}setpoints @user/ID <n>` — تعيين نقاط لاعب (يُحدّث الرانك تلقائياً)\n• `{PREFIX}resetstats @user/ID` — تصفير ستاتس لاعب\n• `{PREFIX}resetrankall` — تصفير كل البيانات لكل السيرفر", inline=False)
+    embed2.add_field(name="⚠️ البلاغات والحظر (5 أوامر)", value=f"• `{PREFIX}banplayer @user/ID [سبب]` — حظر لاعب + نقله لفويس التفتيش\n• `{PREFIX}unbanplayer @user/ID` — فك حظر لاعب\n• `{PREFIX}banned` — قائمة المحظورين\n• `{PREFIX}setreportchannel #voice` — إضافة فويس تفتيش\n• `{PREFIX}removereportchannel #voice` — حذف فويس تفتيش", inline=False)
+    embed2.add_field(name="🔒 نظام السجن JAIL (2 أمر)", value=f"• `{PREFIX}jail @user/ID [سبب]` — إرسال لاعب للسجن + فويس خاص\n• `{PREFIX}unjail @user/ID` — فك السجن", inline=False)
+    embed2.add_field(name="🔇 نظام البلاك ليست (3 أوامر)", value=f"• `{PREFIX}blacklist @user/ID [سبب]` — إضافة لاعب للبلاك ليست\n• `{PREFIX}unblacklist @user/ID` — إزالة لاعب من البلاك ليست\n• `{PREFIX}blacklisted` — قائمة البلاك ليست", inline=False)
+    embed2.add_field(name="📋 معلومات إضافية (6 أوامر)", value=f"• `{PREFIX}reportchannels` — عرض فويسات التفتيش\n• `{PREFIX}startvote [id]` — 🗳️ بدء التصويت فوراً (يتجاوز cooldown 10 دقائق)\n• `{PREFIX}resolve <id> <team1|team2>` — حل نزاع التصويت\n• `{PREFIX}w <id> <@user/ID>` — تعيين MVP WINNER يدوياً\n• `{PREFIX}l <id> <@user/ID>` — تعيين MVP LOSER يدوياً\n• `{PREFIX}botinfo` — معلومات البوت", inline=False)
+    embed2.add_field(name="💡 معلومات النظام", value=f"💰 **النقاط:** MVP فائز +80 • فائز +30 • MVP خاسر +30 • خاسر -30\n🏅 **الرانك:** ترتيب الـ leaderboard (1 = الأفضل)\n🗳️ **تصويت MVP:** أول 2 من كل فريق (4 مصوّتين) يختارون WINNER و LOSER — يحتاج `{MVP_CONSENSUS_NEEDED}` أصوات\n🚨 **ما في تفاهم:** البوت ينقل أدمن لو حاضر بالفويسات الخاصة، وإلا يتاغه مع `!!w` و `!!l`\n🏆 **Roles:** #1 Best Player • #2-10 Goated • #11-50 Skilled • #51-100 Efficient\n⚠️ **البلاغات:** 6 بلاغات = حظر تلقائي\n🔒 **JAIL:** فويس خاص + شاتات مخصصة فقط\n🔇 **BLACKLIST:** 3 دق غياب أو 5 خروج/دخول = منع 10 دقائق\n🗳️ **Cancel Match:** أغلبية اللاعبين (5 من 8)\n🛡️ **Rules channel:** `{RULES_CHANNEL_NAME}` — للقراءة فقط (ينشئها `!!setup`)، أو `{PREFIX}rules` في أي قناة", inline=False)
+    embed2.set_footer(text=f"{BOT_FOOTER}  •  صفحة 2/2  ·  v4.0  ·  51 أمر إجمالي")
     embed2 = apply_branding(embed2, ctx.guild)
     await ctx.send(embed=embed2)
 
@@ -8748,7 +8458,10 @@ async def cloudbackup_cmd(ctx):
     if not _CLOUD_AVAILABLE or not is_cloud_enabled():
         embed = discord.Embed(
             title="☁️ Cloud Backup",
-            description="❌ Cloud backup not enabled!\n\nSet `MONGODB_URI` environment variable.",
+            description=(
+                "❌ Cloud backup not enabled!\n"
+                "Set `MONGODB_URI` environment variable."
+            ),
             color=COLORS["error"]
         )
         embed = apply_branding(embed, ctx.guild)
@@ -8774,7 +8487,10 @@ async def cloudrestore_cmd(ctx):
     if not _CLOUD_AVAILABLE or not is_cloud_enabled():
         embed = discord.Embed(
             title="☁️ Cloud Restore",
-            description="❌ Cloud backup not enabled!\n\nSet `MONGODB_URI` environment variable.",
+            description=(
+                "❌ Cloud backup not enabled!\n"
+                "Set `MONGODB_URI` environment variable."
+            ),
             color=COLORS["error"]
         )
         embed = apply_branding(embed, ctx.guild)
@@ -8783,7 +8499,10 @@ async def cloudrestore_cmd(ctx):
     
     embed = discord.Embed(
         title="⚠️ Cloud Restore",
-        description="This will **DELETE all local data** and replace it with cloud data.\n\nReact with ✅ to confirm.",
+        description=(
+            "This will **DELETE all local data** and replace it with cloud data.\n"
+            "React with ✅ to confirm."
+        ),
         color=COLORS["warning"]
     )
     embed = apply_branding(embed, ctx.guild)
@@ -8837,7 +8556,7 @@ async def cloudstatus_cmd(ctx):
     
     embed = discord.Embed(
         title="☁️ Cloud Status",
-        description=status,
+        description=f"{status}",
         color=COLORS["info"]
     )
     embed = apply_branding(embed, ctx.guild)
