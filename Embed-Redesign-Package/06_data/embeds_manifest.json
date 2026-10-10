@@ -1,0 +1,2221 @@
+[
+  {
+    "id": "EMB-001",
+    "line": 790,
+    "func": "notify_admins",
+    "var": "embed",
+    "title_hint": "f\"⚠️  {title}\"",
+    "color_hint": "color",
+    "embed": "        embed = discord.Embed(\n            title=f\"⚠️  {title}\",\n            description=f\"{admin_mention_str}\\n{description}\",\n            color=color,\n            timestamp=discord.utils.utcnow()\n        )",
+    "modifiers": [
+      "        embed.set_author(name=\"Admin Alert\")",
+      "        embed.set_footer(text=f\"{BOT_FOOTER}  •  Action required\")"
+    ],
+    "sends": [
+      "        await channel.send(content=admin_mention_str, embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-002",
+    "line": 2143,
+    "func": "create_lobby_embed",
+    "var": "embed",
+    "title_hint": "f\"✦ Free Fire — {mode.upper()} Lobby\"",
+    "color_hint": "0xFFD700",
+    "embed": "    embed = discord.Embed(\n        title=f\"✦ Free Fire — {mode.upper()} Lobby\",\n        description=(\n            f\"> Lobby ID: `{lobby['id']}`\\n\"\n            f\"> Host: <@{lobby['creator_id']}>\\n\"\n            f\"> Mode: `{mode.upper()}` · Progress: `{total}/{lobby_size}` `{progress_pct}%`\\n\"\n            f\"`{progress_bar}`\"\n        ),\n        color=0xFFD700,\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    embed.add_field(\n        name=f\"🔴 Team 1 — `{t1c}/{team_size}`\",\n        value=t1_text,\n        inline=True\n    )",
+      "    embed.add_field(\n        name=f\"🟢 Team 2 — `{t2c}/{team_size}`\",\n        value=t2_text,\n        inline=True\n    )",
+      "    embed.add_field(name=\"📋 Status\", value=f\"> {status_text}\", inline=False)",
+      "    embed.set_author(\n        name=f\"Host: {host_name} · Match Lobby\",\n        icon_url=host_member.display_avatar.url if host_member else None\n    )",
+      "    embed.set_footer(text=f\"{BOT_FOOTER}  •  Lobby #{lobby['id']}\")",
+      "        embed.add_field(\n            name=\"🔐 Private Match\",\n            value=(\n                f\"> This match is protected with a private key.\\n\"\n                f\"> Ask <@{lobby['creator_id']}> for the key to join.\"\n            ),\n            inline=False\n        )"
+    ],
+    "sends": []
+  },
+  {
+    "id": "EMB-003",
+    "line": 2232,
+    "func": "create_profile_embed",
+    "var": "embed",
+    "title_hint": null,
+    "color_hint": "rank_color",
+    "embed": "    embed = discord.Embed(\n        title=display_title,\n        description=(\n            f\"> 🏅 Rank: `{rank_title}` — `#{level}`\\n\"\n            f\"> 💰 Points: `{points:,}` pts{streak_display.replace('> ', '\\n> ')}\\n\"\n            f\"> 🔱 MVPs: `{mvps}` — `{mvp_title}`{f' {mvp_badge}' if mvp_badge else ''}\"\n        ),\n        color=rank_color,\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    embed.add_field(name=\"🏆 Wins\",   value=f\"`{player['wins']}`\", inline=True)",
+      "    embed.add_field(name=\"☠️ Losses\",  value=f\"`{player['losses']}`\", inline=True)",
+      "    embed.add_field(name=\"⚖️ W/L\",     value=f\"`{kd_sign}{kd_diff}`\", inline=True)",
+      "    embed.add_field(name=\"🎮 Matches\", value=f\"`{player['matches_played']}`\", inline=True)",
+      "    embed.add_field(name=\"🔱 MVPs\",    value=f\"`{mvps}`\", inline=True)",
+      "    embed.add_field(name=\"🔪 Kills\",   value=f\"`{player['kills']}`\", inline=True)",
+      "    embed.add_field(\n        name=f\"📊 Win Rate — `{wr}%` {wr_status}\",\n        value=f\"{wr_bar} `{player['wins']}/{player['matches_played']}`\",\n        inline=False\n    )",
+      "    embed.set_footer(text=f\"{BOT_FOOTER}  •  {rank_title} #{level}  •  {mvp_title}\")",
+      "    embed.set_author(name=\"Player Profile\")",
+      "        embed.add_field(\n            name=\"📈 Progress Toward `#1`\",\n            value=(\n                f\"`{rank_progress_bar}` `{progress_pct}%`\\n\"\n                f\"> Your pts: `{points:,}` · Top: `{top_pts:,}` · Remaining: `{pts_to_next:,}`\"\n            ),\n            inline=False\n        )",
+      "        embed.add_field(\n            name=\"🔱 You're the Leader!\",\n            value=f\"> 🎉 You're at the top with `{points:,}` points! Keep it up!\",\n            inline=False\n        )",
+      "        embed.add_field(\n            name=f\"🔱 MVP Achievement — `{mvps}` total\",\n            value=f\"> `{badge_display}` — `{mvp_title}`\",\n            inline=False\n        )"
+    ],
+    "sends": []
+  },
+  {
+    "id": "EMB-004",
+    "line": 2341,
+    "func": "update_leaderboard_channel",
+    "var": "embed",
+    "title_hint": "\"◆ Free Fire — Top 10 Players\"",
+    "color_hint": "COLORS[\"leaderboard\"]",
+    "embed": "        embed = discord.Embed(\n            title=\"◆ Free Fire — Top 10 Players\",\n            description=(\n                f\"📊 Ranking by points · 🔄 Auto-updates after every match · 📈 Every `50` pts = `+1` rank\"\n            ),\n            color=COLORS[\"leaderboard\"],\n            timestamp=discord.utils.utcnow()\n        )",
+    "modifiers": [
+      "        embed.set_footer(text=f\"{BOT_FOOTER}  •  Live Leaderboard  •  {len(lb)} players ranked\")",
+      "        embed.set_author(name=f\"🏆 {guild.name} Leaderboard\", icon_url=None)"
+    ],
+    "sends": [
+      "        msg = await channel.send(embed=embed)",
+      "                await msg.edit(embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-005",
+    "line": 2448,
+    "func": "update_blacklist_channel",
+    "var": "embed",
+    "title_hint": "\"🔇  Blacklisted Players\"",
+    "color_hint": "COLORS[\"warning\"] if blacklisted else COLORS[\"success\"]",
+    "embed": "        embed = discord.Embed(\n            title=\"🔇  Blacklisted Players\",\n            description=(\n                f\"> 📊  **الإجمالي:**  `{len(blacklisted)}`\\n\"\n                f\"{separator()}\"\n            ),\n            color=COLORS[\"warning\"] if blacklisted else COLORS[\"success\"],\n            timestamp=discord.utils.utcnow()\n        )",
+    "modifiers": [
+      "        embed.set_author(name=\"🔇 Blacklist\")",
+      "                embed.add_field(\n                    name=f\"#{i}  —  {name}\",\n                    value=(\n                        f\"> 👤  {mention}\\n\"\n                        f\"> 📝  `{reason}`\\n\"\n                        f\"> ⏱️  ينتهي:  `{expires}`\"\n                    ),\n                    inline=False\n                )",
+      "                embed.set_footer(text=f\"... و {len(blacklisted) - 15} لاعب آخر\")"
+    ],
+    "sends": [
+      "        msg = await channel.send(embed=embed)",
+      "                await msg.edit(embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-006",
+    "line": 2678,
+    "func": "_auto_hide_idle_lobby_embed",
+    "var": "closed_embed",
+    "title_hint": "\"⏰  Lobby Closed — Not Enough Players\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "            closed_embed = discord.Embed(\n                title=\"⏰  Lobby Closed — Not Enough Players\",\n                description=(\n                    f\"> لم يكتمل العدد المطلوب خلال **{TEMP_EMBED_DELETE_AFTER // 60} دقيقة**.\\n\"\n                    f\"> استخدم `{PREFIX}play 4v4` لبدء ماتش جديد.\"\n                ),\n                color=COLORS[\"warning\"],\n                timestamp=discord.utils.utcnow()\n            )",
+    "modifiers": [
+      "            closed_embed.set_footer(text=f\"{BOT_FOOTER}  •  Lobby #{lobby_id}\")"
+    ],
+    "sends": [
+      "            await ch.send(embed=closed_embed, delete_after=TEMP_EMBED_DELETE_AFTER)"
+    ]
+  },
+  {
+    "id": "EMB-007",
+    "line": 3034,
+    "func": "auto_trigger_vote",
+    "var": "mvp_embed",
+    "title_hint": "f\"🗳️  تصويت MVP الجماعي — Match `#{lobby_id}`\"",
+    "color_hint": "COLORS[\"vote\"]",
+    "embed": "        mvp_embed = discord.Embed(\n            title=f\"🗳️  تصويت MVP الجماعي — Match `#{lobby_id}`\",\n            description=(\n                f\">Match finished — اختروا الـ MVPs معاً.\\n\"\n                f\"> ⏱️  عندكم **{VOTE_TIMEOUT_SECONDS} ثانية** للتوصل لاتفاق.\\n\"\n                f\"> 🎯  **الاتفاق المطلوب:**  `{MVP_CONSENSUS_NEEDED}` أصوات من `{len(voters)}`\\n\"\n                f\"{separator()}\\n\"\n                f\"> 🔴 **مصوّني Team 1 (أول 2):**  {' '.join(f'<@{p}>' for p in v1) or '*N/A*'}\\n\"\n                f\"> 🟢 **مصوّني Team 2 (أول 2):**  {' '.join(f'<@{p}>' for p in v2) or '*N/A*'}\\n\"\n                f\"> 💡  المصوّنين يدوّرون على  `🏆 MVP WINNER`  و  `✦ MVP LOSER`  من القوائم تحت.\\n\"\n                f\"> ⚠️  **ما اتفقتم؟**  البوت ينقل أدمن لو حاضر بالفويسات، أو يتاغه مع الأوامر.\"\n            ),\n            color=COLORS[\"vote\"],\n            timestamp=discord.utils.utcnow()\n        )",
+    "modifiers": [
+      "        mvp_embed.add_field(\n            name=f\"🔴 Team 1 — `{len(lobby['team1_players'])}` players\",\n            value=t1m or \"*No players*\",\n            inline=True\n        )",
+      "        mvp_embed.add_field(\n            name=f\"🟢 Team 2 — `{len(lobby['team2_players'])}` players\",\n            value=t2m or \"*No players*\",\n            inline=True\n        )",
+      "        mvp_embed.set_author(name=\"MVP Voting\", icon_url=None)",
+      "        mvp_embed.set_footer(text=f\"{BOT_FOOTER}  •  Match #{lobby_id}\")"
+    ],
+    "sends": [
+      "            vote_msg = await general_text.send(\n                f\"🔱 {t1m} {t2m}\",\n                embed=mvp_embed,\n                view=mvp_view\n            )"
+    ]
+  },
+  {
+    "id": "EMB-008",
+    "line": 3121,
+    "func": "auto_lobby_timeout",
+    "var": "timeout_embed",
+    "title_hint": "\"⏰  Lobby Timed Out\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "            timeout_embed = discord.Embed(\n                title=\"⏰  Lobby Timed Out\",\n                description=(\n                    f\"> اللوبي `#{lobby_id}` تم إلغاؤه بسبب عدم النشاط.\\n\"\n                    f\"> استخدم `{PREFIX}play 4v4` لبدء ماتش جديد.\"\n                ),\n                color=COLORS[\"warning\"],\n                timestamp=discord.utils.utcnow()\n            )",
+    "modifiers": [
+      "            timeout_embed.set_footer(text=f\"{BOT_FOOTER}  •  Lobby #{lobby_id}\")"
+    ],
+    "sends": [
+      "            await ch.send(embed=timeout_embed, delete_after=TEMP_EMBED_DELETE_AFTER)"
+    ]
+  },
+  {
+    "id": "EMB-009",
+    "line": 3259,
+    "func": "process_match_result",
+    "var": "embed",
+    "title_hint": "f\"🏅 Match Result — `#{lobby_id}`\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "        embed = discord.Embed(\n            title=f\"🏅 Match Result — `#{lobby_id}`\",\n            description=(\n                f\"## 🎉  {wd}  Wins!\\n\"\n                f\"{separator()}\\n\"\n                f\"> 🎮 Mode:  `{game_mode.upper()}`\\n\"\n                f\"> 🏆 Winner MVP:  {f'<@{winner_mvp_id}>' if winner_mvp_id else '*N/A*'} → `+{WINNER_MVP_POINTS}` pts\\n\"\n                f\"> ✦ Loser MVP:  {f'<@{loser_mvp_id}>' if loser_mvp_id else '*N/A*'} → `+{LOSER_MVP_POINTS}` pts\"\n            ),\n            color=COLORS[\"success\"],\n            timestamp=discord.utils.utcnow()\n        )",
+    "modifiers": [
+      "        embed.add_field(\n            name=f\"🏆 Winners —  `{len(winner_details)}` players\",\n            value=wt_mentions,\n            inline=True\n        )",
+      "        embed.add_field(\n            name=f\"☠️ Losers —  `{len(loser_details)}` players\",\n            value=lt_mentions,\n            inline=True\n        )",
+      "        embed.set_author(name=\"Match Finished\", icon_url=None)",
+      "        embed.set_footer(text=f\"{BOT_FOOTER}  •  GG WP!  •  Match #{lobby_id}\")"
+    ],
+    "sends": []
+  },
+  {
+    "id": "EMB-010",
+    "line": 3338,
+    "func": "RoomInfoModal.on_submit",
+    "var": "None",
+    "title_hint": "\"✅  Room Info Saved\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "                embed=discord.Embed(\n                    title=\"✅  Room Info Saved\",\n                    description=(\n                        f\"> Room details stored successfully.\\n\"\n                        f\"──────────────────────\\n\"\n                        f\"🆔 Room ID:\\n\"\n                        f\"```\\n{room_id}\\n```\\n\"\n                        f\"🔑  **Code:**\\n\"\n                        f\"```\\n{password or 'N/A'}\\n```\"\n                        + (f\"\\n🔐  **Private Key:**\\n```\\n{private_key}\\n```\" if private_key else \"\")\n                    ),\n                    color=COLORS[\"success\"]\n                ),",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-011",
+    "line": 3375,
+    "func": "JoinKeyModal.on_submit",
+    "var": "None",
+    "title_hint": "\"❌  Wrong Key\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "                await interaction.response.send_message(embed=discord.Embed(\n                    title=\"❌  Wrong Key\",\n                    description=(\n                        f\"> The private key you entered is incorrect.\\n\"\n                        f\"> Please ask the host for the correct key.\"\n                    ),\n                    color=COLORS[\"error\"]\n                ), ephemeral=True)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-012",
+    "line": 3413,
+    "func": "ReportReasonModal.on_submit",
+    "var": "None",
+    "title_hint": "\"⚠️  بلغت من قبل\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "                    embed=discord.Embed(\n                        title=\"⚠️  بلغت من قبل\",\n                        description=f\"> لقد بلّغت على <@{self.reported_id}> سابقاً.\\n> لا يمكنك البلاغ مرتين على نفس اللاعب.\",\n                        color=COLORS[\"warning\"]\n                    ), ephemeral=True",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-013",
+    "line": 3423,
+    "func": "ReportReasonModal.on_submit",
+    "var": "report_embed",
+    "title_hint": "\"⚠️  تم تسجيل البلاغ\"",
+    "color_hint": "COLORS[\"warning\"] if remaining > 0 else COLORS[\"error\"]",
+    "embed": "            report_embed = discord.Embed(\n                title=\"⚠️  تم تسجيل البلاغ\",\n                description=(\n                    f\"> 👤  **اللاعب المُبلَّغ عنه:**  <@{self.reported_id}>\\n\"\n                    f\"> 👮  **الـمُبلَّغ:**  <@{self.reporter_id}>\\n\"\n                    + (f\"> 📝  **السبب:**  {reason}\\n\" if reason else \"\")\n                    + f\"> 📊  **إجمالي البلاغات:**  `{total}/{REPORT_THRESHOLD}`\\n\"\n                    + (f\"> ⚠️  **يتبقى:**  `{remaining}`  بلاغ للحظر التلقائي\" if remaining > 0 else f\"> ⚠️  **وصل للحد!**  سيتم الحظر تلقائياً\")\n                ),\n                color=COLORS[\"warning\"] if remaining > 0 else COLORS[\"error\"],\n                timestamp=discord.utils.utcnow()\n            )",
+    "modifiers": [
+      "            report_embed.set_footer(text=f\"{BOT_FOOTER}  •  Report #{total}\")"
+    ],
+    "sends": []
+  },
+  {
+    "id": "EMB-014",
+    "line": 3530,
+    "func": "ReportButtonView.report_btn",
+    "var": "None",
+    "title_hint": "\"⚠️  اختر اللاعب المُبلَّغ عنه\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "            embed=discord.Embed(\n                title=\"⚠️  اختر اللاعب المُبلَّغ عنه\",\n                description=(\n                    f\"> اختر اللاعب الذي تريد البلاغ عنه من القائمة\\n\"\n                    f\"> ⚠️  البلاغ جدّي — لا تبلغ بدون سبب\"\n                ),\n                color=COLORS[\"error\"]\n            ), view=view, ephemeral=True",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-015",
+    "line": 3611,
+    "func": "LobbyButtonsView.cancel_game_btn",
+    "var": "None",
+    "title_hint": "\"🛡️ Match Cancelled\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await interaction.response.send_message(embed=discord.Embed(\n            title=\"🛡️ Match Cancelled\",\n            description=(\n                f\"> Match `#{self.lobby_id}` — `{mode}`  was cancelled by <@{uid}>.\\n\"\n                f\"> Use `{PREFIX}play` to start a new match.\"\n            ),\n            color=COLORS[\"error\"]\n        ), delete_after=30)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-016",
+    "line": 3654,
+    "func": "LobbyButtonsView._handle_join",
+    "var": "ban_embed",
+    "title_hint": "\"🚫  أنت محظور من اللعب\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "            ban_embed = discord.Embed(\n                title=\"🚫  أنت محظور من اللعب\",\n                description=(\n                    f\"> ⚠️  **السبب:**  `{ban_info.get('ban_reason') or 'غير محدد'}`\\n\"\n                    f\"> 📊  **عدد البلاغات:**  `{ban_info.get('report_count', 0)}`\\n\"\n                    f\"{separator()}\\n\"\n                    f\"> 🔍  يتم توجيهك لفويس التفتيش\\n\"\n                    f\"> 💡  لفك الحظر، تواصل مع الأدمن\"\n                ),\n                color=COLORS[\"error\"],\n                timestamp=discord.utils.utcnow()\n            )",
+    "modifiers": [
+      "            ban_embed.set_footer(text=f\"{BOT_FOOTER}  •  Banned\")"
+    ],
+    "sends": []
+  },
+  {
+    "id": "EMB-017",
+    "line": 3684,
+    "func": "LobbyButtonsView._handle_join",
+    "var": "None",
+    "title_hint": "\"⏳  Join a Waiting Room\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "            await interaction.response.send_message(embed=discord.Embed(\n                title=\"⏳  Join a Waiting Room\",\n                description=(\n                    f\"> You must be in a voice waiting room to join a match.\\n\"\n                    f\"──────────────────────\\n\"\n                    f\"🔊  **Available Rooms:**\\n{rooms_text}\"\n                ),\n                color=COLORS[\"warning\"]\n            ), ephemeral=True)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-018",
+    "line": 3703,
+    "func": "LobbyButtonsView._handle_join",
+    "var": "None",
+    "title_hint": "\"⏳  Wrong Voice Channel\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "                await interaction.response.send_message(embed=discord.Embed(\n                    title=\"⏳  Wrong Voice Channel\",\n                    description=(\n                        f\"> You're in `{member.voice.channel.name}` — that's not a waiting room.\\n\"\n                        f\"──────────────────────\\n\"\n                        f\"🔊  **Available Rooms:**\\n{rooms_text}\"\n                    ),\n                    color=COLORS[\"warning\"]\n                ), ephemeral=True)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-019",
+    "line": 3717,
+    "func": "LobbyButtonsView._handle_join",
+    "var": "None",
+    "title_hint": "\"⏳  Pending Match\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "                await interaction.response.send_message(embed=discord.Embed(\n                    title=\"⏳  Pending Match\",\n                    description=(\n                        f\"> You have a pending match that needs to be finished first.\\n\"\n                        f\"> Complete or cancel it before joining a new one.\"\n                    ),\n                    color=COLORS[\"warning\"]\n                ), ephemeral=True)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-020",
+    "line": 3765,
+    "func": "LobbyButtonsView._complete_join",
+    "var": "room_embed",
+    "title_hint": "\"ℹ️ Room Info\"",
+    "color_hint": "COLORS[\"auto\"]",
+    "embed": "            room_embed = discord.Embed(\n                title=\"ℹ️ Room Info\",\n                description=(\n                    f\"Join the room with these credentials:\"\n                ),\n                color=COLORS[\"auto\"]\n            )",
+    "modifiers": [
+      "            room_embed.add_field(name=\"🆔 Room ID\", value=f\"`{lobby['room_id']}`\", inline=True)",
+      "            room_embed.add_field(name=\"🔑 Password\", value=f\"`{lobby.get('room_code') or 'N/A'}`\", inline=True)",
+      "            room_embed.add_field(name=\"\", value=\"🔥 Join now and good luck!\", inline=False)",
+      "                    room_embed.add_field(name=\"🆔 Room ID\", value=f\"`{lobby['room_id']}`\", inline=True)",
+      "                    room_embed.add_field(name=\"🔑 Password\", value=f\"`{lobby.get('room_code') or 'N/A'}`\", inline=True)",
+      "                    room_embed.add_field(name=\"\", value=\"🔥 Join now and good luck!\", inline=False)"
+    ],
+    "sends": [
+      "            await interaction.followup.send(embed=room_embed, ephemeral=True)",
+      "                    try: await channels[\"team1_text\"].send(mentions, embed=room_embed)"
+    ]
+  },
+  {
+    "id": "EMB-021",
+    "line": 3819,
+    "func": "LobbyButtonsView._complete_join",
+    "var": "None",
+    "title_hint": "\"❌  Failed to Start\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "                await interaction.channel.send(embed=discord.Embed(\n                    title=\"❌  Failed to Start\",\n                    description=(\n                        f\"> Could not create match channels.\\n\"\n                        f\"> Lobby `#{self.lobby_id}` has been cancelled.\"\n                    ),\n                    color=COLORS[\"error\"]\n                ), delete_after=15)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-022",
+    "line": 3833,
+    "func": "LobbyButtonsView._complete_join",
+    "var": "None",
+    "title_hint": "\"✅  Match Ready!\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "                ready_msg = await interaction.channel.send(embed=discord.Embed(\n                    title=\"✅  Match Ready!\",\n                    description=(\n                        f\"> Lobby is full — match is starting now!\\n\"\n                        f\"> Moving players to their team voice channels...\"\n                    ),\n                    color=COLORS[\"success\"],\n                    timestamp=discord.utils.utcnow()\n                ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-023",
+    "line": 3870,
+    "func": "LobbyButtonsView._complete_join",
+    "var": "room_embed",
+    "title_hint": "\"ℹ️ Room Info\"",
+    "color_hint": "COLORS[\"auto\"]",
+    "embed": "                    room_embed = discord.Embed(\n                        title=\"ℹ️ Room Info\",\n                        description=\"Join the room with these credentials:\",\n                        color=COLORS[\"auto\"]\n                    )",
+    "modifiers": [
+      "                    room_embed.add_field(name=\"🆔 Room ID\", value=f\"`{lobby['room_id']}`\", inline=True)",
+      "                    room_embed.add_field(name=\"🔑 Password\", value=f\"`{lobby.get('room_code') or 'N/A'}`\", inline=True)",
+      "                    room_embed.add_field(name=\"\", value=\"🔥 Join now and good luck!\", inline=False)"
+    ],
+    "sends": [
+      "            await interaction.followup.send(embed=room_embed, ephemeral=True)",
+      "                    try: await channels[\"team1_text\"].send(mentions, embed=room_embed)"
+    ]
+  },
+  {
+    "id": "EMB-024",
+    "line": 3882,
+    "func": "LobbyButtonsView._complete_join",
+    "var": "start_embed",
+    "title_hint": "\"📻 Match Started!\"",
+    "color_hint": "COLORS[\"auto\"]",
+    "embed": "                start_embed = discord.Embed(\n                    title=\"📻 Match Started!\",\n                    description=(\n                        f\"> Lobby: `#{self.lobby_id}`\\n\"\n                        f\"> Mode: `{mode.upper()}` · Host: <@{lobby['creator_id']}>\\n\"\n                    ),\n                    color=COLORS[\"auto\"],\n                    timestamp=discord.utils.utcnow()\n                )",
+    "modifiers": [
+      "                start_embed.add_field(\n                    name=\"\",\n                    value=(\n                        f\"🎮 Match started. Join the room now.\\n\"\n                        f\"🔱 Host: press **Start Vote** when finished.\\n\"\n                        f\"❌ Host: press **Cancel Match** to abort.\"\n                    ),\n                    inline=False\n                )",
+      "                start_embed.set_author(name=\"Match Live\", icon_url=None)",
+      "                start_embed.set_footer(text=f\"{BOT_FOOTER}  •  Match #{self.lobby_id}\")",
+      "                    start_embed.add_field(\n                        name=\"📡 Room Info\",\n                        value=(\n                            f\"🆔 Room ID: `{lobby['room_id']}`\\n\"\n                            f\"🔑 Password: `{lobby.get('room_code') or 'N/A'}`\"\n                        ),\n                        inline=False\n                    )"
+    ],
+    "sends": [
+      "                    sv_msg = await channels[\"team1_text\"].send(embed=start_embed, view=start_vote_view)"
+    ]
+  },
+  {
+    "id": "EMB-025",
+    "line": 3923,
+    "func": "LobbyButtonsView._complete_join",
+    "var": "report_embed",
+    "title_hint": "\"⚠️  نظام البلاغ\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "                    report_embed = discord.Embed(\n                        title=\"⚠️  نظام البلاغ\",\n                        description=(\n                            f\"> لو لاحظت لاعب يغش أو يسيء، اضغط زر  **⚠️ إبلاغ**\\n\"\n                            f\"> 📊  عند وصول البلاغات إلى  `{REPORT_THRESHOLD}`  → حظر تلقائي\\n\"\n                            f\"> 🔍  اللاعب المحظور يُنقل لفويس التفتيش حتى يفك الأدمن الحظر\"\n                        ),\n                        color=COLORS[\"error\"],\n                        timestamp=discord.utils.utcnow()\n                    )",
+    "modifiers": [
+      "                    report_embed.set_footer(text=f\"{BOT_FOOTER}  •  Match #{self.lobby_id}\")"
+    ],
+    "sends": [
+      "                    await channels[\"team1_text\"].send(embed=report_embed, view=report_view)"
+    ]
+  },
+  {
+    "id": "EMB-026",
+    "line": 4001,
+    "func": "StartVoteView.start_vote_btn",
+    "var": "None",
+    "title_hint": "\"⏳  لم يحن وقت التصويت بعد\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "                    await interaction.response.send_message(embed=discord.Embed(\n                        title=\"⏳  لم يحن وقت التصويت بعد\",\n                        description=f\"> ⏱️  يجب انتظار **10 دقائق** من بدء الماتش\\n> ⏳  المتبقي:  `{remaining_min} دقيقة و {remaining_sec} ثانية`\",\n                        color=COLORS[\"warning\"]\n                    ), ephemeral=True)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-027",
+    "line": 4050,
+    "func": "StartVoteView.cancel_match_btn",
+    "var": "vote_embed",
+    "title_hint": "\"🗳️ تصويت إلغاء الماتش\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "        vote_embed = discord.Embed(\n            title=\"🗳️ تصويت إلغاء الماتش\",\n            description=f\"> 👤 <@{uid}> صوّت لإلغاء الماتش\\n> 📊 **التقدم:** `{current_votes}/{required_votes}`\\n> ⏳ **يتبقى:** `{remaining}`\",\n            color=COLORS[\"warning\"], timestamp=discord.utils.utcnow()\n        )",
+    "modifiers": [
+      "        vote_embed.set_footer(text=f\"{BOT_FOOTER}  •  Cancel Vote\")"
+    ],
+    "sends": []
+  },
+  {
+    "id": "EMB-028",
+    "line": 4061,
+    "func": "StartVoteView._execute_cancel",
+    "var": "cancelled_embed",
+    "title_hint": "\"🛡️ Match Cancelled\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        cancelled_embed = discord.Embed(\n            title=\"🛡️ Match Cancelled\",\n            description=(\n                f\"> **Lobby:**  `#{self.lobby_id}`\\n> **Mode:**  `{mode}`\\n\"\n                f\"> **Cancelled by:**  <@{uid}> ({reason})\\n{separator()}\\n\"\n                f\"> 🔄  جارٍ إعادة اللاعبين...\\n> 🗑️  جارٍ حذف القنوات...\\n\"\n                f\"> 💡 Use  `{PREFIX}play`  لبدء ماتش جديد.\"\n            ),\n            color=COLORS[\"error\"], timestamp=discord.utils.utcnow()\n        )",
+    "modifiers": [
+      "        cancelled_embed.set_author(name=\"Match Cancelled\")",
+      "        cancelled_embed.set_footer(text=f\"{BOT_FOOTER}  •  Lobby #{self.lobby_id}\")"
+    ],
+    "sends": []
+  },
+  {
+    "id": "EMB-029",
+    "line": 4203,
+    "func": "MvpSelectionView._try_apply",
+    "var": "None",
+    "title_hint": "\"✅  تم تطبيق النقاط!\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "            embed=discord.Embed(\n                title=\"✅  تم تطبيق النقاط!\",\n                description=(\n                    f\"> 🏆  **MVP الفائز:**  <@{self.winner_mvp_id}>\\n\"\n                    f\"> ✦  **MVP الخاسر:**  <@{self.loser_mvp_id}>\\n\"\n                    f\"> ⚡  جارٍ تطبيق النقاط وتحديث الرانك...\"\n                ),\n                color=COLORS[\"success\"],\n                timestamp=discord.utils.utcnow()\n            )",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-030",
+    "line": 4404,
+    "func": "escalate_mvp_dispute",
+    "var": "embed",
+    "title_hint": "f\"🚨 تعذّر الاتفاق على MVP — الماتش `#{lobby_id}`\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "            embed = discord.Embed(\n                title=f\"🚨 تعذّر الاتفاق على MVP — الماتش `#{lobby_id}`\",\n                description=(\n                    f\"{mentions}\\n\"\n                    f\"> ⚠️  **ما في تفاهم بين المصوّنين** — نطلب تدخل أحد الأدمنز.\\n\"\n                    f\"> 📌  **السبب:**  {reason_detail}\\n\"\n                    f\"{separator()}\\n\"\n                    f\"> 👥  **المصوّنين (أول 2 من كل فريق):**\\n\"\n                    f\"> ─  Team 1 🔴:  {' '.join(f'<@{p}>' for p in (team1_players or [])[:MVP_VOTERS_PER_TEAM]) or '*N/A*'}\\n\"\n                    f\"> ─  Team 2 🟢:  {' '.join(f'<@{p}>' for p in (team2_players or [])[:MVP_VOTERS_PER_TEAM]) or '*N/A*'}\\n\"\n                    f\"> 🗳  **التصويت:**\\n\"\n                    f\"> ─  🏆 Winner:  \" + (\", \".join(f\"**{c}**×<@{p}>\" for p, c in sorted(w_tally.items(), key=lambda x: -x[1])) or \"*لا توجد أصوات*\") + \"\\n\"\n                    f\"> ─  ✦ Loser:  \" + (\", \".join(f\"**{c}**×<@{p}>\" for p, c in sorted(l_tally.items(), key=lambda x: -x[1])) or \"*لا توجد أصوات*\")\n                ),\n                color=COLORS[\"error\"],\n                timestamp=discord.utils.utcnow()\n            )",
+    "modifiers": [
+      "            embed.add_field(\n                name=\"🔧  الأمر المطلوب منك\",\n                value=(\n                    f\"> `{PREFIX}w {lobby_id} @user`  —  عينِ MVPWINNER\\n\"\n                    f\"> `{PREFIX}l {lobby_id} @user`  —  عينِ MVPLOSER\\n\"\n                    f\"> 📌  لازم من فريقين مختلفين — بـ `!!w` + `!!l` بتُطبَّق النقاط تلقائياً\"\n                ),\n                inline=False\n            )",
+      "            embed.set_footer(text=f\"{BOT_FOOTER}  • .Admin action required\")"
+    ],
+    "sends": [
+      "                await channel.send(content=mentions, embed=embed)",
+      "                    await txt.send(content=mentions, embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-031",
+    "line": 4579,
+    "func": "MvpVoteView._guard_voter",
+    "var": "None",
+    "title_hint": "\"⛔  ما أنت من المصوّنين\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "            embed=discord.Embed(\n                title=\"⛔  ما أنت من المصوّنين\",\n                description=(\n                    f\"> ❌  موقعك ما يحسب تصويتاً في هذا النظام.\\n\"\n                    f\"> 👥  المصوّنين هم **أول شخصين من كل فريق**:\\n\"\n                    f\"> ─  🔴 Team 1:  {t1_names or '*N/A*'}\\n\"\n                    f\"> ─  🟢 Team 2:  {t2_names or '*N/A*'}\\n\"\n                    f\"> 📌  لو كنت من المصوّنين وبس، اختر MVP من القوائم بالأعلى.\"\n                ),\n                color=COLORS[\"error\"]\n            ),",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-032",
+    "line": 4651,
+    "func": "MvpVoteView.status_callback",
+    "var": "None",
+    "title_hint": "f\"📊  حالة تصويت MVP — ماتش `#{self.lobby_id}`\"",
+    "color_hint": "COLORS[\"info\"]",
+    "embed": "            embed=discord.Embed(\n                title=f\"📊  حالة تصويت MVP — ماتش `#{self.lobby_id}`\",\n                description=(\n                    f\"> 👥  **المصوّنين (أول 2 من كل فريق):**  \"\n                    f\"{' '.join(f'<@{p}>' for p in self.voters) or '*N/A*'}\\n\"\n                    f\"> ✅  **صوّتوا:**  `{self._voted_count()}` / `{len(self.voters)}`\\n\"\n                    f\"{separator()}\\n\"\n                    f\"{self._tally_line('winner', '🏆 MVP WINNER')}\\n\"\n                    f\"{self._tally_line('loser', '✦ MVP LOSER')}\\n\"\n                    f\"> 🎯  **الاتفاق المطلوب:**  `{MVP_CONSENSUS_NEEDED}` أصوات\"\n                ),\n                color=COLORS[\"info\"],\n                timestamp=discord.utils.utcnow()\n            ),",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-033",
+    "line": 4671,
+    "func": "MvpVoteView.tag_admin_callback",
+    "var": "None",
+    "title_hint": "\"⚠️  تم طلب تدخل الأدمن\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "            embed=discord.Embed(\n                title=\"⚠️  تم طلب تدخل الأدمن\",\n                description=(\n                    f\"> 🚨  تم إبلاغ الأدمن بمشكلة في الماتش  `#{self.lobby_id}`\\n\"\n                    f\"> 👤  **المبلّغ:**  {interaction.user.mention}\\n\"\n                    f\"> 📌  لو فيه أدمن بالفويسات الخاصة باللاعبين، البوت نقله عندهم.\\n\"\n                    f\"> 📌  وإلا، تم تاغ الأدمن مع الأوامر المناسبة.\"\n                ),\n                color=COLORS[\"warning\"]\n            ),",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-034",
+    "line": 4786,
+    "func": "MvpVoteView._apply",
+    "var": "None",
+    "title_hint": "\"✅  تم الاتفاق على MVP!\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "                embed=discord.Embed(\n                    title=\"✅  تم الاتفاق على MVP!\",\n                    description=(\n                        f\"> 🤝  **اتفاق `{MVP_CONSENSUS_NEEDED}` أصوات من `{len(self.voters)}` مصوّنين**\\n\"\n                        f\"> 🏆  **MVP WINNER:**  <@{winner_mvp}> → `+80` pts\\n\"\n                        f\"> ✦  **MVP LOSER:**  <@{loser_mvp}> → `+30` pts\\n\"\n                        f\"> ⚡  جارٍ تطبيق النقاط وتحديث الرانك...\"\n                    ),\n                    color=COLORS[\"success\"]\n                )",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-035",
+    "line": 4965,
+    "func": "process_match_result_with_mvps",
+    "var": "embed",
+    "title_hint": "f\"🏅 Match Result — `#{lobby_id}`\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "        embed = discord.Embed(\n            title=f\"🏅 Match Result — `#{lobby_id}`\",\n            description=(\n                f\"## 🎉  {wd}  Wins!\\n\"\n                f\"{separator()}\\n\"\n                f\"> 🎮 Mode:  `{game_mode.upper()}`\\n\"\n                f\"> 🏆 Winner MVP:  {f'<@{winner_mvp_id}>' if winner_mvp_id else '*N/A*'} → `+{WINNER_MVP_POINTS}` pts\\n\"\n                f\"> ✦ Loser MVP:  {f'<@{loser_mvp_id}>' if loser_mvp_id else '*N/A*'} → `+{LOSER_MVP_POINTS}` pts\"\n            ),\n            color=COLORS[\"success\"],\n            timestamp=discord.utils.utcnow()\n        )",
+    "modifiers": [
+      "        embed.add_field(\n            name=f\"🏆 Winners —  `{len(winner_details)}` players\",\n            value=wt_mentions,\n            inline=True\n        )",
+      "        embed.add_field(\n            name=f\"☠️ Losers —  `{len(loser_details)}` players\",\n            value=lt_mentions,\n            inline=True\n        )",
+      "        embed.set_author(name=\"Match Finished\", icon_url=None)",
+      "        embed.set_footer(text=f\"{BOT_FOOTER}  •  GG WP!  •  Match #{lobby_id}\")"
+    ],
+    "sends": []
+  },
+  {
+    "id": "EMB-036",
+    "line": 5060,
+    "func": "VoteView.on_timeout",
+    "var": "no_votes_embed",
+    "title_hint": "\"⏰ Vote Ended — No Votes!\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "                no_votes_embed = discord.Embed(\n                    title=\"⏰ Vote Ended — No Votes!\",\n                    description=(\n                        f\"> ⚠️  لم يصوت أي لاعب في الماتش  `#{self.lobby_id}`\\n\"\n                        f\"> 📊  **النتيجة:**  `0 — 0`\\n\"\n                        f\"> ⚖️  الأدمن يجب أن يحل الماتش يدوياً:\\n\"\n                        f\"> `{PREFIX}resolve {self.lobby_id} team1`\\n\"\n                        f\"> `{PREFIX}resolve {self.lobby_id} team2`\\n\"\n                        f\"> 💡  أو استخدم  `{PREFIX}resolve {self.lobby_id} team1`  لفوز Team 1\"\n                    ),\n                    color=COLORS[\"warning\"],\n                    timestamp=discord.utils.utcnow()\n                )",
+    "modifiers": [
+      "                no_votes_embed.set_footer(text=f\"{BOT_FOOTER}  •  Action required\")"
+    ],
+    "sends": [
+      "                await result_ch.send(embed=no_votes_embed)"
+    ]
+  },
+  {
+    "id": "EMB-037",
+    "line": 5097,
+    "func": "VoteView.on_timeout",
+    "var": "tie_embed",
+    "title_hint": "\"⏰  Vote Tied!\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "                tie_embed = discord.Embed(\n                    title=\"⏰  Vote Tied!\",\n                    description=(\n                        f\"> 🤝  الماتش  `#{self.lobby_id}`  انتهى بالتعادل\\n\"\n                        f\"> 📊  **النتيجة:**  `{t1v} — {t2v}`\\n\"\n                        f\"> ⚖️  الأدمن يجب أن يحل الماتش:\\n\"\n                        f\"> `{PREFIX}resolve {self.lobby_id} team1`\\n\"\n                        f\"> `{PREFIX}resolve {self.lobby_id} team2`\"\n                    ),\n                    color=COLORS[\"warning\"],\n                    timestamp=discord.utils.utcnow()\n                )",
+    "modifiers": [
+      "                tie_embed.set_footer(text=f\"{BOT_FOOTER}  •  Action required\")"
+    ],
+    "sends": [
+      "                await result_ch.send(embed=tie_embed)"
+    ]
+  },
+  {
+    "id": "EMB-038",
+    "line": 5125,
+    "func": "VoteView.on_timeout",
+    "var": "vote_close_embed",
+    "title_hint": "\"⏰  Vote Closed!\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "            vote_close_embed = discord.Embed(\n                title=\"⏰  Vote Closed!\",\n                description=(\n                    f\"> **{wd}**  wins the vote  `{t1v} — {t2v}`\\n\"\n                    f\"> 🎯  اختر MVP لكل فريق الآن...\"\n                ),\n                color=COLORS[\"success\"],\n                timestamp=discord.utils.utcnow()\n            )",
+    "modifiers": [
+      "            vote_close_embed.set_footer(text=f\"{BOT_FOOTER}  •  MVP selection required\")"
+    ],
+    "sends": [
+      "            await result_ch.send(embed=vote_close_embed)"
+    ]
+  },
+  {
+    "id": "EMB-039",
+    "line": 5146,
+    "func": "VoteView.on_timeout",
+    "var": "mvp_embed",
+    "title_hint": "\"🎯  اختر MVP كل فريق\"",
+    "color_hint": "COLORS[\"vote\"]",
+    "embed": "            mvp_embed = discord.Embed(\n                title=\"🎯  اختر MVP كل فريق\",\n                description=(\n                    f\"> 🏆  **الفريق الفائز:**  {wd}\\n\"\n                    f\"> 🔱  الهوست أو الأدمن يختار MVP لكل فريق\\n\"\n                    f\"> ⏱️  لديك **3 دقائق** — وإلا سيُختار تلقائياً\\n\"\n                    f\"{separator()}\\n\"\n                    f\"> 💡  **تعليمات:**\\n\"\n                    f\"> ─  استخدم القائمة الأولى لاختيار MVP الفريق الفائز  (`+80` pts)\\n\"\n                    f\"> ─  استخدم القائمة الثانية لاختيار MVP الفريق الخاسر  (`+30` pts)\\n\"\n                    f\"> ─  اضغط **تأكيد** لتطبيق النقاط\"\n                ),\n                color=COLORS[\"vote\"],\n                timestamp=discord.utils.utcnow()\n            )",
+    "modifiers": [
+      "            mvp_embed.set_author(name=\"MVP Selection\", icon_url=None)",
+      "            mvp_embed.set_footer(text=f\"{BOT_FOOTER}  •  Match #{self.lobby_id}\")"
+    ],
+    "sends": [
+      "            await result_ch.send(embed=mvp_embed, view=mvp_view)"
+    ]
+  },
+  {
+    "id": "EMB-040",
+    "line": 5222,
+    "func": "VoteView._handle_vote",
+    "var": "None",
+    "title_hint": null,
+    "color_hint": "COLORS[\"vote\"]",
+    "embed": "        await interaction.channel.send(embed=discord.Embed(\n            description=(\n                f\"> 🗳️  **Vote Progress:**  🟠 `{t1v}`  —  🟢 `{t2v}`\\n\"\n                f\"> Cast: `{votes_count}/{total_voters}`  (Host + First Joiner)\"\n            ),\n            color=COLORS[\"vote\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-041",
+    "line": 5238,
+    "func": "VoteView._handle_vote",
+    "var": "tie_embed",
+    "title_hint": "\"⏰  Vote Tied!\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "                tie_embed = discord.Embed(\n                    title=\"⏰  Vote Tied!\",\n                    description=(\n                        f\"> 🤝  الماتش  `#{lobby_id}`  انتهى بالتعادل\\n\"\n                        f\"> 📊  **النتيجة:**  `{t1v} — {t2v}`\\n\"\n                        f\"> ⚖️  الأدمن يجب أن يحل الماتش:\\n\"\n                        f\"> `{PREFIX}resolve {lobby_id} team1`\\n\"\n                        f\"> `{PREFIX}resolve {lobby_id} team2`\"\n                    ),\n                    color=COLORS[\"warning\"],\n                    timestamp=discord.utils.utcnow()\n                )",
+    "modifiers": [
+      "                tie_embed.set_footer(text=f\"{BOT_FOOTER}  •  Action required\")"
+    ],
+    "sends": [
+      "                await interaction.channel.send(embed=tie_embed)"
+    ]
+  },
+  {
+    "id": "EMB-042",
+    "line": 5266,
+    "func": "VoteView._handle_vote",
+    "var": "vote_complete_embed",
+    "title_hint": "\"✅  Vote Complete!\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "            vote_complete_embed = discord.Embed(\n                title=\"✅  Vote Complete!\",\n                description=(\n                    f\"> All participants voted!\\n\"\n                    f\"> Winner: **{wd}**  `{t1v} — {t2v}`  🎉\\n\"\n                    f\"> 🎯  اختر MVP لكل فريق الآن...\"\n                ),\n                color=COLORS[\"success\"],\n                timestamp=discord.utils.utcnow()\n            )",
+    "modifiers": [
+      "            vote_complete_embed.set_footer(text=f\"{BOT_FOOTER}  •  MVP selection required\")"
+    ],
+    "sends": [
+      "            await interaction.channel.send(embed=vote_complete_embed)"
+    ]
+  },
+  {
+    "id": "EMB-043",
+    "line": 5290,
+    "func": "VoteView._handle_vote",
+    "var": "mvp_embed",
+    "title_hint": "\"🎯  اختر MVP كل فريق\"",
+    "color_hint": "COLORS[\"vote\"]",
+    "embed": "                mvp_embed = discord.Embed(\n                    title=\"🎯  اختر MVP كل فريق\",\n                    description=(\n                        f\"> 🏆  **الفريق الفائز:**  {wd}\\n\"\n                        f\"> 🔱  الهوست أو الأدمن يختار MVP لكل فريق\\n\"\n                        f\"> ⏱️  لديك **3 دقائق** — وإلا سيُختار تلقائياً\\n\"\n                        f\"{separator()}\\n\"\n                        f\"> 💡  **تعليمات:**\\n\"\n                        f\"> ─  استخدم القائمة الأولى لاختيار MVP الفريق الفائز  (`+80` pts)\\n\"\n                        f\"> ─  استخدم القائمة الثانية لاختيار MVP الفريق الخاسر  (`+30` pts)\\n\"\n                        f\"> ─  اضغط **تأكيد** لتطبيق النقاط\"\n                    ),\n                    color=COLORS[\"vote\"],\n                    timestamp=discord.utils.utcnow()\n                )",
+    "modifiers": [
+      "                mvp_embed.set_author(name=\"MVP Selection\", icon_url=None)",
+      "                mvp_embed.set_footer(text=f\"{BOT_FOOTER}  •  Match #{lobby_id}\")"
+    ],
+    "sends": [
+      "                await result_ch.send(embed=mvp_embed, view=mvp_view)"
+    ]
+  },
+  {
+    "id": "EMB-044",
+    "line": 5333,
+    "func": "CreateLobbyView.create_lobby_btn",
+    "var": "None",
+    "title_hint": "\"⏳  انتهت صلاحية الرسالة\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "                embed=discord.Embed(\n                    title=\"⏳  انتهت صلاحية الرسالة\",\n                    description=(\n                        \"> 🔄  البوت أُعيد تشغيله — الرسالة دي ما عادتش صالحة anymore.\\n\"\n                        f\"> 💡  أعد الأمر  `{PREFIX}play {self.mode.upper()}`  لإنشاء روم جديد.\"\n                    ),\n                    color=COLORS[\"warning\"]\n                ),",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-045",
+    "line": 5407,
+    "func": "LobbyCreateModal.on_submit",
+    "var": "None",
+    "title_hint": "\"✅  Lobby Created!\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "                embed=discord.Embed(\n                    title=\"✅  Lobby Created!\",\n                    description=(\n                        f\"> Lobby `#{lid}` is now live!\\n\"\n                        f\"> Players can press **Join Team 1 / 2** to enter.\\n\"\n                        + (f\"> 🔐  **Private Key** required to join.\" if private_key else \"\")\n                    ),\n                    color=COLORS[\"success\"]\n                ),",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-046",
+    "line": 5543,
+    "func": "on_command_error",
+    "var": "None",
+    "title_hint": "\"⏳  Cooldown\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"⏳  Cooldown\",\n            description=(\n                f\"> Please wait  `{error.retry_after:.1f}s`  before using this command again.\"\n            ),\n            color=COLORS[\"warning\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-047",
+    "line": 5552,
+    "func": "on_command_error",
+    "var": "None",
+    "title_hint": "\"🔇  أنت في البلاك ليست\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "            await ctx.send(embed=discord.Embed(\n                title=\"🔇  أنت في البلاك ليست\",\n                description=(\n                    f\"> لا يمكنك استخدام البوت حالياً.\\n\"\n                    f\"> أنت في قائمة البلاك ليست لمدة 10 دقائق.\\n\"\n                    f\"> ⏱️  انتظر حتى انتهاء المدة.\"\n                ),\n                color=COLORS[\"error\"]\n            ), delete_after=15)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-048",
+    "line": 5562,
+    "func": "on_command_error",
+    "var": "None",
+    "title_hint": "\"❌  No Permission\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "            await ctx.send(embed=discord.Embed(\n                title=\"❌  No Permission\",\n                description=(\n                    f\"> You don't have permission to use this command.\"\n                ),\n                color=COLORS[\"error\"]\n            ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-049",
+    "line": 5636,
+    "func": "send_success",
+    "var": "success_embed",
+    "title_hint": "\"✅ AUTO-DETECT Complete\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "                success_embed = discord.Embed(\n                    title=\"✅ AUTO-DETECT Complete\",\n                    description=(\n                        f\"> 🤖  **Bot:**  Free Fire Bot V3 MAX\\n\"\n                        f\"> 🏠  **Server:**  {guild.name}\\n\"\n                        f\"> 📅  **Time:**  {discord.utils.format_dt(discord.utils.utcnow(), 'F')}\\n\"\n                        f\"{separator()}\\n\"\n                        f\"> 📊  **Channels detected:**\\n\"\n                        f\"> ─  📝  Commands:  `{cmd_channels_count}`\\n\"\n                        f\"> ─  🎮  Play:  `{play_channels_count}`\\n\"\n                        f\"> ─  🔊  Waiting rooms:  `{len(waiting_rooms)}`\\n\"\n                        f\"> ─  🔍  Under check:  `{len(report_channels)}`\\n\"\n                        f\"{separator()}\\n\"\n                        f\"> ✅  كل القنوات الموجودة تم تسجيلها تلقائياً\\n\"\n                        f\"> ✅  البوت جاهز للعمل بدون أي إعداد يدوي\\n\"\n                        f\"> 💡 Use  `{PREFIX}help`  لعرض الأوامر\"\n                    ),\n                    color=COLORS[\"success\"],\n                    timestamp=discord.utils.utcnow()\n                )",
+    "modifiers": [
+      "                success_embed.set_footer(text=f\"{BOT_FOOTER}  •  V3 MAX AUTO-DETECT\")"
+    ],
+    "sends": [
+      "                await success_ch.send(embed=success_embed)"
+    ]
+  },
+  {
+    "id": "EMB-050",
+    "line": 6134,
+    "func": "on_message",
+    "var": "None",
+    "title_hint": "\"📡  الأوامر داخل السيرفر فقط\"",
+    "color_hint": "COLORS[\"info\"]",
+    "embed": "        await message.channel.send(embed=discord.Embed(\n            title=\"📡  الأوامر داخل السيرفر فقط\",\n            description=(\n                f\"> هذه الرسالة خاصة (DM) — أوامر البوت كلها تحتاج قناة داخل السيرفر.\\n\"\n                f\"> 💡  افتح قناة الأوامر واكتب  `{PREFIX}help`  لعرض كل الأوامر.\\n\"\n                f\"> 📌  أوامر تعمل هنا:  `{PREFIX}serverleave`\"\n            ),\n            color=COLORS[\"info\"]\n        ), delete_after=20)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-051",
+    "line": 6172,
+    "func": "on_message",
+    "var": "None",
+    "title_hint": "\"❌  Not Allowed Here\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "                await message.reply(embed=discord.Embed(\n                    title=\"❌  Not Allowed Here\",\n                    description=(\n                        f\"> Commands can only be used in play channels.\\n\"\n                        f\"> Allowed:  `apostada-play`  •  `highlight-play`  •  `zelika-play`\\n\"\n                        f\"> 💡  Use  `{PREFIX}general`  for help.\"\n                    ),\n                    color=COLORS[\"error\"]\n                ), delete_after=10)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-052",
+    "line": 6196,
+    "func": "create_mode_lobby",
+    "var": "ban_embed",
+    "title_hint": "\"🚫  أنت محظور من اللعب\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        ban_embed = discord.Embed(\n            title=\"🚫  أنت محظور من اللعب\",\n            description=(\n                f\"> ⚠️  **السبب:**  `{ban_info.get('ban_reason') or 'غير محدد'}`\\n\"\n                f\"> 📊  **عدد البلاغات:**  `{ban_info.get('report_count', 0)}`\\n\"\n                f\"> 📅  **تاريخ الحظر:**  `{ban_info.get('banned_at', 'N/A')[:19]}`\\n\"\n                f\"{separator()}\\n\"\n                f\"> 🔍  يتم توجيهك لفويس التفتيش\\n\"\n                f\"> 💡  لفك الحظر، تواصل مع الأدمن\"\n            ),\n            color=COLORS[\"error\"],\n            timestamp=discord.utils.utcnow()\n        )",
+    "modifiers": [
+      "        ban_embed.set_footer(text=f\"{BOT_FOOTER}  •  Banned\")"
+    ],
+    "sends": [
+      "        await ctx.send(embed=ban_embed, delete_after=20)"
+    ]
+  },
+  {
+    "id": "EMB-053",
+    "line": 6217,
+    "func": "create_mode_lobby",
+    "var": "None",
+    "title_hint": "\"❌  Not Allowed Here\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Not Allowed Here\",\n            description=(\n                f\"> This command can only be used in play channels.\\n\"\n                f\"> Allowed:  `apostada-play`  •  `highlight-play`  •  `zelika-play`\"\n            ),\n            color=COLORS[\"error\"]\n        ), delete_after=15)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-054",
+    "line": 6230,
+    "func": "create_mode_lobby",
+    "var": "None",
+    "title_hint": "\"⏳  Must Be in a Waiting Room\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"⏳  Must Be in a Waiting Room\",\n            description=(\n                f\"> You need to be in a voice waiting room to create a lobby.\\n\"\n                f\"──────────────────────\\n\"\n                f\"🔊  **Available Rooms:**\\n{rooms_text}\"\n            ),\n            color=COLORS[\"warning\"]\n        ), delete_after=20)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-055",
+    "line": 6245,
+    "func": "create_mode_lobby",
+    "var": "None",
+    "title_hint": "\"⏳  Wrong Voice Channel\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "            await ctx.send(embed=discord.Embed(\n                title=\"⏳  Wrong Voice Channel\",\n                description=(\n                    f\"> You're in `{member.voice.channel.name}` — that's not a waiting room.\\n\"\n                    f\"──────────────────────\\n\"\n                    f\"🔊  **Available Rooms:**\\n{rooms_text}\"\n                ),\n                color=COLORS[\"warning\"]\n            ), delete_after=20)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-056",
+    "line": 6257,
+    "func": "create_mode_lobby",
+    "var": "None",
+    "title_hint": "\"❌  Already in Lobby\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Already in Lobby\",\n            description=(\n                f\"> You're already in a lobby. Leave it first.\\n\"\n                f\"> Use  `{PREFIX}leave`  to leave.\"\n            ),\n            color=COLORS[\"error\"]\n        ), delete_after=10)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-057",
+    "line": 6284,
+    "func": "create_mode_lobby",
+    "var": "None",
+    "title_hint": "f\"🎮  Create  {mode.upper()}  Lobby\"",
+    "color_hint": "COLORS[\"info\"]",
+    "embed": "    prompt = await ctx.send(embed=discord.Embed(\n        title=f\"🎮  Create  {mode.upper()}  Lobby\",\n        description=(\n            f\"> اضغط الزر تحت لإدخال بيانات الغرفة وإنشاء اللوبي.\\n\"\n            f\"──────────────────────\\n\"\n            f\"> 💡  **تحتاج:**\\n\"\n            f\"> ›  Room ID  (أرقام)\\n\"\n            f\"> ›  Password  (اختياري)\\n\"\n            f\"> ›  Private Key  (اختياري)\\n\"\n            f\"{separator()}\\n\"\n            f\"> ⏱️  **تختفي هذه الرسالة تلقائياً بعد `{CREATE_PROMPT_DELETE_AFTER}` ثانية**\"\n            f\" إذا ما ضغطت الزر.\\n\"\n            f\"> ✅  وإذا أنشأت الغرفة — تنحذف مع انتهاء الروم.\"\n        ),\n        color=COLORS[\"info\"]\n    ), view=create_view)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-058",
+    "line": 6323,
+    "func": "play_cmd",
+    "var": "no_mode_embed",
+    "title_hint": "\"❌  أمر غير صحيح\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        no_mode_embed = discord.Embed(\n            title=\"❌  أمر غير صحيح\",\n            description=(\n                f\"> الأمر  `{PREFIX}play`  غير صالح.\\n\"\n                f\"> يجب تحديد نوع الماتش بوضوح.\\n\"\n                f\"{separator()}\\n\"\n                f\"> 🎮  **الأوامر الصحيحة:**\\n\"\n                f\"> ─  `{PREFIX}play1v1`  —  ماتش 1 ضد 1  🔒  (للـ roles العالية)\\n\"\n                f\"> ─  `{PREFIX}play2v2`  —  ماتش 2 ضد 2\\n\"\n                f\"> ─  `{PREFIX}play3v3`  —  ماتش 3 ضد 3\\n\"\n                f\"> ─  `{PREFIX}play4v4`  —  ماتش 4 ضد 4  (الافتراضي)\\n\"\n                f\"> 💡  مثال:  `{PREFIX}play4v4`\"\n            ),\n            color=COLORS[\"error\"],\n            timestamp=discord.utils.utcnow()\n        )",
+    "modifiers": [
+      "        no_mode_embed.set_footer(text=f\"{BOT_FOOTER}  •  Specify the game mode\")"
+    ],
+    "sends": [
+      "        await ctx.send(embed=no_mode_embed, delete_after=15)"
+    ]
+  },
+  {
+    "id": "EMB-059",
+    "line": 6352,
+    "func": "play_cmd",
+    "var": "invalid_mode_embed",
+    "title_hint": "\"❌  مود غير صحيح\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        invalid_mode_embed = discord.Embed(\n            title=\"❌  مود غير صحيح\",\n            description=(\n                f\"> المود  `{mode}`  غير صالح.\\n\"\n                f\"> يجب استخدام أحد المودات التالية:\\n\"\n                f\"{separator()}\\n\"\n                f\"> 🎮  **المودات الصحيحة:**\\n\"\n                f\"> ─  `{PREFIX}play 1v1`  أو  `{PREFIX}play1v1`  🔒\\n\"\n                f\"> ─  `{PREFIX}play 2v2`  أو  `{PREFIX}play2v2`\\n\"\n                f\"> ─  `{PREFIX}play 3v3`  أو  `{PREFIX}play3v3`\\n\"\n                f\"> ─  `{PREFIX}play 4v4`  أو  `{PREFIX}play4v4`\\n\"\n                f\"> 💡  مثال:  `{PREFIX}play 4v4`\"\n            ),\n            color=COLORS[\"error\"],\n            timestamp=discord.utils.utcnow()\n        )",
+    "modifiers": [
+      "        invalid_mode_embed.set_footer(text=f\"{BOT_FOOTER}  •  Invalid mode\")"
+    ],
+    "sends": [
+      "        await ctx.send(embed=invalid_mode_embed, delete_after=15)"
+    ]
+  },
+  {
+    "id": "EMB-060",
+    "line": 6382,
+    "func": "play_cmd",
+    "var": "restricted_embed",
+    "title_hint": "\"🔒  أمر محمي\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        restricted_embed = discord.Embed(\n            title=\"🔒  أمر محمي\",\n            description=(\n                f\"> **الأمر:**  `{PREFIX}play 1v1`\\n\"\n                f\"> هذا الأمر مخصص فقط للأعضاء ذوي **الـ roles العالية** في السيرفر.\\n\"\n                f\"{separator()}\\n\"\n                f\"> 🎯  **شروط الاستخدام:**  تحقق أحد الشروط التالية:\\n\"\n                f\"> ─  صلاحية  `Administrator`  في السيرفر\\n\"\n                f\"> ─  صلاحية  `Manage Guild`  (إدارة السيرفر)\\n\"\n                f\"> ─  role تبعك في النصف العلوي من الهرم\\n\"\n                f\">    (مطلوب position  `≥ {threshold}`  —  أنت حالياً  `{member_top}`)\\n\"\n                f\"> 💡 Use  `{PREFIX}play 4v4`  للعب العادي  (متاح للجميع).\"\n            ),\n            color=COLORS[\"error\"],\n            timestamp=discord.utils.utcnow()\n        )",
+    "modifiers": [
+      "        restricted_embed.set_footer(text=f\"{BOT_FOOTER}  •  Restricted Command\")"
+    ],
+    "sends": [
+      "        await ctx.send(embed=restricted_embed, delete_after=20)"
+    ]
+  },
+  {
+    "id": "EMB-061",
+    "line": 6417,
+    "func": "play1v1_cmd",
+    "var": "restricted_embed",
+    "title_hint": "\"🔒  أمر محمي\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        restricted_embed = discord.Embed(\n            title=\"🔒  أمر محمي\",\n            description=(\n                f\"> **الأمر:**  `{PREFIX}play1v1`\\n\"\n                f\"> هذا الأمر مخصص فقط للأعضاء ذوي **الـ roles العالية** في السيرفر.\\n\"\n                f\"{separator()}\\n\"\n                f\"> 🎯  **شروط الاستخدام:**  تحقق أحد الشروط التالية:\\n\"\n                f\"> ─  صلاحية  `Administrator`  في السيرفر\\n\"\n                f\"> ─  صلاحية  `Manage Guild`  (إدارة السيرفر)\\n\"\n                f\"> ─  role تبعك في النصف العلوي من الهرم\\n\"\n                f\">    (مطلوب position  `≥ {threshold}`  —  أنت حالياً  `{member_top}`)\\n\"\n                f\"> 💡 Use  `{PREFIX}play`  للعب 4v4 العادي  (متاح للجميع).\"\n            ),\n            color=COLORS[\"error\"],\n            timestamp=discord.utils.utcnow()\n        )",
+    "modifiers": [
+      "        restricted_embed.set_footer(text=f\"{BOT_FOOTER}  •  Restricted Command\")"
+    ],
+    "sends": [
+      "        await ctx.send(embed=restricted_embed, delete_after=20)"
+    ]
+  },
+  {
+    "id": "EMB-062",
+    "line": 6477,
+    "func": "points_cmd",
+    "var": "embed",
+    "title_hint": "f\"💰  نقاط اللاعب\"",
+    "color_hint": "rank_color",
+    "embed": "    embed = discord.Embed(\n        title=f\"💰  نقاط اللاعب\",\n        description=(\n            f\"> 👤  **اللاعب:**  {target.mention}\\n\"\n            f\"> 🏅  **الرانك:**  {rank_emoji}  `{rank_title}`  —  `#{level}`\\n\"\n            f\"> 💰  **النقاط:**  `{points:,}`  pts\\n\"\n            f\"{separator()}\"\n        ),\n        color=rank_color,\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    embed.add_field(name=\"🏆  Wins\", value=f\"```fix\\n{player['wins']}\\n```\", inline=True)",
+      "    embed.add_field(name=\"☠️  Losses\", value=f\"```fix\\n{player['losses']}\\n```\", inline=True)",
+      "    embed.add_field(name=\"🔱  MVPs\", value=f\"```fix\\n{player['mvps']}\\n```\", inline=True)",
+      "    embed.add_field(\n        name=f\"📊  Win Rate  —  `{wr}%`\",\n        value=f\"`{wr_bar}`  `{player['wins']}/{player['matches_played']}`\",\n        inline=False\n    )",
+      "    embed.set_author(name=\"Player Points\", icon_url=None)",
+      "    embed.set_footer(text=f\"{BOT_FOOTER}  •  {rank_title} #{level}\")",
+      "        embed.add_field(\n            name=f\"📈  التقدم نحو المركز الأول\",\n            value=(\n                f\"`{progress_bar}`  `{progress_pct}%`\\n\"\n                f\"> 💎  **نقاطك:**  `{points:,}`\\n\"\n                f\"> 🏆  **القمة:**  `{top_pts:,}`\\n\"\n                f\"> ⏭️  **يتبقى:**  `{pts_to_next:,}`  نقطة للوصول للقمة\"\n            ),\n            inline=False\n        )",
+      "        embed.add_field(\n            name=\"🔱  أنت الأول!\",\n            value=(\n                f\"> 🎉  أنت في القمة بـ `{points:,}` نقطة!\\n\"\n                f\"> 🚀  حافظ على مركزك بالفوز بالمزيد من المباريات!\"\n            ),\n            inline=False\n        )"
+    ],
+    "sends": [
+      "    await ctx.send(embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-063",
+    "line": 6542,
+    "func": "top_cmd",
+    "var": "None",
+    "title_hint": "\"🏆  Leaderboard\"",
+    "color_hint": "COLORS[\"leaderboard\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"🏆  Leaderboard\",\n            description=(\n                f\"> No players yet!\\n\"\n                f\"> Use `{PREFIX}play` to start your first match.\\n\"\n                f\"{separator()}\"\n            ),\n            color=COLORS[\"leaderboard\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-064",
+    "line": 6552,
+    "func": "top_cmd",
+    "var": "embed",
+    "title_hint": "\"🏆  Free Fire  —  Top 10 Leaderboard\"",
+    "color_hint": "COLORS[\"leaderboard\"]",
+    "embed": "    embed = discord.Embed(\n        title=\"🏆  Free Fire  —  Top 10 Leaderboard\",\n        color=COLORS[\"leaderboard\"],\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    embed.set_author(name=f\"{ctx.guild.name} Leaderboard\", icon_url=ctx.guild.icon.url if ctx.guild.icon else None)",
+      "    embed.set_footer(text=f\"{BOT_FOOTER}  •  {len(lb)} players ranked\")"
+    ],
+    "sends": [
+      "    await ctx.send(embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-065",
+    "line": 6586,
+    "func": "leave_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Not in Lobby\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Not in Lobby\",\n            description=(\n                f\"> You're not currently in any lobby.\\n\"\n                f\"> Use `{PREFIX}play` to create one.\"\n            ),\n            color=COLORS[\"error\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-066",
+    "line": 6600,
+    "func": "leave_cmd",
+    "var": "None",
+    "title_hint": "\"🗑️  Lobby Cancelled\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "            await ctx.send(embed=discord.Embed(\n                title=\"🗑️  Lobby Cancelled\",\n                description=(\n                    f\"> Lobby `#{lobby['id']}` was cancelled.\"\n                ),\n                color=COLORS[\"warning\"]\n            ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-067",
+    "line": 6612,
+    "func": "leave_cmd",
+    "var": "None",
+    "title_hint": "\"✅  Left Lobby\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "    await ctx.send(embed=discord.Embed(\n        title=\"✅  Left Lobby\",\n        description=(\n            f\"> You left lobby `#{lobby['id']}`.\"\n        ),\n        color=COLORS[\"success\"]\n    ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-068",
+    "line": 6625,
+    "func": "matches_cmd",
+    "var": "None",
+    "title_hint": "\"🎮  Active Lobbies\"",
+    "color_hint": "COLORS[\"info\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"🎮  Active Lobbies\",\n            description=(\n                f\"> No active lobbies right now.\\n\"\n                f\"> Use `{PREFIX}play` to start one.\"\n            ),\n            color=COLORS[\"info\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-069",
+    "line": 6634,
+    "func": "matches_cmd",
+    "var": "embed",
+    "title_hint": "\"🎮  Active Lobbies\"",
+    "color_hint": "COLORS[\"match\"]",
+    "embed": "    embed = discord.Embed(title=\"🎮  Active Lobbies\", color=COLORS[\"match\"])",
+    "modifiers": [
+      "        embed.add_field(\n            name=f\"`#{l['id']}`  {mi['emoji']}  {mode.upper()}  —  {se}\",\n            value=f\"> 🟠 `{t1c}/{mi['team_size']}`  •  🟢 `{t2c}/{mi['team_size']}`\",\n            inline=False\n        )"
+    ],
+    "sends": [
+      "    await ctx.send(embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-070",
+    "line": 6661,
+    "func": "mylevel_cmd",
+    "var": "embed",
+    "title_hint": "f\"{rank_emoji}  RANK  —  {target.display_name}\"",
+    "color_hint": "rank_color",
+    "embed": "    embed = discord.Embed(\n        title=f\"{rank_emoji}  RANK  —  {target.display_name}\",\n        description=(\n            f\"> 🏅  **Rank:**  `{rank_title}`  —  `#{level}`\\n\"\n            f\"> 💰  **Points:**  `{player['points']:,}`  pts\\n\"\n            f\"{separator()}\"\n        ),\n        color=rank_color,\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    embed.add_field(name=\"✅  Wins\", value=f\"```fix\\n{player['wins']}\\n```\", inline=True)",
+      "    embed.add_field(name=\"❌  Losses\", value=f\"```fix\\n{player['losses']}\\n```\", inline=True)",
+      "    embed.add_field(name=\"⚖️  W/L Diff\", value=f\"```fix\\n{kd_sign}{kd_diff}\\n```\", inline=True)",
+      "    embed.add_field(\n        name=f\"📊  Win Rate  —  `{wr}%`\",\n        value=f\"`{wr_bar}`  `{player['wins']}/{player['matches_played']}`\",\n        inline=False\n    )",
+      "    embed.set_author(name=\"Player Rank\", icon_url=None)",
+      "    embed.set_footer(text=f\"{BOT_FOOTER}  •  {rank_title} #{level}\")"
+    ],
+    "sends": [
+      "    await ctx.send(embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-071",
+    "line": 6693,
+    "func": "myrank_cmd",
+    "var": "embed",
+    "title_hint": "\"📝  Your Rank\"",
+    "color_hint": "COLORS[\"profile\"]",
+    "embed": "    embed = discord.Embed(\n        title=\"📝  Your Rank\",\n        description=(\n            f\"> 👤  **Member:**  {target.mention}\\n\"\n            f\"> 🏅  **RANK:**  `#{level}`\\n\"\n            f\"──────────────────────\\n\"\n            f\"📝  **Current Nickname:**  `{target.display_name}`\\n\"\n            f\"🎯  **Target Nickname:**  `{target_nick}`\"\n        ),\n        color=COLORS[\"profile\"]\n    )",
+    "modifiers": [
+      "        embed.add_field(name=\"🔱  Server Owner\", value=\"> Bot can't change your nickname. Apply manually.\", inline=False)"
+    ],
+    "sends": [
+      "    await ctx.send(embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-072",
+    "line": 6717,
+    "func": "fixrank_cmd",
+    "var": "None",
+    "title_hint": "\"🔱  Server Owner\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"🔱  Server Owner\",\n            description=(\n                f\"> {target.mention} → **RANK `#{level}`**\\n\"\n                f\"──────────────────────\\n\"\n                f\"> 📝  **Target Nickname:**  `{target_nick}`\\n\"\n                f\"> Apply manually:  *Right-click → Edit Profile → Nickname*\"\n            ),\n            color=COLORS[\"warning\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-073",
+    "line": 6729,
+    "func": "fixrank_cmd",
+    "var": "None",
+    "title_hint": "\"🔧  Rank Applied\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "    await ctx.send(embed=discord.Embed(\n        title=\"🔧  Rank Applied\",\n        description=(\n            f\"> {target.mention} → **RANK `#{level}`**\"\n        ),\n        color=COLORS[\"success\"]\n    ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-074",
+    "line": 6741,
+    "func": "matchinfo_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Missing ID\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Missing ID\",\n            description=(\n                f\"> Please provide a lobby ID.\\n\"\n                f\"> Usage:  `{PREFIX}matchinfo <id>`\"\n            ),\n            color=COLORS[\"error\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-075",
+    "line": 6752,
+    "func": "matchinfo_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Not Found\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Not Found\",\n            description=(\n                f\"> Lobby `#{lobby_id}` doesn't exist.\"\n            ),\n            color=COLORS[\"error\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-076",
+    "line": 6760,
+    "func": "matchinfo_cmd",
+    "var": "embed",
+    "title_hint": "f\"📋  Match  —  `#{lobby_id}`\"",
+    "color_hint": "COLORS[\"info\"]",
+    "embed": "    embed = discord.Embed(\n        title=f\"📋  Match  —  `#{lobby_id}`\",\n        description=(\n            f\"> 📊  **Status:**  `{lobby['status']}`\\n\"\n            f\"> 🎮 Mode:  `{lobby.get('game_mode', DEFAULT_MODE).upper()}`\\n\"\n            f\"──────────────────────\"\n        ),\n        color=COLORS[\"info\"]\n    )",
+    "modifiers": [
+      "    embed.add_field(name=f\"🔴  Team 1  —  `{len(lobby['team1_players'])}`\", value=t1m, inline=True)",
+      "    embed.add_field(name=f\"🟢  Team 2  —  `{len(lobby['team2_players'])}`\", value=t2m, inline=True)"
+    ],
+    "sends": [
+      "    await ctx.send(embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-077",
+    "line": 6786,
+    "func": "build_rules_embed",
+    "var": "embed",
+    "title_hint": "\"🛡️  قواعد السيرفر\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "    embed = discord.Embed(\n        title=\"🛡️  قواعد السيرفر\",\n        description=(\n            f\"> مرحباً بك في  **{guild_name}**  🔥\\n\"\n            f\"> يرجى الالتزام بالقواعد التالية:\\n\"\n            f\"{separator()}\\n\"\n            f\"> **1️⃣  الاحترام المتبادل**\\n\"\n            f\"> ─  احترم جميع اللاعبين والأدمنز.\\n\"\n            f\"> ─  ممنوع السب، الشتم، أو الإساءة.\\n\\n\"\n            f\"> **2️⃣  قواعد اللعب**\\n\"\n            f\"> ─  ادخل غرفة انتظار قبل اللعب.\\n\"\n            f\"> ─  استخدم  `{PREFIX}play 4v4`  لبدء ماتش.\\n\"\n            f\"> ─  التزم بنتيجة التصويت.\\n\\n\"\n            f\"> **3️⃣  عدم الغش**\\n\"\n            f\"> ─  ممنوع التلاعب بالتصويت.\\n\"\n            f\"> ─  ممنوع مغادرة الماتش في المنتصف.\\n\\n\"\n            f\"> **4️⃣  استخدام الأوامر**\\n\"\n            f\"> ─  الأوامر تعمل فقط في قنوات play.\\n\\n\"\n            f\"> **5️⃣  العقوبات**\\n\"\n            f\"> ─  مخالفة القواعد = تحذير / كتم / طرد.\\n\"\n            f\"> ─  القرار النهائي للأدمن.\\n\\n\"\n            f\"> 💬  لأي استفسار، تواصل مع الأدمن.\"\n        ),\n        color=COLORS[\"warning\"],\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    embed.set_author(name=\"Server Rules\")",
+      "    embed.set_footer(text=f\"{BOT_FOOTER}  •  Read carefully\")"
+    ],
+    "sends": []
+  },
+  {
+    "id": "EMB-078",
+    "line": 6923,
+    "func": "setup_cmd",
+    "var": "setup_embed",
+    "title_hint": "\"✅  Setup Complete!\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "    setup_embed = discord.Embed(\n        title=\"✅  Setup Complete!\",\n        description=(\n            f\"> Created  `{len(created)}`  channels successfully.\\n\"\n            f\"{separator()}\\n\"\n            f\"> 🛡️  **Rules channel:**  `{RULES_CHANNEL_NAME}`  — للقراءة فقط، وإن لم تُنشأ استخدم  `{PREFIX}rules`\\n\"\n            f\"> 🔇  **Blacklist Role:**  `{BLACKLIST_ROLE_NAME}`\\n\"\n            f\"> 🎮  Use  `{PREFIX}play4v4`  in play channels to start.\"\n        ),\n        color=COLORS[\"success\"],\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    setup_embed.set_footer(text=f\"{BOT_FOOTER}  •  Setup complete\")"
+    ],
+    "sends": [
+      "    await ctx.send(embed=setup_embed)"
+    ]
+  },
+  {
+    "id": "EMB-079",
+    "line": 6945,
+    "func": "autosetup_cmd",
+    "var": "progress_embed",
+    "title_hint": "\"🔄  جارٍ فحص السيرفر...\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "    progress_embed = discord.Embed(\n        title=\"🔄  جارٍ فحص السيرفر...\",\n        description=(\n            f\"> 🔍  البحث عن القنوات والكاتيجوريات الناقصة...\\n\"\n            f\"> 🔧  إنشاء Roles + JAIL لو غير موجودة...\\n\"\n            f\"> ⏳  انتظر...\"\n        ),\n        color=COLORS[\"warning\"],\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    progress_embed.set_footer(text=f\"{BOT_FOOTER}  •  Auto-setup\")"
+    ],
+    "sends": [
+      "    progress = await ctx.send(embed=progress_embed)"
+    ]
+  },
+  {
+    "id": "EMB-080",
+    "line": 6962,
+    "func": "autosetup_cmd",
+    "var": "success_embed",
+    "title_hint": "\"✅  تم الفحص والإصلاح!\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "        success_embed = discord.Embed(\n            title=\"✅  تم الفحص والإصلاح!\",\n            description=(\n                f\"> 🔍  تم فحص السيرفر بالكامل\\n\"\n                f\"> ✅  كل القنوات الناقصة أُنشئت\\n\"\n                f\"> ✅  كل الكاتيجوريات مُحدثة (TEXT + VOICE منفصلين)\\n\"\n                f\"> ✅  Rank Roles مُحدثة\\n\"\n                f\"> ✅  نظام JAIL مُفعّل\\n\"\n                f\"> ✅  Blacklist Role `{BLACKLIST_ROLE_NAME}`\\n\"\n                f\"> ✅  Leaderboard مُحدث\\n\"\n                f\"{separator()}\\n\"\n                f\"> 💡  لم تُمسح أي بيانات موجودة\\n\"\n                f\"> 💡  النقاط والرانك والفويسات كما هي\"\n            ),\n            color=COLORS[\"success\"],\n            timestamp=discord.utils.utcnow()\n        )",
+    "modifiers": [
+      "        success_embed.set_footer(text=f\"{BOT_FOOTER}  •  Auto-setup complete\")"
+    ],
+    "sends": [
+      "        await progress.edit(embed=success_embed)"
+    ]
+  },
+  {
+    "id": "EMB-081",
+    "line": 6984,
+    "func": "autosetup_cmd",
+    "var": "error_embed",
+    "title_hint": "\"❌  فشل Auto-setup\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        error_embed = discord.Embed(\n            title=\"❌  فشل Auto-setup\",\n            description=f\"> 🐛  **الخطأ:**  `{str(e)[:200]}`\",\n            color=COLORS[\"error\"],\n            timestamp=discord.utils.utcnow()\n        )",
+    "modifiers": [
+      "        error_embed.set_footer(text=f\"{BOT_FOOTER}  •  Auto-setup failed\")"
+    ],
+    "sends": [
+      "        await progress.edit(embed=error_embed)"
+    ]
+  },
+  {
+    "id": "EMB-082",
+    "line": 7007,
+    "func": "cleanup_cmd",
+    "var": "None",
+    "title_hint": "\"🧹  Cleanup Complete!\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "    await ctx.send(embed=discord.Embed(\n        title=\"🧹  Cleanup Complete!\",\n        description=(\n            f\"> Deleted  `{deleted}`  match categories.\"\n        ),\n        color=COLORS[\"success\"]\n    ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-083",
+    "line": 7034,
+    "func": "scan_cmd",
+    "var": "embed",
+    "title_hint": "f\"🔍  Server Scan  —  `{len(categories)}`  Categories\"",
+    "color_hint": "COLORS[\"info\"]",
+    "embed": "    embed = discord.Embed(\n        title=f\"🔍  Server Scan  —  `{len(categories)}`  Categories\",\n        description=(\n            f\"> 🏠  **Server:**  {guild.name}\\n\"\n            f\"> 📝  **Text Channels:**  `{len(guild.text_channels)}`\\n\"\n            f\"> 🔊  **Voice Channels:**  `{len(guild.voice_channels)}`\\n\"\n            f\"> 📄  **Page:**  `{page}/{total_pages}`\\n\"\n            f\"──────────────────────\"\n        ),\n        color=COLORS[\"info\"]\n    )",
+    "modifiers": [
+      "    embed.set_footer(text=f\"Page {page}/{total_pages}  •  {PREFIX}scan <page>  •  {PREFIX}deletecat <name>  •  {PREFIX}confirmcat <name>\")",
+      "        embed.add_field(\n            name=f\"📁  `{i}.`  {cat.name}\",\n            value=detail,\n            inline=False\n        )",
+      "        embed.add_field(name=\"📂  No Category\", value=detail or \"> *None*\", inline=False)"
+    ],
+    "sends": [
+      "    await ctx.send(embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-084",
+    "line": 7095,
+    "func": "deletecat_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Missing Name\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Missing Name\",\n            description=(\n                f\"> Please provide a category name.\\n\"\n                f\"> Usage:  `{PREFIX}deletecat <category name>`\\n\"\n                f\"> Use  `{PREFIX}scan`  to see all categories.\"\n            ),\n            color=COLORS[\"error\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-085",
+    "line": 7120,
+    "func": "deletecat_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Not Found\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Not Found\",\n            description=(\n                f\"> No category matching  `{category_name}`.\\n\"\n                f\"> Use  `{PREFIX}scan`  to see all categories.\"\n            ),\n            color=COLORS[\"error\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-086",
+    "line": 7135,
+    "func": "deletecat_cmd",
+    "var": "confirm_embed",
+    "title_hint": "\"⚠️  Confirm Deletion\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "    confirm_embed = discord.Embed(\n        title=\"⚠️  Confirm Deletion\",\n        description=(\n            f\"> 📁  **Category:**  `{target.name}`\\n\"\n            f\"> 📊  **Channels:**  `{total_channels}`  (`{text_count}` text  +  `{voice_count}` voice)\\n\"\n            f\"──────────────────────\\n\"\n            f\"> ⚠️  **This will delete ALL channels inside!**\\n\"\n            f\"> Type  `{PREFIX}confirmcat {target.name}`  to confirm.\"\n        ),\n        color=COLORS[\"warning\"]\n    )",
+    "modifiers": [],
+    "sends": [
+      "    await ctx.send(embed=confirm_embed)"
+    ]
+  },
+  {
+    "id": "EMB-087",
+    "line": 7154,
+    "func": "confirmcat_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Missing Name\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Missing Name\",\n            description=(\n                f\"> Usage:  `{PREFIX}confirmcat <name>`\"\n            ),\n            color=COLORS[\"error\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-088",
+    "line": 7171,
+    "func": "confirmcat_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Not Found\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Not Found\",\n            description=(\n                f\"> No category matching  `{category_name}`.\"\n            ),\n            color=COLORS[\"error\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-089",
+    "line": 7197,
+    "func": "confirmcat_cmd",
+    "var": "None",
+    "title_hint": "\"🗑️  Category Deleted!\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"🗑️  Category Deleted!\",\n            description=(\n                f\"> **{cat_name}** has been deleted.\\n\"\n                f\"──────────────────────\\n\"\n                f\"> ✅  **Channels deleted:**  `{deleted}`\\n\"\n                f\"> ❌  **Errors:**  `{errors}`\"\n            ),\n            color=COLORS[\"success\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-090",
+    "line": 7208,
+    "func": "confirmcat_cmd",
+    "var": "None",
+    "title_hint": "\"⚠️  Partial Delete\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"⚠️  Partial Delete\",\n            description=(\n                f\"> Deleted  `{deleted}`  channels but couldn't delete the category itself.\\n\"\n                f\"> Error:  `{e}`\"\n            ),\n            color=COLORS[\"warning\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-091",
+    "line": 7222,
+    "func": "fixrankall_cmd",
+    "var": "None",
+    "title_hint": "\"🚀  Applying Ranks...\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "    progress = await ctx.send(embed=discord.Embed(\n        title=\"🚀  Applying Ranks...\",\n        description=(\n            f\"> Processing  `{len(guild.members)}`  members.\\n\"\n            f\"> Please wait...\"\n        ),\n        color=COLORS[\"warning\"]\n    ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-092",
+    "line": 7239,
+    "func": "fixrankall_cmd",
+    "var": "None",
+    "title_hint": "\"✅  Done!\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "    await progress.edit(embed=discord.Embed(\n        title=\"✅  Done!\",\n        description=(\n            f\"> Updated  `{updated}`  members successfully.\"\n        ),\n        color=COLORS[\"success\"]\n    ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-093",
+    "line": 7254,
+    "func": "botinfo_cmd",
+    "var": "embed",
+    "title_hint": "\"🤖 Bot Info\"",
+    "color_hint": "COLORS[\"info\"]",
+    "embed": "    embed = discord.Embed(\n        title=\"🤖 Bot Info\",\n        description=(\n            f\"> 🔥  **Free Fire Matchmaking Bot**\\n\"\n            f\"> نظام ماتشмейكنج متكامل لإدارة مباريات Free Fire\\n\"\n            f\"{separator()}\"\n        ),\n        color=COLORS[\"info\"],\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    embed.add_field(name=\"📛  Name\", value=f\"```fix\\n{bot.user.name}\\n```\", inline=True)",
+      "    embed.add_field(name=\"🏷️  Version\", value=f\"```fix\\nv4.1 MVP-COLLECTIVE\\n```\", inline=True)",
+      "    embed.add_field(name=\"🔨  Build\", value=f\"```fix\\n{BUILD_SHA}\\n```\", inline=True)",
+      "    embed.add_field(name=\"⌨️  Prefix\", value=f\"```fix\\n{PREFIX}\\n```\", inline=True)",
+      "    embed.add_field(name=\"🏠  Servers\", value=f\"```fix\\n{len(bot.guilds)}\\n```\", inline=True)",
+      "    embed.add_field(name=\"👥  Users\", value=f\"```fix\\n{total_members:,}\\n```\", inline=True)",
+      "    embed.add_field(name=\"🔱  Owner\", value=f\"```fix\\n{BOT_OWNER_NAME}\\n```\", inline=True)",
+      "    embed.add_field(\n        name=\"📡  Channels Coverage\",\n        value=(\n            f\"> 📝  **Text Channels:**  `{total_text_channels}`\\n\"\n            f\"> 🔊  **Voice Channels:**  `{total_voice_channels}`\"\n        ),\n        inline=False\n    )",
+      "    embed.add_field(\n        name=\"🎮  Features\",\n        value=(\n            f\"> 🏆  4 Game Modes (1v1, 2v2, 3v3, 4v4)\\n\"\n            f\"> 🗳️  Group MVP Voting (4 voters, `{MVP_CONSENSUS_NEEDED}` consensus)\\n\"\n            f\"> 🏅  Dynamic Rank System\\n\"\n            f\"> 📊  Live Leaderboard\\n\"\n            f\"> 🛡️  Auto Rules Channel (`{RULES_CHANNEL_NAME}`)\\n\"\n            f\"> ⏱️  Auto-hide 'Create Lobby' after `{CREATE_PROMPT_DELETE_AFTER}s`\"\n        ),\n        inline=False\n    )",
+      "    embed.set_author(name=\"Bot Information\", icon_url=bot.user.display_avatar.url)",
+      "    embed.set_footer(text=f\"{BOT_FOOTER}  •  Online & Ready\")"
+    ],
+    "sends": [
+      "    await ctx.send(embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-094",
+    "line": 7303,
+    "func": "setcommandschannel_cmd",
+    "var": "None",
+    "title_hint": "\"✅  Channel Removed\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"✅  Channel Removed\",\n            description=(\n                f\"> {channel.mention}  has been removed from allowed command channels.\"\n            ),\n            color=COLORS[\"success\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-095",
+    "line": 7312,
+    "func": "setcommandschannel_cmd",
+    "var": "None",
+    "title_hint": "\"✅  Channel Added\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"✅  Channel Added\",\n            description=(\n                f\"> {channel.mention}  has been added to allowed command channels.\"\n            ),\n            color=COLORS[\"success\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-096",
+    "line": 7326,
+    "func": "setleaderboard_cmd",
+    "var": "None",
+    "title_hint": "\"✅  Leaderboard Set\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "    await ctx.send(embed=discord.Embed(\n        title=\"✅  Leaderboard Set\",\n        description=(\n            f\"> {ctx.channel.mention}  is now the leaderboard channel.\\n\"\n            f\"> It will update automatically.\"\n        ),\n        color=COLORS[\"success\"]\n    ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-097",
+    "line": 7344,
+    "func": "report_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Missing User\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Missing User\",\n            description=(\n                f\"> Usage:  `{PREFIX}report @user [reason]`\\n\"\n                f\"> مثال:  `{PREFIX}report @user يستخدم هاك`\"\n            ),\n            color=COLORS[\"error\"]\n        ), delete_after=15)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-098",
+    "line": 7354,
+    "func": "report_cmd",
+    "var": "None",
+    "title_hint": "\"❌  لا يمكنك البلاغ عن نفسك\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  لا يمكنك البلاغ عن نفسك\",\n            color=COLORS[\"error\"]\n        ), delete_after=10)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-099",
+    "line": 7360,
+    "func": "report_cmd",
+    "var": "None",
+    "title_hint": "\"❌  لا يمكنك البلاغ عن بوت\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  لا يمكنك البلاغ عن بوت\",\n            color=COLORS[\"error\"]\n        ), delete_after=10)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-100",
+    "line": 7371,
+    "func": "report_cmd",
+    "var": "None",
+    "title_hint": "\"⚠️  بلغت من قبل\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"⚠️  بلغت من قبل\",\n            description=f\"> لقد بلّغت على {member.mention} سابقاً.\",\n            color=COLORS[\"warning\"]\n        ), delete_after=10)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-101",
+    "line": 7378,
+    "func": "report_cmd",
+    "var": "report_embed",
+    "title_hint": "\"⚠️  تم تسجيل البلاغ\"",
+    "color_hint": "COLORS[\"warning\"] if remaining > 0 else COLORS[\"error\"]",
+    "embed": "    report_embed = discord.Embed(\n        title=\"⚠️  تم تسجيل البلاغ\",\n        description=(\n            f\"> 👤  **اللاعب المُبلَّغ عنه:**  {member.mention}\\n\"\n            f\"> 👮  **الـمُبلَّغ:**  {ctx.author.mention}\\n\"\n            + (f\"> 📝  **السبب:**  {reason}\\n\" if reason else \"\")\n            + f\"> 📊  **إجمالي البلاغات:**  `{total}/{REPORT_THRESHOLD}`\\n\"\n            + (f\"> ⚠️  **يتبقى:**  `{remaining}`  بلاغ للحظر التلقائي\" if remaining > 0 else f\"> ⚠️  **وصل للحد!**  سيتم الحظر تلقائياً\")\n        ),\n        color=COLORS[\"warning\"] if remaining > 0 else COLORS[\"error\"],\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    report_embed.set_footer(text=f\"{BOT_FOOTER}  •  Report #{total}\")"
+    ],
+    "sends": [
+      "    await ctx.send(embed=report_embed)"
+    ]
+  },
+  {
+    "id": "EMB-102",
+    "line": 7413,
+    "func": "reports_cmd",
+    "var": "embed",
+    "title_hint": "f\"⚠️  بلاغات اللاعب  —  {target.display_name}\"",
+    "color_hint": "COLORS[\"error\"] if count >= REPORT_THRESHOLD else COLORS[\"warning\"]",
+    "embed": "    embed = discord.Embed(\n        title=f\"⚠️  بلاغات اللاعب  —  {target.display_name}\",\n        description=(\n            f\"> 👤  **اللاعب:**  {target.mention}\\n\"\n            f\"> 📊  **إجمالي البلاغات:**  `{count}/{REPORT_THRESHOLD}`\\n\"\n            + (f\"> ⚠️  **محظور تلقائياً**\" if count >= REPORT_THRESHOLD else f\"> ⚠️  **يتبقى:**  `{REPORT_THRESHOLD - count}`  بلاغ للحظر\")\n            + f\"\\n{separator()}\"\n        ),\n        color=COLORS[\"error\"] if count >= REPORT_THRESHOLD else COLORS[\"warning\"],\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    embed.set_author(name=\"Player Reports\", icon_url=None)",
+      "            embed.add_field(\n                name=f\"#{i}  —  {reporter_name}\",\n                value=f\"> 📝  `{reason}`\\n> 📅  `{timestamp}`\",\n                inline=False\n            )",
+      "            embed.set_footer(text=f\"... و {count - 10} بلاغ آخر\")"
+    ],
+    "sends": [
+      "    await ctx.send(embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-103",
+    "line": 7452,
+    "func": "banplayer_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Missing User\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Missing User\",\n            description=f\"> Usage:  `{PREFIX}banplayer @user أو ID [reason]`\",\n            color=COLORS[\"error\"]\n        ), delete_after=15)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-104",
+    "line": 7475,
+    "func": "banplayer_cmd",
+    "var": "ban_embed",
+    "title_hint": "\"🚫  تم حظر اللاعب\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "    ban_embed = discord.Embed(\n        title=\"🚫  تم حظر اللاعب\",\n        description=(\n            f\"> 👤  **اللاعب:**  <@{user_id}>\\n\"\n            f\"> 👮  **حظره:**  {ctx.author.mention}\\n\"\n            + (f\"> 📝  **السبب:**  `{reason}`\\n\" if reason else \"\")\n            + f\"> 📊  **عدد البلاغات السابقة:**  `{report_count}`\\n\"\n            + (f\"> 🔍  **فويس التفتيش:**  {assigned_channel.mention}\\n> 🔒  **مقيّد:**  لا يمكنه مغادرة هذا الفويس\" if assigned_channel else \"\")\n        ),\n        color=COLORS[\"error\"],\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    ban_embed.set_footer(text=f\"{BOT_FOOTER}  •  Banned\")"
+    ],
+    "sends": [
+      "    await ctx.send(embed=ban_embed)"
+    ]
+  },
+  {
+    "id": "EMB-105",
+    "line": 7497,
+    "func": "unbanplayer_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Missing User\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Missing User\",\n            description=f\"> Usage:  `{PREFIX}unbanplayer @user أو ID`\",\n            color=COLORS[\"error\"]\n        ), delete_after=15)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-106",
+    "line": 7506,
+    "func": "unbanplayer_cmd",
+    "var": "None",
+    "title_hint": "\"ℹ️  اللاعب غير محظور\"",
+    "color_hint": "COLORS[\"info\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"ℹ️  اللاعب غير محظور\",\n            description=f\"> <@{user_id}>  غير محظور أصلاً.\",\n            color=COLORS[\"info\"]\n        ), delete_after=10)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-107",
+    "line": 7514,
+    "func": "unbanplayer_cmd",
+    "var": "unban_embed",
+    "title_hint": "\"✅  تم فك الحظر\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "    unban_embed = discord.Embed(\n        title=\"✅  تم فك الحظر\",\n        description=(\n            f\"> 👤  **اللاعب:**  <@{user_id}>\\n\"\n            f\"> 👮  **فك الحظر:**  {ctx.author.mention}\\n\"\n            f\"> 📊  **تم مسح كل البلاغات السابقة**\\n\"\n            f\"> 🎮  اللاعب يستطيع اللعب الآن\"\n        ),\n        color=COLORS[\"success\"],\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    unban_embed.set_footer(text=f\"{BOT_FOOTER}  •  Unbanned\")"
+    ],
+    "sends": [
+      "    await ctx.send(embed=unban_embed)"
+    ]
+  },
+  {
+    "id": "EMB-108",
+    "line": 7535,
+    "func": "banned_cmd",
+    "var": "embed",
+    "title_hint": "\"📋  قائمة المحظورين\"",
+    "color_hint": "COLORS[\"error\"] if banned else COLORS[\"success\"]",
+    "embed": "    embed = discord.Embed(\n        title=\"📋  قائمة المحظورين\",\n        description=(\n            f\"> 📊  **إجمالي المحظورين:**  `{len(banned)}`\\n\"\n            f\"{separator()}\"\n        ),\n        color=COLORS[\"error\"] if banned else COLORS[\"success\"],\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    embed.set_author(name=\"Banned Players\", icon_url=None)",
+      "            embed.add_field(\n                name=f\"#{i}  —  {name}\",\n                value=(\n                    f\"> 👤  {mention}\\n\"\n                    f\"> 📝  `{reason}`\\n\"\n                    f\"> 📊  `{report_count}` reports  •  📅  `{banned_at}`\"\n                ),\n                inline=False\n            )",
+      "            embed.set_footer(text=f\"... و {len(banned) - 15} لاعب آخر\")"
+    ],
+    "sends": [
+      "    await ctx.send(embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-109",
+    "line": 7576,
+    "func": "setreportchannel_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Missing Voice Channel\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Missing Voice Channel\",\n            description=(\n                f\"> Usage:  `{PREFIX}setreportchannel <#voice_channel>`\\n\"\n                f\"> مثال:  `{PREFIX}setreportchannel #Investigation-Room`\\n\\n\"\n                f\"> 💡  اذكر فويس صوتي (Voice Channel) موجود\"\n            ),\n            color=COLORS[\"error\"]\n        ), delete_after=15)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-110",
+    "line": 7588,
+    "func": "setreportchannel_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Not a Voice Channel\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Not a Voice Channel\",\n            description=f\"> {channel.mention}  ليس فويس صوتي.\\n> استخدم فويس صوتي (Voice Channel).\",\n            color=COLORS[\"error\"]\n        ), delete_after=10)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-111",
+    "line": 7600,
+    "func": "setreportchannel_cmd",
+    "var": "embed",
+    "title_hint": "\"🎤  فويسات التفتيش\"",
+    "color_hint": "COLORS[\"success\"] if added else COLORS[\"warning\"]",
+    "embed": "    embed = discord.Embed(\n        title=\"🎤  فويسات التفتيش\",\n        description=(\n            f\"> 🎤  **الفويس:**  {channel.mention}\\n\"\n            + (f\"> ✅  **تمت الإضافة** لقائمة فويسات التفتيش\\n\" if added else f\"> ⚠️  **موجود مسبقاً** في القائمة\\n\")\n            + f\"{separator()}\\n\"\n            f\"> 📊  **إجمالي الفويسات:**  `{len(all_channels)}`\\n\"\n            f\"{channels_list}\\n\"\n            f\"> 💡  اللاعبون المحظورون سيُنقلون لهذه الفويسات تلقائياً\"\n        ),\n        color=COLORS[\"success\"] if added else COLORS[\"warning\"],\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    embed.set_author(name=\"Report Channel Set\", icon_url=None)",
+      "    embed.set_footer(text=f\"{BOT_FOOTER}  •  Admin setup\")"
+    ],
+    "sends": [
+      "    await ctx.send(embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-112",
+    "line": 7624,
+    "func": "removereportchannel_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Missing Voice Channel\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Missing Voice Channel\",\n            description=f\"> Usage:  `{PREFIX}removereportchannel <#voice_channel>`\",\n            color=COLORS[\"error\"]\n        ), delete_after=15)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-113",
+    "line": 7636,
+    "func": "removereportchannel_cmd",
+    "var": "embed",
+    "title_hint": "\"🗑️  حذف فويس التفتيش\"",
+    "color_hint": "COLORS[\"success\"] if removed else COLORS[\"warning\"]",
+    "embed": "    embed = discord.Embed(\n        title=\"🗑️  حذف فويس التفتيش\",\n        description=(\n            f\"> 🎤  **الفويس:**  {channel.mention}\\n\"\n            + (f\"> ✅  **تم الحذف** من القائمة\\n\" if removed else f\"> ⚠️  **غير موجود** في القائمة\\n\")\n            + f\"{separator()}\\n\"\n            f\"> 📊  **الفويسات المتبقية:**  `{len(all_channels)}`\\n\"\n            f\"{channels_list}\"\n        ),\n        color=COLORS[\"success\"] if removed else COLORS[\"warning\"],\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    embed.set_author(name=\"Report Channel Removed\", icon_url=None)",
+      "    embed.set_footer(text=f\"{BOT_FOOTER}  •  Admin setup\")"
+    ],
+    "sends": [
+      "    await ctx.send(embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-114",
+    "line": 7659,
+    "func": "reportchannels_cmd",
+    "var": "embed",
+    "title_hint": "\"📋  فويسات التفتيش المحددة\"",
+    "color_hint": "COLORS[\"info\"]",
+    "embed": "    embed = discord.Embed(\n        title=\"📋  فويسات التفتيش المحددة\",\n        description=(\n            f\"> 📊  **إجمالي الفويسات:**  `{len(all_channels)}`\\n\"\n            + (f\"> ⚠️  **لا توجد فويسات محددة** — سيتم إنشاء فويسات تلقائية عند الحظر\\n\" if not all_channels else \"\")\n            + f\"{separator()}\"\n        ),\n        color=COLORS[\"info\"],\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    embed.set_author(name=\"Report Channels List\", icon_url=None)",
+      "    embed.set_footer(text=f\"{BOT_FOOTER}  •  Use !!setreportchannel to add\")",
+      "                embed.add_field(\n                    name=f\"#{i}  —  {ch.name}\",\n                    value=f\"> 🎤  {ch.mention}\\n> 📊  `{members_count}` members\",\n                    inline=False\n                )",
+      "                embed.add_field(\n                    name=f\"#{i}  —  ⚠️ محذوف\",\n                    value=f\"> ❌  Channel ID:  `{cid}`  غير موجود\\n> 💡 Use  `{PREFIX}removereportchannel`  لتنظيف القائمة\",\n                    inline=False\n                )"
+    ],
+    "sends": [
+      "    await ctx.send(embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-115",
+    "line": 7763,
+    "func": "jail_cmd",
+    "var": "None",
+    "title_hint": "\"❌ Missing User\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(title=\"❌ Missing User\", description=f\"> Usage: `{PREFIX}jail <@user أو ID> [سبب]`\", color=COLORS[\"error\"]), delete_after=15); return",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-116",
+    "line": 7767,
+    "func": "jail_cmd",
+    "var": "None",
+    "title_hint": "\"❌ اللاعب غير موجود في السيرفر\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(title=\"❌ اللاعب غير موجود في السيرفر\", description=f\"> <@{user_id}>  ليس عضو في هذا السيرفر.\", color=COLORS[\"error\"]), delete_after=10)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-117",
+    "line": 7781,
+    "func": "jail_cmd",
+    "var": "jail_embed",
+    "title_hint": "\"🔒  تم إرسال اللاعب للسجن\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "    jail_embed = discord.Embed(title=\"🔒  تم إرسال اللاعب للسجن\", description=(f\"> 👤  **اللاعب:**  {member.mention}\\n> 👮  **الأدمن:**  {ctx.author.mention}\\n\" + (f\"> 📝  **السبب:**  `{reason}`\\n\" if reason else \"\") + f\"{separator()}\\n> 🔒  اللاعب الآن في السجن\\n> 💬  يمكنه الكتابة في `{JAIL_CHAT_NAME}` و `{JAIL_PROUVES_NAME}`\\n\" + (f\"> 🎤  فويس السجن: `{jail_voice.name}`\\n\" if jail_voice else \"\") + f\"> ✅  لفك السجن:  `{PREFIX}unjail @user`\"), color=COLORS[\"error\"], timestamp=discord.utils.utcnow())",
+    "modifiers": [
+      "    jail_embed.set_author(name=\"JAIL System\"); jail_embed.set_footer(text=f\"{BOT_FOOTER}  •  Jailed\")",
+      "    jail_embed.set_author(name=\"JAIL System\"); jail_embed.set_footer(text=f\"{BOT_FOOTER}  •  Jailed\")"
+    ],
+    "sends": [
+      "    await ctx.send(embed=jail_embed)"
+    ]
+  },
+  {
+    "id": "EMB-118",
+    "line": 7788,
+    "func": "jail_cmd",
+    "var": "welcome",
+    "title_hint": "\"🔒  مرحباً بك في السجن\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "            welcome = discord.Embed(title=\"🔒  مرحباً بك في السجن\", description=(f\"> {member.mention}  تم إرسالك للسجن\\n\" + (f\"> 📝  **السبب:**  {reason}\\n\" if reason else \"\") + f\"{separator()}\\n> 💬  يمكنك الكلام هنا فقط\\n> 📸  ارفع أدلتك في  `#{JAIL_PROUVES_NAME}`\\n> ⏳  انتظر قرار الأدمن\"), color=COLORS[\"warning\"], timestamp=discord.utils.utcnow())",
+    "modifiers": [
+      "            welcome.set_footer(text=f\"{BOT_FOOTER}  •  JAIL\")"
+    ],
+    "sends": [
+      "            await jail_chat.send(content=member.mention, embed=welcome)"
+    ]
+  },
+  {
+    "id": "EMB-119",
+    "line": 7799,
+    "func": "unjail_cmd",
+    "var": "None",
+    "title_hint": "\"❌ Missing User\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(title=\"❌ Missing User\", description=f\"> Usage: `{PREFIX}unjail <@user أو ID>`\", color=COLORS[\"error\"]), delete_after=15); return",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-120",
+    "line": 7803,
+    "func": "unjail_cmd",
+    "var": "None",
+    "title_hint": "\"ℹ️  اللاعب غير موجود\"",
+    "color_hint": "COLORS[\"info\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(title=\"ℹ️  اللاعب غير موجود\", description=f\"> <@{user_id}>  ليس في السيرفر.\", color=COLORS[\"info\"]), delete_after=10); return",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-121",
+    "line": 7810,
+    "func": "unjail_cmd",
+    "var": "unjail_embed",
+    "title_hint": "\"✅  تم فك السجن\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "    unjail_embed = discord.Embed(title=\"✅  تم فك السجن\", description=f\"> 👤  **اللاعب:**  {member.mention}\\n> 👮  **الأدمن:**  {ctx.author.mention}\\n> 🎮  اللاعب حر الآن\", color=COLORS[\"success\"], timestamp=discord.utils.utcnow())",
+    "modifiers": [
+      "    unjail_embed.set_author(name=\"JAIL System\"); unjail_embed.set_footer(text=f\"{BOT_FOOTER}  •  Released\")",
+      "    unjail_embed.set_author(name=\"JAIL System\"); unjail_embed.set_footer(text=f\"{BOT_FOOTER}  •  Released\")"
+    ],
+    "sends": [
+      "    await ctx.send(embed=unjail_embed)"
+    ]
+  },
+  {
+    "id": "EMB-122",
+    "line": 7921,
+    "func": "blacklist_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Missing User\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Missing User\",\n            description=f\"> Usage:  `{PREFIX}blacklist @user أو ID [reason]`\",\n            color=COLORS[\"error\"]\n        ), delete_after=15)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-123",
+    "line": 7941,
+    "func": "blacklist_cmd",
+    "var": "None",
+    "title_hint": "\"❌  فشل\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  فشل\",\n            description=\"> لم أستطع تطبيق البلاك ليست.\",\n            color=COLORS[\"error\"]\n        ), delete_after=10)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-124",
+    "line": 7947,
+    "func": "blacklist_cmd",
+    "var": "embed",
+    "title_hint": "\"🔇  تمت إضافة اللاعب للبلاك ليست\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "    embed = discord.Embed(\n        title=\"🔇  تمت إضافة اللاعب للبلاك ليست\",\n        description=(\n            f\"> 👤  **اللاعب:**  <@{user_id}>\\n\"\n            f\"> 👮  **بواسطة:**  {ctx.author.mention}\\n\"\n            + (f\"> 📝  **السبب:**  `{reason}`\\n\" if reason else \"\")\n            + f\"> ⏱️  **المدة:**  10 دقائق\"\n        ),\n        color=COLORS[\"warning\"],\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    embed.set_footer(text=f\"{BOT_FOOTER}  •  Blacklisted\")"
+    ],
+    "sends": [
+      "    await ctx.send(embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-125",
+    "line": 7973,
+    "func": "unblacklist_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Missing User\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Missing User\",\n            description=f\"> Usage:  `{PREFIX}unblacklist @user أو ID`\",\n            color=COLORS[\"error\"]\n        ), delete_after=15)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-126",
+    "line": 7985,
+    "func": "unblacklist_cmd",
+    "var": "embed",
+    "title_hint": "\"✅  تمت إزالة البلاك ليست\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "    embed = discord.Embed(\n        title=\"✅  تمت إزالة البلاك ليست\",\n        description=(\n            f\"> 👤  **اللاعب:**  <@{user_id}>\\n\"\n            f\"> 👮  **بواسطة:**  {ctx.author.mention}\\n\"\n            f\"> 🎮  يمكنه استخدام البوت الآن\"\n        ),\n        color=COLORS[\"success\"],\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    embed.set_footer(text=f\"{BOT_FOOTER}  •  Unblacklisted\")"
+    ],
+    "sends": [
+      "    await ctx.send(embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-127",
+    "line": 8010,
+    "func": "blacklisted_cmd",
+    "var": "embed",
+    "title_hint": "\"📋  قائمة البلاك ليست\"",
+    "color_hint": "COLORS[\"warning\"] if blacklisted else COLORS[\"success\"]",
+    "embed": "    embed = discord.Embed(\n        title=\"📋  قائمة البلاك ليست\",\n        description=(\n            f\"> 📊  **إجمالي:**  `{len(blacklisted)}`\\n\"\n            f\"{separator()}\"\n        ),\n        color=COLORS[\"warning\"] if blacklisted else COLORS[\"success\"],\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    embed.set_author(name=\"Blacklisted Players\")",
+      "            embed.add_field(\n                name=f\"#{i}  —  {name}\",\n                value=(\n                    f\"> 👤  {mention}\\n\"\n                    f\"> 📝  `{reason}`\\n\"\n                    f\"> ⏱️  ينتهي:  `{expires}`\"\n                ),\n                inline=False\n            )",
+      "            embed.set_footer(text=f\"... و {len(blacklisted) - 15} لاعب آخر\")"
+    ],
+    "sends": [
+      "    await ctx.send(embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-128",
+    "line": 8057,
+    "func": "winner_mvp_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Missing\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Missing\",\n            description=f\"> Usage:  `{PREFIX}w <lobby_id> <@user/ID>`\",\n            color=COLORS[\"error\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-129",
+    "line": 8066,
+    "func": "winner_mvp_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Lobby not active\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Lobby not active\",\n            description=f\"> Lobby `#{lobby_id}` ليس في حالة تصويت.\",\n            color=COLORS[\"error\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-130",
+    "line": 8074,
+    "func": "winner_mvp_cmd",
+    "var": "None",
+    "title_hint": "\"❌  لاعب غير موجود في الماتش\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  لاعب غير موجود في الماتش\",\n            description=f\"> <@{user_id}>  ليس من لاعبي هذا الماتش.\",\n            color=COLORS[\"error\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-131",
+    "line": 8083,
+    "func": "winner_mvp_cmd",
+    "var": "None",
+    "title_hint": "\"✅  تم تعيين MVP WINNER\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "    await ctx.send(embed=discord.Embed(\n        title=\"✅  تم تعيين MVP WINNER\",\n        description=f\"> 🏆  **MVP WINNER:**  <@{user_id}>\\n> 📌  **Lobby:**  `#{lobby_id}`\",\n        color=COLORS[\"success\"]\n    ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-132",
+    "line": 8098,
+    "func": "loser_mvp_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Missing\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Missing\",\n            description=f\"> Usage:  `{PREFIX}l <lobby_id> <@user/ID>`\",\n            color=COLORS[\"error\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-133",
+    "line": 8107,
+    "func": "loser_mvp_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Lobby not active\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Lobby not active\",\n            description=f\"> Lobby `#{lobby_id}` ليس في حالة تصويت.\",\n            color=COLORS[\"error\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-134",
+    "line": 8115,
+    "func": "loser_mvp_cmd",
+    "var": "None",
+    "title_hint": "\"❌  لاعب غير موجود في الماتش\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  لاعب غير موجود في الماتش\",\n            description=f\"> <@{user_id}>  ليس من لاعبي هذا الماتش.\",\n            color=COLORS[\"error\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-135",
+    "line": 8124,
+    "func": "loser_mvp_cmd",
+    "var": "None",
+    "title_hint": "\"✅  تم تعيين MVP LOSER\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "    await ctx.send(embed=discord.Embed(\n        title=\"✅  تم تعيين MVP LOSER\",\n        description=f\"> ✦  **MVP LOSER:**  <@{user_id}>\\n> 📌  **Lobby:**  `#{lobby_id}`\",\n        color=COLORS[\"success\"]\n    ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-136",
+    "line": 8149,
+    "func": "_apply_admin_mvp",
+    "var": "None",
+    "title_hint": "\"❌  MVP من نفس الفريق!\"",
+    "color_hint": "COLORS.get(\"danger\"",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  MVP من نفس الفريق!\",\n            description=\"> MVP WINNER و MVP LOSER يجب أن يكونا من فريقين مختلفين.\",\n            color=COLORS.get(\"danger\", COLORS.get(\"error\", 0xE74C3C))\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-137",
+    "line": 8156,
+    "func": "_apply_admin_mvp",
+    "var": "None",
+    "title_hint": "\"⚙️  جارٍ تطبيق النقاط...\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "    await ctx.send(embed=discord.Embed(\n        title=\"⚙️  جارٍ تطبيق النقاط...\",\n        description=(\n            f\"> 🏆  **Winner Team:**  {w_team}\\n\"\n            f\"> 🔱  **MVP WINNER:**  <@{winner_id}>\\n\"\n            f\"> ✦  **MVP LOSER:**  <@{loser_id}>\"\n        ),\n        color=COLORS[\"success\"]\n    ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-138",
+    "line": 8185,
+    "func": "_apply_admin_mvp",
+    "var": "None",
+    "title_hint": "\"❌  فشل تطبيق النقاط\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  فشل تطبيق النقاط\",\n            description=f\"> 🐛  **الخطأ:**  `{str(e)[:200]}`\\n> ✅  تم إنهاء الماتش وحذف القنوات\",\n            color=COLORS[\"error\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-139",
+    "line": 8203,
+    "func": "startvote_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Missing Lobby ID\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "            await ctx.send(embed=discord.Embed(\n                title=\"❌  Missing Lobby ID\",\n                description=(\n                    f\"> Usage:  `{PREFIX}startvote <lobby_id>`\\n\"\n                    f\"> أو استخدم  `{PREFIX}startvote`  لو فيه ماتش نشط\\n\"\n                    f\"> 💡 Use  `{PREFIX}matches`  لعرض الماتشات النشطة\"\n                ),\n                color=COLORS[\"error\"]\n            ), delete_after=15)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-140",
+    "line": 8215,
+    "func": "startvote_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Not Found\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Not Found\",\n            description=f\"> اللوبي `#{lobby_id}` غير موجود\",\n            color=COLORS[\"error\"]\n        ), delete_after=10)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-141",
+    "line": 8222,
+    "func": "startvote_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Not Active\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Not Active\",\n            description=f\"> اللوبي `#{lobby_id}` حالته: `{lobby['status']}`\\n> يجب أن يكون `started`\",\n            color=COLORS[\"error\"]\n        ), delete_after=10)",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-142",
+    "line": 8230,
+    "func": "startvote_cmd",
+    "var": "embed",
+    "title_hint": "\"🗳️  تم بدء التصويت!\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "    embed = discord.Embed(\n        title=\"🗳️  تم بدء التصويت!\",\n        description=(\n            f\"> 🏠  **Lobby:**  `#{lobby_id}`\\n\"\n            f\"> 👮  **Started by:**  {ctx.author.mention}\\n\"\n            f\"> ⚡  تم تجاوز cooldown الـ 10 دقائق\\n\"\n            f\"> 🗳️  الهوست وأول داخل يصوتان الآن!\"\n        ),\n        color=COLORS[\"success\"],\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    embed.set_footer(text=f\"{BOT_FOOTER}  •  Force Start Vote\")"
+    ],
+    "sends": [
+      "    await ctx.send(embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-143",
+    "line": 8252,
+    "func": "resolve_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Missing\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Missing\",\n            description=(\n                f\"> Usage:  `{PREFIX}resolve <id> <team1|team2>`\"\n            ),\n            color=COLORS[\"error\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-144",
+    "line": 8262,
+    "func": "resolve_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Invalid\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Invalid\",\n            description=(\n                f\"> Winner must be  `team1`  or  `team2`.\"\n            ),\n            color=COLORS[\"error\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-145",
+    "line": 8272,
+    "func": "resolve_cmd",
+    "var": "None",
+    "title_hint": "\"❌  No Dispute\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  No Dispute\",\n            description=(\n                f\"> Lobby `#{lobby_id}` is not in voting status.\"\n            ),\n            color=COLORS[\"error\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-146",
+    "line": 8280,
+    "func": "resolve_cmd",
+    "var": "None",
+    "title_hint": "\"⚖️  Resolved!\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "    await ctx.send(embed=discord.Embed(\n        title=\"⚖️  Resolved!\",\n        description=(\n            f\"> **{ctx.author.mention}**  decided the winner:\\n\"\n            f\"> **{'🟠 Team 1' if winner=='team1' else '🟢 Team 2'}**\"\n        ),\n        color=COLORS[\"success\"]\n    ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-147",
+    "line": 8295,
+    "func": "resetstats_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Missing User\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Missing User\",\n            description=(\n                f\"> Usage:  `{PREFIX}resetstats @user أو ID`\"\n            ),\n            color=COLORS[\"error\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-148",
+    "line": 8308,
+    "func": "resetstats_cmd",
+    "var": "None",
+    "title_hint": "\"✅  Stats Reset\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "    await ctx.send(embed=discord.Embed(\n        title=\"✅  Stats Reset\",\n        description=(\n            f\"> <@{user_id}>  —  RANK  `#{STARTING_LEVEL}`\\n\"\n            f\"> All stats have been reset to default.\"\n        ),\n        color=COLORS[\"success\"]\n    ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-149",
+    "line": 8325,
+    "func": "resetrankall_cmd",
+    "var": "progress_embed",
+    "title_hint": "\"🚀  جارٍ تصفير النقاط والرانك...\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "    progress_embed = discord.Embed(\n        title=\"🚀  جارٍ تصفير النقاط والرانك...\",\n        description=(\n            f\"> 📊  **عدد الأعضاء:**  `{len(guild.members)}`\\n\"\n            f\"> 💰  **سيتم تصفير:**  النقاط + الرانك\\n\"\n            f\"> 🏅  **الرانك المستهدف:**  `#{STARTING_LEVEL}`  (نقاط = 0)\\n\"\n            f\"> ⏳  **انتظر...**\"\n        ),\n        color=COLORS[\"warning\"],\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    progress_embed.set_footer(text=f\"{BOT_FOOTER}  •  Server-wide reset\")"
+    ],
+    "sends": [
+      "    progress = await ctx.send(embed=progress_embed)"
+    ]
+  },
+  {
+    "id": "EMB-150",
+    "line": 8372,
+    "func": "resetrankall_cmd",
+    "var": "success_embed",
+    "title_hint": "\"✅  تم تصفير كل البيانات!\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "    success_embed = discord.Embed(\n        title=\"✅  تم تصفير كل البيانات!\",\n        description=(\n            f\"> 🏅  كل الأعضاء تم تصفيرهم إلى  `RANK #{STARTING_LEVEL}`  (نقاط = 0)\\n\"\n            f\"{separator()}\\n\"\n            f\"> ✅  **تم التصفير:**  `{reset_count}`\\n\"\n            f\"> 🤖  **تم تخطي البوتات:**  `{skipped_bots}`\\n\"\n            f\"> ⚠️  **فشل:**  `{failed}`\\n\"\n            f\"> 💡  كل الستاتس (نقاط/فوز/خسارة/MVPs) صفرت أيضاً\"\n        ),\n        color=COLORS[\"success\"],\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    success_embed.set_footer(text=f\"{BOT_FOOTER}  •  Reset complete\")"
+    ],
+    "sends": [
+      "    await progress.edit(embed=success_embed)"
+    ]
+  },
+  {
+    "id": "EMB-151",
+    "line": 8402,
+    "func": "setlevel_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Missing\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Missing\",\n            description=(\n                f\"> Usage:  `{PREFIX}setlevel @user أو ID <level>`\"\n            ),\n            color=COLORS[\"error\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-152",
+    "line": 8411,
+    "func": "setlevel_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Invalid Level\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Invalid Level\",\n            description=(\n                f\"> Level must be between  `1`  and  `9999`.\"\n            ),\n            color=COLORS[\"error\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-153",
+    "line": 8431,
+    "func": "setlevel_cmd",
+    "var": "None",
+    "title_hint": "\"✅  Level Updated\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "    await ctx.send(embed=discord.Embed(\n        title=\"✅  Level Updated\",\n        description=(\n            f\"> <@{user_id}> → **RANK  `#{level}`**\"\n        ),\n        color=COLORS[\"success\"]\n    ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-154",
+    "line": 8444,
+    "func": "setpoints_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Missing\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Missing\",\n            description=(\n                f\"> Usage:  `{PREFIX}setpoints @user أو ID <points>`\"\n            ),\n            color=COLORS[\"error\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-155",
+    "line": 8453,
+    "func": "setpoints_cmd",
+    "var": "None",
+    "title_hint": "\"❌  Invalid Points\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        await ctx.send(embed=discord.Embed(\n            title=\"❌  Invalid Points\",\n            description=(\n                f\"> Points must be between  `-99999`  and  `99999`.\"\n            ),\n            color=COLORS[\"error\"]\n        ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-156",
+    "line": 8471,
+    "func": "setpoints_cmd",
+    "var": "None",
+    "title_hint": "\"✅  Points Updated\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "    await ctx.send(embed=discord.Embed(\n        title=\"✅  Points Updated\",\n        description=(\n            f\"> <@{user_id}> → **`{points}` points**  (RANK `#{new_level}`)\"\n        ),\n        color=COLORS[\"success\"]\n    ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-157",
+    "line": 8491,
+    "func": "syncnicknames_cmd",
+    "var": "None",
+    "title_hint": "\"✅  Synced\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "    await ctx.send(embed=discord.Embed(\n        title=\"✅  Synced\",\n        description=(\n            f\"> Synced  `{updated}`  members' nicknames successfully.\"\n        ),\n        color=COLORS[\"success\"]\n    ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-158",
+    "line": 8504,
+    "func": "syncroles_cmd",
+    "var": "None",
+    "title_hint": "\"🔄  جارٍ مزامنة الـ Roles...\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "    progress = await ctx.send(embed=discord.Embed(\n        title=\"🔄  جارٍ مزامنة الـ Roles...\",\n        description=(\n            f\"> 📊  جاري تحديث ألقاب كل اللاعبين حسب ترتيبهم...\\n\"\n            f\"> ⏳  انتظر...\"\n        ),\n        color=COLORS[\"warning\"],\n        timestamp=discord.utils.utcnow()\n    ))",
+    "modifiers": [],
+    "sends": []
+  },
+  {
+    "id": "EMB-159",
+    "line": 8518,
+    "func": "syncroles_cmd",
+    "var": "synced_embed",
+    "title_hint": "\"✅  تمت مزامنة الـ Roles!\"",
+    "color_hint": "COLORS[\"success\"]",
+    "embed": "    synced_embed = discord.Embed(\n        title=\"✅  تمت مزامنة الـ Roles!\",\n        description=(\n            f\"> 🔄  كل اللاعبين تم تحديث ألقابهم حسب ترتيبهم.\\n\"\n            f\"{separator()}\\n\"\n            f\"> 🏆  **#1:**  Best Player\\n\"\n            f\"> 💎  **#2-10:**  Goated Players  (SoundBoard + Waiting Prv)\\n\"\n            f\"> ⭐  **#11-50:**  Skilled Players  (SoundBoard)\\n\"\n            f\"> 🎯  **#51-100:**  Efficient Players\"\n        ),\n        color=COLORS[\"success\"],\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    synced_embed.set_footer(text=f\"{BOT_FOOTER}  •  Roles synced\")"
+    ],
+    "sends": [
+      "    await progress.edit(embed=synced_embed)"
+    ]
+  },
+  {
+    "id": "EMB-160",
+    "line": 8542,
+    "func": "general_cmd",
+    "var": "embed",
+    "title_hint": "\"🎮  Player Commands\"",
+    "color_hint": "0xFF6B00",
+    "embed": "    embed = discord.Embed(\n        title=\"🎮  Player Commands\",\n        description=(\n            f\"> 📌  **Prefix:**  `{PREFIX}`\\n\"\n            f\"──────────────────────\"\n        ),\n        color=0xFF6B00\n    )",
+    "modifiers": [
+      "    embed.add_field(name=\"🚀  Play\", value=(\n        f\"›  `{PREFIX}play 4v4`  أو  `{PREFIX}play4v4`  —  4v4  (الافتراضي)\\n\"\n        f\"›  `{PREFIX}play 2v2`  أو  `{PREFIX}play2v2`  —  2v2\\n\"\n        f\"›  `{PREFIX}play 3v3`  أو  `{PREFIX}play3v3`  —  3v3\\n\"\n        f\"›  `{PREFIX}play 1v1`  أو  `{PREFIX}play1v1`  🔒  (للـ roles العالية)\\n\"\n        f\"›  ⚠️  `{PREFIX}play`  بدون مود → رسالة خطأ\"\n    ), inline=False)",
+      "    embed.add_field(name=\"📊  Stats\", value=(\n        f\"›  `{PREFIX}p`  —  Profile (full stats)\\n\"\n        f\"›  `{PREFIX}points`  —  💰 نقاطك + تقدم الرانك\\n\"\n        f\"›  `{PREFIX}card`  —  Card  (zelika-play)\\n\"\n        f\"›  `{PREFIX}top`  —  Leaderboard (Top 10)\\n\"\n        f\"›  `{PREFIX}mylevel`  —  Your rank\\n\"\n        f\"›  `{PREFIX}matches`  —  Active lobbies\"\n    ), inline=False)",
+      "    embed.add_field(name=\"🎮  Control\", value=(\n        f\"›  `{PREFIX}leave`  —  Leave lobby\\n\"\n        f\"›  `{PREFIX}fixrank`  —  Apply rank\"\n    ), inline=False)",
+      "    embed.add_field(name=\"🤖  How to Play\", value=(\n        f\"> 1️⃣  Join a ⏳ waiting room\\n\"\n        f\"> 2️⃣  `{PREFIX}play 4v4`  in a play channel  (حدد المود!)\\n\"\n        f\"> 3️⃣  Press **Create Lobby** → Enter Room Info\\n\"\n        f\"> 4️⃣  Players press **Join Team 1 / 2**\\n\"\n        f\"> 5️⃣  Lobby fills → Match starts\\n\"\n        f\"> 6️⃣  Host presses **Start Vote**  (or **Cancel Match** to abort)\\n\"\n        f\"> 7️⃣  Vote → Result → Points + RANK updates\\n\"\n        f\"> 8️⃣  Players return to waiting rooms\\n\"\n        f\"\\n\"\n        f\"> 💰  **نظام النقاط:**\\n\"\n        f\"> ─  🔱  Winner MVP:  `+80` pts\\n\"\n        f\"> ─  ✅  Winners:  `+30` pts\\n\"\n        f\"> ─  ✦  Loser MVP:  `+30` pts\\n\"\n        f\"> ─  ☠️  Losers:  `-30` pts\\n\"\n        f\"> ─  📈  كل `50` نقطة = `+1` رانك\"\n    ), inline=False)",
+      "    embed.set_footer(text=f\"Free Fire Bot v4.0  •  {PREFIX}help (admin)\")"
+    ],
+    "sends": [
+      "    await ctx.send(embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-161",
+    "line": 8594,
+    "func": "help_cmd",
+    "var": "embed1",
+    "title_hint": "\"🔥  Free Fire Bot v4.0  —  أوامر اللاعبين\"",
+    "color_hint": "0xFF6B00",
+    "embed": "    embed1 = discord.Embed(\n        title=\"🔥  Free Fire Bot v4.0  —  أوامر اللاعبين\",\n        description=(\n            f\"> 📌  **Prefix:**  `{PREFIX}`\\n\"\n            f\"> 🎮  جميع الأوامر تعمل في قنوات play\\n\"\n            f\"{separator()}\"\n        ),\n        color=0xFF6B00,\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    embed1.add_field(name=\"🎮  اللعب (9 أوامر)\", value=(\n        f\"›  `{PREFIX}play 4v4`  أو  `{PREFIX}play4v4`  —  4v4\\n\"\n        f\"›  `{PREFIX}play 3v3`  أو  `{PREFIX}play3v3`  —  3v3\\n\"\n        f\"›  `{PREFIX}play 2v2`  أو  `{PREFIX}play2v2`  —  2v2\\n\"\n        f\"›  `{PREFIX}play 1v1`  أو  `{PREFIX}play1v1`  🔒  (للـ roles العالية)\\n\"\n        f\"›  `{PREFIX}play`  —  رسالة خطأ (حدد المود)\\n\"\n        f\"›  `{PREFIX}leave`  —  مغادرة اللوبي\\n\"\n        f\"›  `{PREFIX}matches`  —  الماتشات النشطة\\n\"\n        f\"›  `{PREFIX}matchinfo <id>`  —  تفاصيل ماتش\"\n    ), inline=False)",
+      "    embed1.add_field(name=\"📊  الإحصائيات (7 أوامر)\", value=(\n        f\"›  `{PREFIX}p`  أو  `{PREFIX}p @user`  —  البروفايل\\n\"\n        f\"›  `{PREFIX}points`  أو  `{PREFIX}points @user`  —  النقاط + تقدم الرانك\\n\"\n        f\"›  `{PREFIX}card`  أو  `{PREFIX}card @user`  —  بطاقة اللاعب\\n\"\n        f\"›  `{PREFIX}top`  —  Leaderboard Top 10\\n\"\n        f\"›  `{PREFIX}mylevel`  أو  `{PREFIX}mylevel @user`  —  الرانك\\n\"\n        f\"›  `{PREFIX}myrank`  —  النك نيم المستهدف\\n\"\n        f\"›  `{PREFIX}fixrank`  أو  `{PREFIX}fixrank @user`  —  تطبيق الرانك\"\n    ), inline=False)",
+      "    embed1.add_field(name=\"⚠️  البلاغات (3 أوامر)\", value=(\n        f\"›  `{PREFIX}report @user [سبب]`  —  بلّغ عن لاعب (6 = حظر)\\n\"\n        f\"›  `{PREFIX}reports`  أو  `{PREFIX}reports @user`  —  عرض البلاغات\\n\"\n        f\"›  ⚠️  زر البلاغ متاح داخل كل ماتش\"\n    ), inline=False)",
+      "    embed1.add_field(name=\"🛡️  المساعدة (4 أوامر)\", value=(\n        f\"›  `{PREFIX}rules`  —  عرض قواعد السيرفر (بدون قناة مخصصة)\\n\"\n        f\"›  `{PREFIX}general`  —  دليل اللاعب\\n\"\n        f\"›  `{PREFIX}help`  —  هذه القائمة\\n\"\n        f\"›  `{PREFIX}botinfo`  —  معلومات البوت\"\n    ), inline=False)",
+      "    embed1.set_footer(text=f\"صفحة 1/2  •  أوامر الأدمن في الصفحة التالية\")"
+    ],
+    "sends": [
+      "    await ctx.send(embed=embed1)"
+    ]
+  },
+  {
+    "id": "EMB-162",
+    "line": 8639,
+    "func": "help_cmd",
+    "var": "embed2",
+    "title_hint": "\"🔧  Free Fire Bot v4.0  —  أوامر الأدمن\"",
+    "color_hint": "0xE74C3C",
+    "embed": "    embed2 = discord.Embed(\n        title=\"🔧  Free Fire Bot v4.0  —  أوامر الأدمن\",\n        description=(\n            f\"> 📌  **Prefix:**  `{PREFIX}`\\n\"\n            f\"> 🔒  جميع الأوامر التالية للأدمن فقط\\n\"\n            f\"{separator()}\"\n        ),\n        color=0xE74C3C,\n        timestamp=discord.utils.utcnow()\n    )",
+    "modifiers": [
+      "    embed2.add_field(name=\"🔧  القنوات والـ Setup (8 أوامر)\", value=(\n        f\"›  `{PREFIX}setup`  —  إنشاء كل القنوات + Roles + JAIL\\n\"\n        f\"›  `{PREFIX}autosetup`  —  فحص وإصلاح الناقص تلقائياً (آمن على البيانات)\\n\"\n        f\"›  `{PREFIX}cleanup`  —  حذف كاتيجوريات الماتش المنتهية\\n\"\n        f\"›  `{PREFIX}scan [page]`  —  عرض كل القنوات\\n\"\n        f\"›  `{PREFIX}deletecat <name>`  —  تحديد كاتيجوري للحذف\\n\"\n        f\"›  `{PREFIX}confirmcat <name>`  —  تأكيد حذف كاتيجوري\\n\"\n        f\"›  `{PREFIX}setcommandschannel #ch`  —  إضافة/إزالة قناة أوامر\\n\"\n        f\"›  `{PREFIX}setleaderboard`  —  تعيين قناة Leaderboard\"\n    ), inline=False)",
+      "    embed2.add_field(name=\"🏅  الرانك والنقاط والـ Roles (8 أوامر)\", value=(\n        f\"›  `{PREFIX}fixrankall`  —  تطبيق الرانك على كل الأعضاء\\n\"\n        f\"›  `{PREFIX}syncnicknames`  —  مزامنة كل النكات\\n\"\n        f\"›  `{PREFIX}syncroles`  —  مزامنة الـ Roles حسب الترتيب\\n\"\n        f\"›  `{PREFIX}setlevel @user/ID <n>`  —  تعيين رانك لاعب\\n\"\n        f\"›  `{PREFIX}setpoints @user/ID <n>`  —  تعيين نقاط لاعب (يُحدّث الرانك تلقائياً)\\n\"\n        f\"›  `{PREFIX}resetstats @user/ID`  —  تصفير ستاتس لاعب\\n\"\n        f\"›  `{PREFIX}resetrankall`  —  تصفير كل البيانات لكل السيرفر\"\n    ), inline=False)",
+      "    embed2.add_field(name=\"⚠️  البلاغات والحظر (5 أوامر)\", value=(\n        f\"›  `{PREFIX}banplayer @user/ID [سبب]`  —  حظر لاعب + نقله لفويس التفتيش\\n\"\n        f\"›  `{PREFIX}unbanplayer @user/ID`  —  فك حظر لاعب\\n\"\n        f\"›  `{PREFIX}banned`  —  قائمة المحظورين\\n\"\n        f\"›  `{PREFIX}setreportchannel #voice`  —  إضافة فويس تفتيش\\n\"\n        f\"›  `{PREFIX}removereportchannel #voice`  —  حذف فويس تفتيش\"\n    ), inline=False)",
+      "    embed2.add_field(name=\"🔒  نظام السجن JAIL (2 أمر)\", value=(\n        f\"›  `{PREFIX}jail @user/ID [سبب]`  —  إرسال لاعب للسجن + فويس خاص\\n\"\n        f\"›  `{PREFIX}unjail @user/ID`  —  فك السجن\"\n    ), inline=False)",
+      "    embed2.add_field(name=\"🔇  نظام البلاك ليست (3 أوامر)\", value=(\n        f\"›  `{PREFIX}blacklist @user/ID [سبب]`  —  إضافة لاعب للبلاك ليست\\n\"\n        f\"›  `{PREFIX}unblacklist @user/ID`  —  إزالة لاعب من البلاك ليست\\n\"\n        f\"›  `{PREFIX}blacklisted`  —  قائمة البلاك ليست\"\n    ), inline=False)",
+      "    embed2.add_field(name=\"📋  معلومات إضافية (6 أوامر)\", value=(\n        f\"›  `{PREFIX}reportchannels`  —  عرض فويسات التفتيش\\n\"\n        f\"›  `{PREFIX}startvote [id]`  —  🗳️ بدء التصويت فوراً (يتجاوز cooldown 10 دقائق)\\n\"\n        f\"›  `{PREFIX}resolve <id> <team1|team2>`  —  حل نزاع التصويت\\n\"\n        f\"›  `{PREFIX}w <id> <@user/ID>`  —  تعيين MVP WINNER يدوياً\\n\"\n        f\"›  `{PREFIX}l <id> <@user/ID>`  —  تعيين MVP LOSER يدوياً\\n\"\n        f\"›  `{PREFIX}botinfo`  —  معلومات البوت\"\n    ), inline=False)",
+      "    embed2.add_field(name=\"💡  معلومات النظام\", value=(\n        f\"> 💰  **النقاط:**  MVP فائز +80  •  فائز +30  •  MVP خاسر +30  •  خاسر -30\\n\"\n        f\"> 🏅  **الرانك:**  ترتيب الـ leaderboard (1 = الأفضل)\\n\"\n        f\"> 🗳️  **تصويت MVP:**  أول 2 من كل فريق (4 مصوّنين) يختارون WINNER و LOSER — يحتاج `{MVP_CONSENSUS_NEEDED}` أصوات\\n\"\n        f\"> 🚨  **ما في تفاهم:**  البوت ينقل أدمن لو حاضر بالفويسات الخاصة، وإلا يتاغه مع `!!w` و `!!l`\\n\"\n        f\"> 🏆  **Roles:**  #1 Best Player  •  #2-10 Goated  •  #11-50 Skilled  •  #51-100 Efficient\\n\"\n        f\"> ⚠️  **البلاغات:**  6 بلاغات = حظر تلقائي\\n\"\n        f\"> 🔒  **JAIL:**  فويس خاص + شاتات مخصصة فقط\\n\"\n        f\"> 🔇  **BLACKLIST:**  3 دق غياب أو 5 خروج/دخول = منع 10 دقائق\\n\"\n        f\"> 🗳️  **Cancel Match:**  أغلبية اللاعبين (5 من 8)\\n\"\n        f\"> 🛡️  **Rules channel:**  `{RULES_CHANNEL_NAME}`  — للقراءة فقط (ينشئها `!!setup`)، أو `{PREFIX}rules` في أي قناة\"\n    ), inline=False)",
+      "    embed2.set_footer(text=f\"صفحة 2/2  •  Free Fire Bot v4.0  •  51 أمر إجمالي\")"
+    ],
+    "sends": [
+      "    await ctx.send(embed=embed2)"
+    ]
+  },
+  {
+    "id": "EMB-163",
+    "line": 8714,
+    "func": "cloudbackup_cmd",
+    "var": "embed",
+    "title_hint": "\"☁️ Cloud Backup\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        embed = discord.Embed(\n            title=\"☁️ Cloud Backup\",\n            description=\"❌ Cloud backup not enabled!\\n\\nSet `MONGODB_URI` environment variable.\",\n            color=COLORS[\"error\"]\n        )",
+    "modifiers": [],
+    "sends": [
+      "    await ctx.send(embed=embed)",
+      "        await ctx.send(embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-164",
+    "line": 8726,
+    "func": "cloudbackup_cmd",
+    "var": "embed",
+    "title_hint": "\"☁️ Cloud Backup\"",
+    "color_hint": "color",
+    "embed": "    embed = discord.Embed(\n        title=\"☁️ Cloud Backup\",\n        description=f\"{'✅' if success else '❌'} {msg}\",\n        color=color\n    )",
+    "modifiers": [],
+    "sends": [
+      "    await ctx.send(embed=embed)",
+      "        await ctx.send(embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-165",
+    "line": 8740,
+    "func": "cloudrestore_cmd",
+    "var": "embed",
+    "title_hint": "\"☁️ Cloud Restore\"",
+    "color_hint": "COLORS[\"error\"]",
+    "embed": "        embed = discord.Embed(\n            title=\"☁️ Cloud Restore\",\n            description=\"❌ Cloud backup not enabled!\\n\\nSet `MONGODB_URI` environment variable.\",\n            color=COLORS[\"error\"]\n        )",
+    "modifiers": [],
+    "sends": [
+      "    msg = await ctx.send(embed=embed)",
+      "    await ctx.send(embed=embed)",
+      "        await ctx.send(embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-166",
+    "line": 8749,
+    "func": "cloudrestore_cmd",
+    "var": "embed",
+    "title_hint": "\"⚠️ Cloud Restore\"",
+    "color_hint": "COLORS[\"warning\"]",
+    "embed": "    embed = discord.Embed(\n        title=\"⚠️ Cloud Restore\",\n        description=\"This will **DELETE all local data** and replace it with cloud data.\\n\\nReact with ✅ to confirm.\",\n        color=COLORS[\"warning\"]\n    )",
+    "modifiers": [],
+    "sends": [
+      "    msg = await ctx.send(embed=embed)",
+      "    await ctx.send(embed=embed)",
+      "        await ctx.send(embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-167",
+    "line": 8774,
+    "func": "cloudrestore_cmd",
+    "var": "embed",
+    "title_hint": "\"☁️ Cloud Restore\"",
+    "color_hint": "color",
+    "embed": "    embed = discord.Embed(\n        title=\"☁️ Cloud Restore\",\n        description=f\"{'✅' if success else '❌'} {msg}\",\n        color=color\n    )",
+    "modifiers": [],
+    "sends": [
+      "    msg = await ctx.send(embed=embed)",
+      "    await ctx.send(embed=embed)",
+      "        await ctx.send(embed=embed)"
+    ]
+  },
+  {
+    "id": "EMB-168",
+    "line": 8803,
+    "func": "cloudstatus_cmd",
+    "var": "embed",
+    "title_hint": "\"☁️ Cloud Status\"",
+    "color_hint": "COLORS[\"info\"]",
+    "embed": "    embed = discord.Embed(\n        title=\"☁️ Cloud Status\",\n        description=status,\n        color=COLORS[\"info\"]\n    )",
+    "modifiers": [],
+    "sends": [
+      "    await ctx.send(embed=embed)"
+    ]
+  }
+]

@@ -1,0 +1,17 @@
+[
+  {
+    "id": "EMB-001",
+    "title": "",
+    "description": "",
+    "fields": [
+      { "name": "", "value": "", "inline": true }
+    ],
+    "color": "#RRGGBB",
+    "footer": "",
+    "author": "",
+    "components": [
+      { "type": "button", "label": "", "style": "success" }
+    ],
+    "why": ""
+  }
+]
