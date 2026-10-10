@@ -3,7 +3,7 @@
 > **هذا الملف هو "ذاكرة المشروع".** اقرأه قبل أي تعديل.
 > **الكود الفعلي هو المصدر الأساسي للحقيقة.** إذا لم يطابق هذا الملف الكود، صحّح هذا الملف.
 
-Last updated: 2026-10-08 (v3: match-results channel shows **results only**; admin alerts → 🔇・Blacklisted channel)
+Last updated: 2026-10-10 (v4: fixed `on_ready` re-running `auto_setup` on every Gateway reconnect — startup is now once per process; added Gateway disconnect/resume diagnostics and a `$PORT` health server)
 
 ---
 
@@ -416,6 +416,12 @@ Status legend: **FIXED** in this audit · **OPEN** (needs a product decision) ·
 |---|---|---|
 | MEDIUM | **The `match-results` channel was full of admin-alert embeds** (`notify_admins` sent every ⚠️ error/failure alert there), while the **actual match results** were posted to the temporary match text channel (deleted at match end) or the play channel — i.e. the channel named "results" never showed results. | New `find_match_results_channel(guild)` locates the channel by normalized name (`match-results` / `match result` / `نتائج`) across **all** guild text channels. New `_post_match_result(guild, embed, channel)` posts the final 🏅 "Match Result"/"Match Finished" embed to that channel when found, else the original channel (never both). Both `process_match_result` and `process_match_result_with_mvps` route through it. `notify_admins` now targets the **🔇・Blacklisted** channel instead (`_resolve_blacklist_channel`: settings pointer → exact-name lookup → play-channel fallback → any writable text channel) — the results channel is now results-only. |
 
+### FIXED in the 2026-10-10 session (reconnect / autosetup loop)
+| Sev | Issue | Fix |
+|---|---|---|
+| HIGH | **`auto_setup` re-ran every few minutes.** `on_ready` is invoked on **every** Gateway (re)connection, and it unconditionally re-ran the full auto-setup scan, re-posted the "AUTO-DETECT Complete" embed to every guild, and (re)started the background loops. With silent auto-reconnects this looked like a periodic autosetup. | New module-level guard `_startup_done`: the heavy startup block (auto-setup scan, AUTO-DETECT message, `periodic_rank_sync` arming, `recover_after_restart`) now runs **once per process**. On a re-fire, `on_ready` only refreshes presence and returns early. `_on_ready_count` is logged to expose reconnects; new `on_disconnect` / `on_resumed` handlers log the connection lifecycle. |
+| MEDIUM | **Possible platform restart loop.** `Procfile` declares the process as `web:`, so Railway/Render expect a listening `$PORT`; the bot never opened one, which can make the platform treat the container as unhealthy and restart it (⇒ `on_ready` again ⇒ autosetup again). | New `_start_health_server()` (started before `bot.run()`): if `$PORT` is set, it opens a minimal threaded HTTP server answering `200 OK` on any path. No-ops when `$PORT` is absent (local). |
+
 ### OPEN — deliberately not changed (needs your decision)
 | Sev | Issue | Why it was not changed |
 |---|---|---|
@@ -424,7 +430,6 @@ Status legend: **FIXED** in this audit · **OPEN** (needs a product decision) ·
 | MEDIUM | **`players` has no UNIQUE `(user_id, guild_id)`** — duplicates would corrupt the leaderboard. | Needs a data migration; risky to do unattended. |
 | MEDIUM | **No transactions** in `process_match_result_with_mvps`. | Wrapping in BEGIN/COMMIT changes failure semantics. |
 | MEDIUM | **MongoDB backup is incomplete** — `sync_bans_to_cloud` and `sync_guild_settings_to_cloud` are imported but never called. | Wiring bans/settings to Atlas changes what is persisted. |
-| LOW | `on_ready` re-runs the full auto-detect **and re-posts the "AUTO-DETECT Complete" message to every guild on every reconnect** (message spam). | Cosmetic, but changing it hides useful startup info. |
 | LOW | **Dead code:** `VoteView` (old team vote) and `MvpSelectionView` (old host-only MVP picker). Both are unreachable — zero instantiations on any live path, and neither is registered as persistent — but `VoteView.on_timeout` instantiates `MvpSelectionView`. | Deleting ~350 lines is a clean-up with a small regression risk; not done unilaterally. |
 | LOW | ~26 unused locals (`t1m`, `t2m`, `mode_info`, `banned`, `avatar_url`, `rank_title`) and ~44 f-strings with no placeholders. | Cosmetic. |
 | LOW | `on_command_error` uses a bare `logger.exception` for unknown errors — users get no feedback. | Needs a decision on what to expose. |
@@ -457,6 +462,7 @@ Status legend: **FIXED** in this audit · **OPEN** (needs a product decision) ·
 14. **The blacklist channel is part of setup**, not lazy-only: `auto_setup_guild` / `!!setup` create `🔇・Blacklisted` and record `blacklist_channel_id` + `blacklist_message_id` in `guild_settings`; `update_blacklist_channel` still self-heals if the channel is missing.
 15. **The periodic task is the only place a full nickname sweep runs** — commands `!!fixrank` / `!!syncnicknames` are interactive one-offs, while the loop re-syncs every 2 minutes so nicknames self-correct without an admin.
 16. **The `match-results` channel is results-only.** Name-based lookup (`find_match_results_channel`, tolerant of `-`/`_`/`・` and Arabic `نتائج`) decides where the final result embed lands; admin alerts were moved off it to `🔇・Blacklisted` so the channel's contents match its purpose.
+17. **Startup is once-per-process.** `on_ready` fires again on every Gateway reconnect, so all heavy startup work (auto-setup, the AUTO-DETECT embed, background-task arming, post-restart recovery) is gated behind the module-level `_startup_done` flag; a reconnect only refreshes presence and returns. The bot also opens a `$PORT` health endpoint (`_start_health_server`) so web-process platforms (Procfile `web:`) do not treat the container as unhealthy and restart it.
 
 ---
 
@@ -510,6 +516,18 @@ Status legend: **FIXED** in this audit · **OPEN** (needs a product decision) ·
 | `notify_admins` alert → `🔇・Blacklisted` channel only (results channel keeps only the result embed) | 6/6 |
 | fallback: no results channel → result goes to the original channel | 6/6 |
 
+**Verification performed during the 2026-10-10 session (reconnect / autosetup fix):**
+
+| Check | Result |
+|---|---|
+| `ast.parse` + `py_compile` on the edited bot file | OK |
+| `_startup_done` / `_on_ready_count` defined at module level and declared `global` in `on_ready` | OK |
+| guard `if _startup_done:` sits directly in `on_ready`, its body returns, and it precedes the `auto_setup_guild` call | OK (AST ordering) |
+| `on_disconnect` / `on_resumed` handlers present | OK |
+| `_start_health_server` defined, called in `__main__`, and called before `bot.run` | OK |
+| simulation: startup runs once, subsequent `on_ready` calls skip | PASS |
+| **Part 4 harness (AST + logic simulation, 15/15)** | 15/15 |
+
 **NOT TESTED — Reason:** everything requiring a live Discord connection.
 
 Specifically **NOT TESTED**: gateway login; any prefix command; any button/select/modal interaction; interaction lifecycle (defer/edit/ephemeral, expired tokens); voice state transitions and member moves; channel/role/category creation and deletion; rate-limit behaviour under load; nickname and role assignment against a real hierarchy; `notify_admins` delivery; SQLite behaviour on Railway's actual filesystem; MongoDB cloud sync; `!!botinfo` build fingerprint in production.
@@ -531,6 +549,7 @@ Specifically **NOT TESTED**: gateway login; any prefix command; any button/selec
 | `77d6fef` | Harden `!!botinfo` against crash when `guild.member_count` is `None` (large servers) — reproducible-foundation for diagnosing what build is actually running |
 | `859ca0a` | **`match-results` channel = results only.** New `find_match_results_channel()` (name-tolerant) + `_post_match_result()` route the final result embed there (fallback: original channel); `notify_admins` alerts moved to `🔇・Blacklisted` (`_resolve_blacklist_channel()` helper) — the results channel no longer collects ⚠️ alerts |
 | *audit, uncommitted at time of writing* | Fixed the CRITICAL `voting`-lockout in `auto_trigger_vote`; fixed the duplicate periodic-task leak on reconnect; added `sanitize_user_text()` to close the mention-injection hole; guarded `CreateLobbyView` against `ctx=None` after restart; fixed the `play_channels` cache invalidation; made DM command handling explicit. Created this document. |
+| *2026-10-10 (this session)* | Fixed **`on_ready` re-running `auto_setup` on every Gateway reconnect** (reported as "autosetup every few minutes") with a once-per-process `_startup_done` guard; added `_on_ready_count` + `on_disconnect`/`on_resumed` diagnostics; added a `$PORT` health server (`_start_health_server`, started before `bot.run`) to prevent platform restart loops. Harness 15/15. |
 
 ### Deployment reminder
 The bot on Railway only runs what was last deployed. After pushing, redeploy, then run `!!botinfo` and confirm **`🔨 Build`** shows the expected commit SHA — not `local-dev`. If it shows `local-dev`, the new code is not live.

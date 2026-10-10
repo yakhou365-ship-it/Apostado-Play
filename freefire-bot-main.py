@@ -5481,6 +5481,12 @@ bot = commands.Bot(command_prefix=PREFIX, intents=intents, help_command=None)
 # on_ready (= كل reconnect) ⇒ عدة حلقات متوازية تجهد Discord API.
 _periodic_rank_task = None
 
+# 🆕 FIX (HIGH): الإعداد الثقيل داخل on_ready (auto_setup + رسالة AUTO-DETECT) كان
+# يُنفَّذ عند كل استدعاء لـ on_ready (= كل إعادة اتصال بالـ Gateway) ⇒ autosetup
+# يتكرر كل عدة دقائق. هذا الحارس يضمن تنفيذه **مرة واحدة فقط لكل عملية تشغيل**.
+_startup_done = False
+_on_ready_count = 0   # للتشخيص فقط: كم مرة نُفِّذ on_ready (يكشف إعادات الاتصال)
+
 
 def is_admin_check(ctx):
     return ctx.author.guild_permissions.administrator
@@ -5574,7 +5580,12 @@ async def on_command_error(ctx, error):
 
 @bot.event
 async def on_ready():
-    logger.info(f"✅ {bot.user} online!")
+    global _on_ready_count, _startup_done
+    _on_ready_count += 1
+    logger.info(
+        f"✅ {bot.user} online!  (on_ready #{_on_ready_count} — "
+        f"startup_done={_startup_done})"
+    )
     logger.info(f"📌 Prefix: {PREFIX}")
     logger.info(f"🔱 Owner: {BOT_OWNER_NAME}")
     logger.info(f"🏠 Servers: {len(bot.guilds)}")
@@ -5596,6 +5607,19 @@ async def on_ready():
     except Exception as e:
         logger.warning(f"Failed to register CreateLobbyView as persistent: {e}")
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=f"Free Fire | {PREFIX}play"))
+
+    # 🆕 FIX (HIGH): on_ready يُستدعى من جديد عند كل إعادة اتصال (reconnect) بالـ Gateway.
+    # قبل التعديل كان auto_setup + رسالة AUTO-DETECT + مهام الخلفية تُعاد كل مرة
+    # (السبب الظاهر لـ «autosetup كل عدة دقائق»). الآن الإعداد الثقيل مرة واحدة/عملية،
+    # وعند إعادة الاتصال نكتفي بتحديث الحضور (تم أعلاه) ونتوقف هنا.
+    if _startup_done:
+        logger.info(
+            f"♻️ on_ready re-fired (reconnect) — skipping auto-setup. "
+            f"latency={bot.latency * 1000:.0f}ms  (on_ready #{_on_ready_count})"
+        )
+        return
+    _startup_done = True
+
     # 🆕 Auto-setup: فحص كل السيرفرات بالتوازي
     logger.info("🔄 Auto-setup: checking all guilds...")
     async def setup_one(guild):
@@ -5743,6 +5767,17 @@ async def on_ready():
             logger.warning(f"recover_after_restart failed: {e}")
     asyncio.create_task(recover_after_restart())
     logger.info("🧹 Lobby embed recovery/cleanup scheduled after restart")
+
+
+@bot.event
+async def on_disconnect():
+    # 🆕 تشخيص: أي انقطاع في Gateway يُسجَّل بوضوح (يكشف سبب تكرار on_ready)
+    logger.warning("🔌 Gateway disconnected — awaiting automatic reconnect...")
+
+
+@bot.event
+async def on_resumed():
+    logger.info("♻️ Gateway session resumed (no full re-identify).")
 
 
 async def auto_setup_guild(guild):
@@ -8854,6 +8889,52 @@ async def serverleave_cmd(ctx):
 # ============================================================
 # RUN
 # ============================================================
+def _start_health_server():
+    """🆕 FIX (Railway/Render): البوت ليس خدمة ويب، لكن Procfile يقول `web:` —
+    فبعض المنصّات تتوقّع فتح منفذ PORT وتعيد تشغيل الحاوية كل حين إذا لم يُفتح
+    (سبب شائع أيضاً لـ «autosetup كل عدة دقائق» لأنه يعيد on_ready). نفتح سيرفر
+    صحّة بسيط يستجيب 200 على أي مسار. يُفعَّل فقط إذا كان PORT موجوداً."""
+    port = os.getenv("PORT")
+    if not port:
+        return
+    try:
+        port = int(port)
+    except (TypeError, ValueError):
+        logger.warning(f"⚠️ Invalid PORT value {port!r} — health server skipped")
+        return
+
+    import http.server
+    import socketserver
+
+    class _HealthHandler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(b"OK - Apostado Play Bot is alive")
+
+        def do_HEAD(self):
+            self.send_response(200)
+            self.end_headers()
+
+        def log_message(self, *args):
+            pass
+
+    class _ReusableTCPServer(socketserver.ThreadingTCPServer):
+        allow_reuse_address = True
+        daemon_threads = True
+
+    def _serve():
+        try:
+            with _ReusableTCPServer(("0.0.0.0", port), _HealthHandler) as httpd:
+                logger.info(f"❤️ Health server listening on 0.0.0.0:{port}")
+                httpd.serve_forever()
+        except Exception as e:
+            logger.warning(f"⚠️ Health server failed on :{port}: {e}")
+
+    threading.Thread(target=_serve, name="health-server", daemon=True).start()
+
+
 if __name__ == "__main__":
     # ⚠️ تحذير أمني: التوكن مكتوب كـ fallback للراحة.
     # للحصول على أمان أعلى، يُفضّل استخدام متغير البيئة DISCORD_TOKEN فقط
@@ -8861,5 +8942,6 @@ if __name__ == "__main__":
     TOKEN = os.getenv("DISCORD_TOKEN")
     if not TOKEN:
         raise RuntimeError("❌ DISCORD_TOKEN environment variable is required! Set it on Railway/Render.")
+    _start_health_server()
     logger.info("🚀 Starting Free Fire Bot v4.0 CLEAN...")
     bot.run(TOKEN)
