@@ -1,0 +1,3960 @@
+
+
+======================================================================
+[EMBED] line 11
+======================================================================
+  ✅ كل buggy chains مُصلّحة (Embed().set_footer())
+
+
+======================================================================
+[EMBED] line 790
+======================================================================
+        embed = discord.Embed(
+            title=f"⚠️  {title}",
+            description=f"{admin_mention_str}\n{description}",
+            color=color,
+            timestamp=discord.utils.utcnow()
+        )
+
+
+======================================================================
+[SEND] line 799
+======================================================================
+        await channel.send(content=admin_mention_str, embed=embed)
+
+
+======================================================================
+[EMBED] line 2143
+======================================================================
+    embed = discord.Embed(
+        title=f"✦ Free Fire — {mode.upper()} Lobby",
+        description=(
+            f"> Lobby ID: `{lobby['id']}`\n"
+            f"> Host: <@{lobby['creator_id']}>\n"
+            f"> Mode: `{mode.upper()}` · Progress: `{total}/{lobby_size}` `{progress_pct}%`\n"
+            f"`{progress_bar}`"
+        ),
+        color=0xFFD700,
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[EMBED] line 2232
+======================================================================
+    embed = discord.Embed(
+        title=display_title,
+        description=(
+            f"> 🏅 Rank: `{rank_title}` — `#{level}`\n"
+            f"> 💰 Points: `{points:,}` pts{streak_display.replace('> ', '\n> ')}\n"
+            f"> 🔱 MVPs: `{mvps}` — `{mvp_title}`{f' {mvp_badge}' if mvp_badge else ''}"
+        ),
+        color=rank_color,
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[SEND] line 2318
+======================================================================
+                await member.edit(nick=new_nick)
+
+
+======================================================================
+[EMBED] line 2341
+======================================================================
+        embed = discord.Embed(
+            title="◆ Free Fire — Top 10 Players",
+            description=(
+                f"📊 Ranking by points · 🔄 Auto-updates after every match · 📈 Every `50` pts = `+1` rank"
+            ),
+            color=COLORS["leaderboard"],
+            timestamp=discord.utils.utcnow()
+        )
+
+
+======================================================================
+[SEND] line 2383
+======================================================================
+                await msg.edit(embed=embed)
+
+
+======================================================================
+[SEND] line 2387
+======================================================================
+        msg = await channel.send(embed=embed)
+
+
+======================================================================
+[SEND] line 2427
+======================================================================
+                        await extra.delete(reason="🧹 Duplicate blacklist channel")
+
+
+======================================================================
+[EMBED] line 2448
+======================================================================
+        embed = discord.Embed(
+            title="🔇  Blacklisted Players",
+            description=(
+                f"> 📊  **الإجمالي:**  `{len(blacklisted)}`\n"
+                f"{separator()}"
+            ),
+            color=COLORS["warning"] if blacklisted else COLORS["success"],
+            timestamp=discord.utils.utcnow()
+        )
+
+
+======================================================================
+[SEND] line 2484
+======================================================================
+                await msg.edit(embed=embed)
+
+
+======================================================================
+[SEND] line 2488
+======================================================================
+        msg = await channel.send(embed=embed)
+
+
+======================================================================
+[SEND] line 2500
+======================================================================
+        await msg.delete()
+
+
+======================================================================
+[SEND] line 2557
+======================================================================
+            await results_ch.send(embed=embed)
+
+
+======================================================================
+[SEND] line 2562
+======================================================================
+                    await channel.send(embed=embed)
+
+
+======================================================================
+[EMBED] line 2678
+======================================================================
+            closed_embed = discord.Embed(
+                title="⏰  Lobby Closed — Not Enough Players",
+                description=(
+                    f"> لم يكتمل العدد المطلوب خلال **{TEMP_EMBED_DELETE_AFTER // 60} دقيقة**.\n"
+                    f"> استخدم `{PREFIX}play 4v4` لبدء ماتش جديد."
+                ),
+                color=COLORS["warning"],
+                timestamp=discord.utils.utcnow()
+            )
+
+
+======================================================================
+[SEND] line 2689
+======================================================================
+            await ch.send(embed=closed_embed, delete_after=TEMP_EMBED_DELETE_AFTER)
+
+
+======================================================================
+[SEND] line 2975
+======================================================================
+                try: await ch.delete()
+
+
+======================================================================
+[SEND] line 2982
+======================================================================
+                try: await ch.delete()
+
+
+======================================================================
+[SEND] line 2988
+======================================================================
+            try: await cat.delete()
+
+
+======================================================================
+[EMBED] line 3034
+======================================================================
+        mvp_embed = discord.Embed(
+            title=f"🗳️  تصويت MVP الجماعي — Match `#{lobby_id}`",
+            description=(
+                f">Match finished — اختروا الـ MVPs معاً.\n"
+                f"> ⏱️  عندكم **{VOTE_TIMEOUT_SECONDS} ثانية** للتوصل لاتفاق.\n"
+                f"> 🎯  **الاتفاق المطلوب:**  `{MVP_CONSENSUS_NEEDED}` أصوات من `{len(voters)}`\n"
+                f"{separator()}\n"
+                f"> 🔴 **مصوّني Team 1 (أول 2):**  {' '.join(f'<@{p}>' for p in v1) or '*N/A*'}\n"
+                f"> 🟢 **مصوّني Team 2 (أول 2):**  {' '.join(f'<@{p}>' for p in v2) or '*N/A*'}\n"
+                f"> 💡  المصوّنين يدوّرون على  `🏆 MVP WINNER`  و  `✦ MVP LOSER`  من القوائم تحت.\n"
+                f"> ⚠️  **ما اتفقتم؟**  البوت ينقل أدمن لو حاضر بالفويسات، أو يتاغه مع الأوامر."
+            ),
+            color=COLORS["vote"],
+            timestamp=discord.utils.utcnow()
+        )
+
+
+======================================================================
+[SEND] line 3086
+======================================================================
+            vote_msg = await general_text.send(
+                f"🔱 {t1m} {t2m}",
+                embed=mvp_embed,
+                view=mvp_view
+            )
+
+
+======================================================================
+[EMBED] line 3121
+======================================================================
+            timeout_embed = discord.Embed(
+                title="⏰  Lobby Timed Out",
+                description=(
+                    f"> اللوبي `#{lobby_id}` تم إلغاؤه بسبب عدم النشاط.\n"
+                    f"> استخدم `{PREFIX}play 4v4` لبدء ماتش جديد."
+                ),
+                color=COLORS["warning"],
+                timestamp=discord.utils.utcnow()
+            )
+
+
+======================================================================
+[SEND] line 3132
+======================================================================
+            await ch.send(embed=timeout_embed, delete_after=TEMP_EMBED_DELETE_AFTER)
+
+
+======================================================================
+[EMBED] line 3259
+======================================================================
+        embed = discord.Embed(
+            title=f"🏅 Match Result — `#{lobby_id}`",
+            description=(
+                f"## 🎉  {wd}  Wins!\n"
+                f"{separator()}\n"
+                f"> 🎮 Mode:  `{game_mode.upper()}`\n"
+                f"> 🏆 Winner MVP:  {f'<@{winner_mvp_id}>' if winner_mvp_id else '*N/A*'} → `+{WINNER_MVP_POINTS}` pts\n"
+                f"> ✦ Loser MVP:  {f'<@{loser_mvp_id}>' if loser_mvp_id else '*N/A*'} → `+{LOSER_MVP_POINTS}` pts"
+            ),
+            color=COLORS["success"],
+            timestamp=discord.utils.utcnow()
+        )
+
+
+======================================================================
+[EMBED] line 3338
+======================================================================
+                embed=discord.Embed(
+                    title="✅  Room Info Saved",
+                    description=(
+                        f"> Room details stored successfully.\n"
+                        f"──────────────────────\n"
+                        f"🆔 Room ID:\n"
+                        f"```\n{room_id}\n```\n"
+                        f"🔑  **Code:**\n"
+                        f"```\n{password or 'N/A'}\n```"
+                        + (f"\n🔐  **Private Key:**\n```\n{private_key}\n```" if private_key else "")
+                    ),
+                    color=COLORS["success"]
+                ),
+
+
+======================================================================
+[EMBED] line 3375
+======================================================================
+                await interaction.response.send_message(embed=discord.Embed(
+                    title="❌  Wrong Key",
+                    description=(
+                        f"> The private key you entered is incorrect.\n"
+                        f"> Please ask the host for the correct key."
+                    ),
+                    color=COLORS["error"]
+                ), ephemeral=True)
+
+
+======================================================================
+[EMBED] line 3413
+======================================================================
+                    embed=discord.Embed(
+                        title="⚠️  بلغت من قبل",
+                        description=f"> لقد بلّغت على <@{self.reported_id}> سابقاً.\n> لا يمكنك البلاغ مرتين على نفس اللاعب.",
+                        color=COLORS["warning"]
+                    ), ephemeral=True
+
+
+======================================================================
+[EMBED] line 3423
+======================================================================
+            report_embed = discord.Embed(
+                title="⚠️  تم تسجيل البلاغ",
+                description=(
+                    f"> 👤  **اللاعب المُبلَّغ عنه:**  <@{self.reported_id}>\n"
+                    f"> 👮  **الـمُبلَّغ:**  <@{self.reporter_id}>\n"
+                    + (f"> 📝  **السبب:**  {reason}\n" if reason else "")
+                    + f"> 📊  **إجمالي البلاغات:**  `{total}/{REPORT_THRESHOLD}`\n"
+                    + (f"> ⚠️  **يتبقى:**  `{remaining}`  بلاغ للحظر التلقائي" if remaining > 0 else f"> ⚠️  **وصل للحد!**  سيتم الحظر تلقائياً")
+                ),
+                color=COLORS["warning"] if remaining > 0 else COLORS["error"],
+                timestamp=discord.utils.utcnow()
+            )
+
+
+======================================================================
+[EMBED] line 3530
+======================================================================
+            embed=discord.Embed(
+                title="⚠️  اختر اللاعب المُبلَّغ عنه",
+                description=(
+                    f"> اختر اللاعب الذي تريد البلاغ عنه من القائمة\n"
+                    f"> ⚠️  البلاغ جدّي — لا تبلغ بدون سبب"
+                ),
+                color=COLORS["error"]
+            ), view=view, ephemeral=True
+
+
+======================================================================
+[SEND] line 3585
+======================================================================
+                try: await interaction.message.edit(embed=create_lobby_embed(lobby, interaction.guild), view=self)
+
+
+======================================================================
+[EMBED] line 3611
+======================================================================
+        await interaction.response.send_message(embed=discord.Embed(
+            title="🛡️ Match Cancelled",
+            description=(
+                f"> Match `#{self.lobby_id}` — `{mode}`  was cancelled by <@{uid}>.\n"
+                f"> Use `{PREFIX}play` to start a new match."
+            ),
+            color=COLORS["error"]
+        ), delete_after=30)
+
+
+======================================================================
+[EMBED] line 3654
+======================================================================
+            ban_embed = discord.Embed(
+                title="🚫  أنت محظور من اللعب",
+                description=(
+                    f"> ⚠️  **السبب:**  `{ban_info.get('ban_reason') or 'غير محدد'}`\n"
+                    f"> 📊  **عدد البلاغات:**  `{ban_info.get('report_count', 0)}`\n"
+                    f"{separator()}\n"
+                    f"> 🔍  يتم توجيهك لفويس التفتيش\n"
+                    f"> 💡  لفك الحظر، تواصل مع الأدمن"
+                ),
+                color=COLORS["error"],
+                timestamp=discord.utils.utcnow()
+            )
+
+
+======================================================================
+[EMBED] line 3684
+======================================================================
+            await interaction.response.send_message(embed=discord.Embed(
+                title="⏳  Join a Waiting Room",
+                description=(
+                    f"> You must be in a voice waiting room to join a match.\n"
+                    f"──────────────────────\n"
+                    f"🔊  **Available Rooms:**\n{rooms_text}"
+                ),
+                color=COLORS["warning"]
+            ), ephemeral=True)
+
+
+======================================================================
+[EMBED] line 3703
+======================================================================
+                await interaction.response.send_message(embed=discord.Embed(
+                    title="⏳  Wrong Voice Channel",
+                    description=(
+                        f"> You're in `{member.voice.channel.name}` — that's not a waiting room.\n"
+                        f"──────────────────────\n"
+                        f"🔊  **Available Rooms:**\n{rooms_text}"
+                    ),
+                    color=COLORS["warning"]
+                ), ephemeral=True)
+
+
+======================================================================
+[EMBED] line 3717
+======================================================================
+                await interaction.response.send_message(embed=discord.Embed(
+                    title="⏳  Pending Match",
+                    description=(
+                        f"> You have a pending match that needs to be finished first.\n"
+                        f"> Complete or cancel it before joining a new one."
+                    ),
+                    color=COLORS["warning"]
+                ), ephemeral=True)
+
+
+======================================================================
+[SEND] line 3758
+======================================================================
+        try: await interaction.message.edit(embed=create_lobby_embed(lobby, interaction.guild), view=self)
+
+
+======================================================================
+[EMBED] line 3765
+======================================================================
+            room_embed = discord.Embed(
+                title="ℹ️ Room Info",
+                description=(
+                    f"Join the room with these credentials:"
+                ),
+                color=COLORS["auto"]
+            )
+
+
+======================================================================
+[SEND] line 3775
+======================================================================
+            await interaction.followup.send(embed=room_embed, ephemeral=True)
+
+
+======================================================================
+[SEND] line 3799
+======================================================================
+            try: await interaction.message.edit(view=self)
+
+
+======================================================================
+[EMBED] line 3819
+======================================================================
+                await interaction.channel.send(embed=discord.Embed(
+                    title="❌  Failed to Start",
+                    description=(
+                        f"> Could not create match channels.\n"
+                        f"> Lobby `#{self.lobby_id}` has been cancelled."
+                    ),
+                    color=COLORS["error"]
+                ), delete_after=15)
+
+
+======================================================================
+[SEND] line 3819
+======================================================================
+                await interaction.channel.send(embed=discord.Embed(
+                    title="❌  Failed to Start",
+                    description=(
+                        f"> Could not create match channels.\n"
+                        f"> Lobby `#{self.lobby_id}` has been cancelled."
+                    ),
+                    color=COLORS["error"]
+                ), delete_after=15)
+
+
+======================================================================
+[EMBED] line 3833
+======================================================================
+                ready_msg = await interaction.channel.send(embed=discord.Embed(
+                    title="✅  Match Ready!",
+                    description=(
+                        f"> Lobby is full — match is starting now!\n"
+                        f"> Moving players to their team voice channels..."
+                    ),
+                    color=COLORS["success"],
+                    timestamp=discord.utils.utcnow()
+                ))
+
+
+======================================================================
+[SEND] line 3833
+======================================================================
+                ready_msg = await interaction.channel.send(embed=discord.Embed(
+                    title="✅  Match Ready!",
+                    description=(
+                        f"> Lobby is full — match is starting now!\n"
+                        f"> Moving players to their team voice channels..."
+                    ),
+                    color=COLORS["success"],
+                    timestamp=discord.utils.utcnow()
+                ))
+
+
+======================================================================
+[EMBED] line 3870
+======================================================================
+                    room_embed = discord.Embed(
+                        title="ℹ️ Room Info",
+                        description="Join the room with these credentials:",
+                        color=COLORS["auto"]
+                    )
+
+
+======================================================================
+[SEND] line 3878
+======================================================================
+                    try: await channels["team1_text"].send(mentions, embed=room_embed)
+
+
+======================================================================
+[EMBED] line 3882
+======================================================================
+                start_embed = discord.Embed(
+                    title="📻 Match Started!",
+                    description=(
+                        f"> Lobby: `#{self.lobby_id}`\n"
+                        f"> Mode: `{mode.upper()}` · Host: <@{lobby['creator_id']}>\n"
+                    ),
+                    color=COLORS["auto"],
+                    timestamp=discord.utils.utcnow()
+                )
+
+
+======================================================================
+[SEND] line 3916
+======================================================================
+                    sv_msg = await channels["team1_text"].send(embed=start_embed, view=start_vote_view)
+
+
+======================================================================
+[EMBED] line 3923
+======================================================================
+                    report_embed = discord.Embed(
+                        title="⚠️  نظام البلاغ",
+                        description=(
+                            f"> لو لاحظت لاعب يغش أو يسيء، اضغط زر  **⚠️ إبلاغ**\n"
+                            f"> 📊  عند وصول البلاغات إلى  `{REPORT_THRESHOLD}`  → حظر تلقائي\n"
+                            f"> 🔍  اللاعب المحظور يُنقل لفويس التفتيش حتى يفك الأدمن الحظر"
+                        ),
+                        color=COLORS["error"],
+                        timestamp=discord.utils.utcnow()
+                    )
+
+
+======================================================================
+[SEND] line 3935
+======================================================================
+                    await channels["team1_text"].send(embed=report_embed, view=report_view)
+
+
+======================================================================
+[EMBED] line 4001
+======================================================================
+                    await interaction.response.send_message(embed=discord.Embed(
+                        title="⏳  لم يحن وقت التصويت بعد",
+                        description=f"> ⏱️  يجب انتظار **10 دقائق** من بدء الماتش\n> ⏳  المتبقي:  `{remaining_min} دقيقة و {remaining_sec} ثانية`",
+                        color=COLORS["warning"]
+                    ), ephemeral=True)
+
+
+======================================================================
+[SEND] line 4012
+======================================================================
+        try: await interaction.message.edit(view=self)
+
+
+======================================================================
+[EMBED] line 4050
+======================================================================
+        vote_embed = discord.Embed(
+            title="🗳️ تصويت إلغاء الماتش",
+            description=f"> 👤 <@{uid}> صوّت لإلغاء الماتش\n> 📊 **التقدم:** `{current_votes}/{required_votes}`\n> ⏳ **يتبقى:** `{remaining}`",
+            color=COLORS["warning"], timestamp=discord.utils.utcnow()
+        )
+
+
+======================================================================
+[EMBED] line 4061
+======================================================================
+        cancelled_embed = discord.Embed(
+            title="🛡️ Match Cancelled",
+            description=(
+                f"> **Lobby:**  `#{self.lobby_id}`\n> **Mode:**  `{mode}`\n"
+                f"> **Cancelled by:**  <@{uid}> ({reason})\n{separator()}\n"
+                f"> 🔄  جارٍ إعادة اللاعبين...\n> 🗑️  جارٍ حذف القنوات...\n"
+                f"> 💡 Use  `{PREFIX}play`  لبدء ماتش جديد."
+            ),
+            color=COLORS["error"], timestamp=discord.utils.utcnow()
+        )
+
+
+======================================================================
+[SEND] line 4110
+======================================================================
+        try: await interaction.message.edit(view=self)
+
+
+======================================================================
+[SEND] line 4200
+======================================================================
+        try: await interaction.message.edit(view=self)
+
+
+======================================================================
+[SEND] line 4202
+======================================================================
+        await interaction.followup.send(
+            embed=discord.Embed(
+                title="✅  تم تطبيق النقاط!",
+                description=(
+                    f"> 🏆  **MVP الفائز:**  <@{self.winner_mvp_id}>\n"
+                    f"> ✦  **MVP الخاسر:**  <@{self.loser_mvp_id}>\n"
+                    f"> ⚡  جارٍ تطبيق النقاط وتحديث الرانك..."
+                ),
+                color=COLORS["success"],
+                timestamp=discord.utils.utcnow()
+            )
+        )
+
+
+======================================================================
+[EMBED] line 4203
+======================================================================
+            embed=discord.Embed(
+                title="✅  تم تطبيق النقاط!",
+                description=(
+                    f"> 🏆  **MVP الفائز:**  <@{self.winner_mvp_id}>\n"
+                    f"> ✦  **MVP الخاسر:**  <@{self.loser_mvp_id}>\n"
+                    f"> ⚡  جارٍ تطبيق النقاط وتحديث الرانك..."
+                ),
+                color=COLORS["success"],
+                timestamp=discord.utils.utcnow()
+            )
+
+
+======================================================================
+[EMBED] line 4404
+======================================================================
+            embed = discord.Embed(
+                title=f"🚨 تعذّر الاتفاق على MVP — الماتش `#{lobby_id}`",
+                description=(
+                    f"{mentions}\n"
+                    f"> ⚠️  **ما في تفاهم بين المصوّنين** — نطلب تدخل أحد الأدمنز.\n"
+                    f"> 📌  **السبب:**  {reason_detail}\n"
+                    f"{separator()}\n"
+                    f"> 👥  **المصوّنين (أول 2 من كل فريق):**\n"
+                    f"> ─  Team 1 🔴:  {' '.join(f'<@{p}>' for p in (team1_players or [])[:MVP_VOTERS_PER_TEAM]) or '*N/A*'}\n"
+                    f"> ─  Team 2 🟢:  {' '.join(f'<@{p}>' for p in (team2_players or [])[:MVP_VOTERS_PER_TEAM]) or '*N/A*'}\n"
+                    f"> 🗳  **التصويت:**\n"
+                    f"> ─  🏆 Winner:  " + (", ".join(f"**{c}**×<@{p}>" for p, c in sorted(w_tally.items(), key=lambda x: -x[1])) or "*لا توجد أصوات*") + "\n"
+                    f"> ─  ✦ Loser:  " + (", ".join(f"**{c}**×<@{p}>" for p, c in sorted(l_tally.items(), key=lambda x: -x[1])) or "*لا توجد أصوات*")
+                ),
+                color=COLORS["error"],
+                timestamp=discord.utils.utcnow()
+            )
+
+
+======================================================================
+[SEND] line 4439
+======================================================================
+                    await txt.send(content=mentions, embed=embed)
+
+
+======================================================================
+[SEND] line 4442
+======================================================================
+                await channel.send(content=mentions, embed=embed)
+
+
+======================================================================
+[EMBED] line 4579
+======================================================================
+            embed=discord.Embed(
+                title="⛔  ما أنت من المصوّنين",
+                description=(
+                    f"> ❌  موقعك ما يحسب تصويتاً في هذا النظام.\n"
+                    f"> 👥  المصوّنين هم **أول شخصين من كل فريق**:\n"
+                    f"> ─  🔴 Team 1:  {t1_names or '*N/A*'}\n"
+                    f"> ─  🟢 Team 2:  {t2_names or '*N/A*'}\n"
+                    f"> 📌  لو كنت من المصوّنين وبس، اختر MVP من القوائم بالأعلى."
+                ),
+                color=COLORS["error"]
+            ),
+
+
+======================================================================
+[SEND] line 4644
+======================================================================
+            await interaction.edit(view=self)
+
+
+======================================================================
+[EMBED] line 4651
+======================================================================
+            embed=discord.Embed(
+                title=f"📊  حالة تصويت MVP — ماتش `#{self.lobby_id}`",
+                description=(
+                    f"> 👥  **المصوّنين (أول 2 من كل فريق):**  "
+                    f"{' '.join(f'<@{p}>' for p in self.voters) or '*N/A*'}\n"
+                    f"> ✅  **صوّتوا:**  `{self._voted_count()}` / `{len(self.voters)}`\n"
+                    f"{separator()}\n"
+                    f"{self._tally_line('winner', '🏆 MVP WINNER')}\n"
+                    f"{self._tally_line('loser', '✦ MVP LOSER')}\n"
+                    f"> 🎯  **الاتفاق المطلوب:**  `{MVP_CONSENSUS_NEEDED}` أصوات"
+                ),
+                color=COLORS["info"],
+                timestamp=discord.utils.utcnow()
+            ),
+
+
+======================================================================
+[EMBED] line 4671
+======================================================================
+            embed=discord.Embed(
+                title="⚠️  تم طلب تدخل الأدمن",
+                description=(
+                    f"> 🚨  تم إبلاغ الأدمن بمشكلة في الماتش  `#{self.lobby_id}`\n"
+                    f"> 👤  **المبلّغ:**  {interaction.user.mention}\n"
+                    f"> 📌  لو فيه أدمن بالفويسات الخاصة باللاعبين، البوت نقله عندهم.\n"
+                    f"> 📌  وإلا، تم تاغ الأدمن مع الأوامر المناسبة."
+                ),
+                color=COLORS["warning"]
+            ),
+
+
+======================================================================
+[SEND] line 4780
+======================================================================
+            await interaction.edit(view=self)
+
+
+======================================================================
+[SEND] line 4785
+======================================================================
+            await interaction.channel.send(
+                embed=discord.Embed(
+                    title="✅  تم الاتفاق على MVP!",
+                    description=(
+                        f"> 🤝  **اتفاق `{MVP_CONSENSUS_NEEDED}` أصوات من `{len(self.voters)}` مصوّنين**\n"
+                        f"> 🏆  **MVP WINNER:**  <@{winner_mvp}> → `+80` pts\n"
+                        f"> ✦  **MVP LOSER:**  <@{loser_mvp}> → `+30` pts\n"
+                        f"> ⚡  جارٍ تطبيق النقاط وتحديث الرانك..."
+                    ),
+                    color=COLORS["success"]
+                )
+            )
+
+
+======================================================================
+[EMBED] line 4786
+======================================================================
+                embed=discord.Embed(
+                    title="✅  تم الاتفاق على MVP!",
+                    description=(
+                        f"> 🤝  **اتفاق `{MVP_CONSENSUS_NEEDED}` أصوات من `{len(self.voters)}` مصوّنين**\n"
+                        f"> 🏆  **MVP WINNER:**  <@{winner_mvp}> → `+80` pts\n"
+                        f"> ✦  **MVP LOSER:**  <@{loser_mvp}> → `+30` pts\n"
+                        f"> ⚡  جارٍ تطبيق النقاط وتحديث الرانك..."
+                    ),
+                    color=COLORS["success"]
+                )
+
+
+======================================================================
+[EMBED] line 4965
+======================================================================
+        embed = discord.Embed(
+            title=f"🏅 Match Result — `#{lobby_id}`",
+            description=(
+                f"## 🎉  {wd}  Wins!\n"
+                f"{separator()}\n"
+                f"> 🎮 Mode:  `{game_mode.upper()}`\n"
+                f"> 🏆 Winner MVP:  {f'<@{winner_mvp_id}>' if winner_mvp_id else '*N/A*'} → `+{WINNER_MVP_POINTS}` pts\n"
+                f"> ✦ Loser MVP:  {f'<@{loser_mvp_id}>' if loser_mvp_id else '*N/A*'} → `+{LOSER_MVP_POINTS}` pts"
+            ),
+            color=COLORS["success"],
+            timestamp=discord.utils.utcnow()
+        )
+
+
+======================================================================
+[EMBED] line 5060
+======================================================================
+                no_votes_embed = discord.Embed(
+                    title="⏰ Vote Ended — No Votes!",
+                    description=(
+                        f"> ⚠️  لم يصوت أي لاعب في الماتش  `#{self.lobby_id}`\n"
+                        f"> 📊  **النتيجة:**  `0 — 0`\n"
+                        f"> ⚖️  الأدمن يجب أن يحل الماتش يدوياً:\n"
+                        f"> `{PREFIX}resolve {self.lobby_id} team1`\n"
+                        f"> `{PREFIX}resolve {self.lobby_id} team2`\n"
+                        f"> 💡  أو استخدم  `{PREFIX}resolve {self.lobby_id} team1`  لفوز Team 1"
+                    ),
+                    color=COLORS["warning"],
+                    timestamp=discord.utils.utcnow()
+                )
+
+
+======================================================================
+[SEND] line 5075
+======================================================================
+                await result_ch.send(embed=no_votes_embed)
+
+
+======================================================================
+[EMBED] line 5097
+======================================================================
+                tie_embed = discord.Embed(
+                    title="⏰  Vote Tied!",
+                    description=(
+                        f"> 🤝  الماتش  `#{self.lobby_id}`  انتهى بالتعادل\n"
+                        f"> 📊  **النتيجة:**  `{t1v} — {t2v}`\n"
+                        f"> ⚖️  الأدمن يجب أن يحل الماتش:\n"
+                        f"> `{PREFIX}resolve {self.lobby_id} team1`\n"
+                        f"> `{PREFIX}resolve {self.lobby_id} team2`"
+                    ),
+                    color=COLORS["warning"],
+                    timestamp=discord.utils.utcnow()
+                )
+
+
+======================================================================
+[SEND] line 5111
+======================================================================
+                await result_ch.send(embed=tie_embed)
+
+
+======================================================================
+[EMBED] line 5125
+======================================================================
+            vote_close_embed = discord.Embed(
+                title="⏰  Vote Closed!",
+                description=(
+                    f"> **{wd}**  wins the vote  `{t1v} — {t2v}`\n"
+                    f"> 🎯  اختر MVP لكل فريق الآن..."
+                ),
+                color=COLORS["success"],
+                timestamp=discord.utils.utcnow()
+            )
+
+
+======================================================================
+[SEND] line 5136
+======================================================================
+            await result_ch.send(embed=vote_close_embed)
+
+
+======================================================================
+[EMBED] line 5146
+======================================================================
+            mvp_embed = discord.Embed(
+                title="🎯  اختر MVP كل فريق",
+                description=(
+                    f"> 🏆  **الفريق الفائز:**  {wd}\n"
+                    f"> 🔱  الهوست أو الأدمن يختار MVP لكل فريق\n"
+                    f"> ⏱️  لديك **3 دقائق** — وإلا سيُختار تلقائياً\n"
+                    f"{separator()}\n"
+                    f"> 💡  **تعليمات:**\n"
+                    f"> ─  استخدم القائمة الأولى لاختيار MVP الفريق الفائز  (`+80` pts)\n"
+                    f"> ─  استخدم القائمة الثانية لاختيار MVP الفريق الخاسر  (`+30` pts)\n"
+                    f"> ─  اضغط **تأكيد** لتطبيق النقاط"
+                ),
+                color=COLORS["vote"],
+                timestamp=discord.utils.utcnow()
+            )
+
+
+======================================================================
+[SEND] line 5164
+======================================================================
+            await result_ch.send(embed=mvp_embed, view=mvp_view)
+
+
+======================================================================
+[EMBED] line 5222
+======================================================================
+        await interaction.channel.send(embed=discord.Embed(
+            description=(
+                f"> 🗳️  **Vote Progress:**  🟠 `{t1v}`  —  🟢 `{t2v}`\n"
+                f"> Cast: `{votes_count}/{total_voters}`  (Host + First Joiner)"
+            ),
+            color=COLORS["vote"]
+        ))
+
+
+======================================================================
+[SEND] line 5222
+======================================================================
+        await interaction.channel.send(embed=discord.Embed(
+            description=(
+                f"> 🗳️  **Vote Progress:**  🟠 `{t1v}`  —  🟢 `{t2v}`\n"
+                f"> Cast: `{votes_count}/{total_voters}`  (Host + First Joiner)"
+            ),
+            color=COLORS["vote"]
+        ))
+
+
+======================================================================
+[EMBED] line 5238
+======================================================================
+                tie_embed = discord.Embed(
+                    title="⏰  Vote Tied!",
+                    description=(
+                        f"> 🤝  الماتش  `#{lobby_id}`  انتهى بالتعادل\n"
+                        f"> 📊  **النتيجة:**  `{t1v} — {t2v}`\n"
+                        f"> ⚖️  الأدمن يجب أن يحل الماتش:\n"
+                        f"> `{PREFIX}resolve {lobby_id} team1`\n"
+                        f"> `{PREFIX}resolve {lobby_id} team2`"
+                    ),
+                    color=COLORS["warning"],
+                    timestamp=discord.utils.utcnow()
+                )
+
+
+======================================================================
+[SEND] line 5252
+======================================================================
+                await interaction.channel.send(embed=tie_embed)
+
+
+======================================================================
+[EMBED] line 5266
+======================================================================
+            vote_complete_embed = discord.Embed(
+                title="✅  Vote Complete!",
+                description=(
+                    f"> All participants voted!\n"
+                    f"> Winner: **{wd}**  `{t1v} — {t2v}`  🎉\n"
+                    f"> 🎯  اختر MVP لكل فريق الآن..."
+                ),
+                color=COLORS["success"],
+                timestamp=discord.utils.utcnow()
+            )
+
+
+======================================================================
+[SEND] line 5278
+======================================================================
+            await interaction.channel.send(embed=vote_complete_embed)
+
+
+======================================================================
+[EMBED] line 5290
+======================================================================
+                mvp_embed = discord.Embed(
+                    title="🎯  اختر MVP كل فريق",
+                    description=(
+                        f"> 🏆  **الفريق الفائز:**  {wd}\n"
+                        f"> 🔱  الهوست أو الأدمن يختار MVP لكل فريق\n"
+                        f"> ⏱️  لديك **3 دقائق** — وإلا سيُختار تلقائياً\n"
+                        f"{separator()}\n"
+                        f"> 💡  **تعليمات:**\n"
+                        f"> ─  استخدم القائمة الأولى لاختيار MVP الفريق الفائز  (`+80` pts)\n"
+                        f"> ─  استخدم القائمة الثانية لاختيار MVP الفريق الخاسر  (`+30` pts)\n"
+                        f"> ─  اضغط **تأكيد** لتطبيق النقاط"
+                    ),
+                    color=COLORS["vote"],
+                    timestamp=discord.utils.utcnow()
+                )
+
+
+======================================================================
+[SEND] line 5308
+======================================================================
+                await result_ch.send(embed=mvp_embed, view=mvp_view)
+
+
+======================================================================
+[SEND] line 5313
+======================================================================
+            try: await interaction.message.edit(view=self)
+
+
+======================================================================
+[EMBED] line 5333
+======================================================================
+                embed=discord.Embed(
+                    title="⏳  انتهت صلاحية الرسالة",
+                    description=(
+                        "> 🔄  البوت أُعيد تشغيله — الرسالة دي ما عادتش صالحة anymore.\n"
+                        f"> 💡  أعد الأمر  `{PREFIX}play {self.mode.upper()}`  لإنشاء روم جديد."
+                    ),
+                    color=COLORS["warning"]
+                ),
+
+
+======================================================================
+[SEND] line 5350
+======================================================================
+        try: await interaction.message.edit(view=self)
+
+
+======================================================================
+[SEND] line 5398
+======================================================================
+            msg = await self.ctx.send(embed=embed, view=view)
+
+
+======================================================================
+[EMBED] line 5407
+======================================================================
+                embed=discord.Embed(
+                    title="✅  Lobby Created!",
+                    description=(
+                        f"> Lobby `#{lid}` is now live!\n"
+                        f"> Players can press **Join Team 1 / 2** to enter.\n"
+                        + (f"> 🔐  **Private Key** required to join." if private_key else "")
+                    ),
+                    color=COLORS["success"]
+                ),
+
+
+======================================================================
+[SEND] line 5454
+======================================================================
+            msg = await target_channel.send(embed=embed, view=view)
+
+
+======================================================================
+[SEND] line 5463
+======================================================================
+            try: await interaction.message.edit(view=self)
+
+
+======================================================================
+[EMBED] line 5543
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="⏳  Cooldown",
+            description=(
+                f"> Please wait  `{error.retry_after:.1f}s`  before using this command again."
+            ),
+            color=COLORS["warning"]
+        ))
+
+
+======================================================================
+[SEND] line 5543
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="⏳  Cooldown",
+            description=(
+                f"> Please wait  `{error.retry_after:.1f}s`  before using this command again."
+            ),
+            color=COLORS["warning"]
+        ))
+
+
+======================================================================
+[EMBED] line 5552
+======================================================================
+            await ctx.send(embed=discord.Embed(
+                title="🔇  أنت في البلاك ليست",
+                description=(
+                    f"> لا يمكنك استخدام البوت حالياً.\n"
+                    f"> أنت في قائمة البلاك ليست لمدة 10 دقائق.\n"
+                    f"> ⏱️  انتظر حتى انتهاء المدة."
+                ),
+                color=COLORS["error"]
+            ), delete_after=15)
+
+
+======================================================================
+[SEND] line 5552
+======================================================================
+            await ctx.send(embed=discord.Embed(
+                title="🔇  أنت في البلاك ليست",
+                description=(
+                    f"> لا يمكنك استخدام البوت حالياً.\n"
+                    f"> أنت في قائمة البلاك ليست لمدة 10 دقائق.\n"
+                    f"> ⏱️  انتظر حتى انتهاء المدة."
+                ),
+                color=COLORS["error"]
+            ), delete_after=15)
+
+
+======================================================================
+[EMBED] line 5562
+======================================================================
+            await ctx.send(embed=discord.Embed(
+                title="❌  No Permission",
+                description=(
+                    f"> You don't have permission to use this command."
+                ),
+                color=COLORS["error"]
+            ))
+
+
+======================================================================
+[SEND] line 5562
+======================================================================
+            await ctx.send(embed=discord.Embed(
+                title="❌  No Permission",
+                description=(
+                    f"> You don't have permission to use this command."
+                ),
+                color=COLORS["error"]
+            ))
+
+
+======================================================================
+[EMBED] line 5636
+======================================================================
+                success_embed = discord.Embed(
+                    title="✅ AUTO-DETECT Complete",
+                    description=(
+                        f"> 🤖  **Bot:**  Free Fire Bot V3 MAX\n"
+                        f"> 🏠  **Server:**  {guild.name}\n"
+                        f"> 📅  **Time:**  {discord.utils.format_dt(discord.utils.utcnow(), 'F')}\n"
+                        f"{separator()}\n"
+                        f"> 📊  **Channels detected:**\n"
+                        f"> ─  📝  Commands:  `{cmd_channels_count}`\n"
+                        f"> ─  🎮  Play:  `{play_channels_count}`\n"
+                        f"> ─  🔊  Waiting rooms:  `{len(waiting_rooms)}`\n"
+                        f"> ─  🔍  Under check:  `{len(report_channels)}`\n"
+                        f"{separator()}\n"
+                        f"> ✅  كل القنوات الموجودة تم تسجيلها تلقائياً\n"
+                        f"> ✅  البوت جاهز للعمل بدون أي إعداد يدوي\n"
+                        f"> 💡 Use  `{PREFIX}help`  لعرض الأوامر"
+                    ),
+                    color=COLORS["success"],
+                    timestamp=discord.utils.utcnow()
+                )
+
+
+======================================================================
+[SEND] line 5658
+======================================================================
+                await success_ch.send(embed=success_embed)
+
+
+======================================================================
+[SEND] line 5983
+======================================================================
+            await member.edit(nick=new_nick)
+
+
+======================================================================
+[EMBED] line 6134
+======================================================================
+        await message.channel.send(embed=discord.Embed(
+            title="📡  الأوامر داخل السيرفر فقط",
+            description=(
+                f"> هذه الرسالة خاصة (DM) — أوامر البوت كلها تحتاج قناة داخل السيرفر.\n"
+                f"> 💡  افتح قناة الأوامر واكتب  `{PREFIX}help`  لعرض كل الأوامر.\n"
+                f"> 📌  أوامر تعمل هنا:  `{PREFIX}serverleave`"
+            ),
+            color=COLORS["info"]
+        ), delete_after=20)
+
+
+======================================================================
+[SEND] line 6134
+======================================================================
+        await message.channel.send(embed=discord.Embed(
+            title="📡  الأوامر داخل السيرفر فقط",
+            description=(
+                f"> هذه الرسالة خاصة (DM) — أوامر البوت كلها تحتاج قناة داخل السيرفر.\n"
+                f"> 💡  افتح قناة الأوامر واكتب  `{PREFIX}help`  لعرض كل الأوامر.\n"
+                f"> 📌  أوامر تعمل هنا:  `{PREFIX}serverleave`"
+            ),
+            color=COLORS["info"]
+        ), delete_after=20)
+
+
+======================================================================
+[SEND] line 6154
+======================================================================
+                try: await message.delete()
+
+
+======================================================================
+[EMBED] line 6172
+======================================================================
+                await message.reply(embed=discord.Embed(
+                    title="❌  Not Allowed Here",
+                    description=(
+                        f"> Commands can only be used in play channels.\n"
+                        f"> Allowed:  `apostada-play`  •  `highlight-play`  •  `zelika-play`\n"
+                        f"> 💡  Use  `{PREFIX}general`  for help."
+                    ),
+                    color=COLORS["error"]
+                ), delete_after=10)
+
+
+======================================================================
+[SEND] line 6172
+======================================================================
+                await message.reply(embed=discord.Embed(
+                    title="❌  Not Allowed Here",
+                    description=(
+                        f"> Commands can only be used in play channels.\n"
+                        f"> Allowed:  `apostada-play`  •  `highlight-play`  •  `zelika-play`\n"
+                        f"> 💡  Use  `{PREFIX}general`  for help."
+                    ),
+                    color=COLORS["error"]
+                ), delete_after=10)
+
+
+======================================================================
+[EMBED] line 6196
+======================================================================
+        ban_embed = discord.Embed(
+            title="🚫  أنت محظور من اللعب",
+            description=(
+                f"> ⚠️  **السبب:**  `{ban_info.get('ban_reason') or 'غير محدد'}`\n"
+                f"> 📊  **عدد البلاغات:**  `{ban_info.get('report_count', 0)}`\n"
+                f"> 📅  **تاريخ الحظر:**  `{ban_info.get('banned_at', 'N/A')[:19]}`\n"
+                f"{separator()}\n"
+                f"> 🔍  يتم توجيهك لفويس التفتيش\n"
+                f"> 💡  لفك الحظر، تواصل مع الأدمن"
+            ),
+            color=COLORS["error"],
+            timestamp=discord.utils.utcnow()
+        )
+
+
+======================================================================
+[SEND] line 6211
+======================================================================
+        await ctx.send(embed=ban_embed, delete_after=20)
+
+
+======================================================================
+[EMBED] line 6217
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Not Allowed Here",
+            description=(
+                f"> This command can only be used in play channels.\n"
+                f"> Allowed:  `apostada-play`  •  `highlight-play`  •  `zelika-play`"
+            ),
+            color=COLORS["error"]
+        ), delete_after=15)
+
+
+======================================================================
+[SEND] line 6217
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Not Allowed Here",
+            description=(
+                f"> This command can only be used in play channels.\n"
+                f"> Allowed:  `apostada-play`  •  `highlight-play`  •  `zelika-play`"
+            ),
+            color=COLORS["error"]
+        ), delete_after=15)
+
+
+======================================================================
+[EMBED] line 6230
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="⏳  Must Be in a Waiting Room",
+            description=(
+                f"> You need to be in a voice waiting room to create a lobby.\n"
+                f"──────────────────────\n"
+                f"🔊  **Available Rooms:**\n{rooms_text}"
+            ),
+            color=COLORS["warning"]
+        ), delete_after=20)
+
+
+======================================================================
+[SEND] line 6230
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="⏳  Must Be in a Waiting Room",
+            description=(
+                f"> You need to be in a voice waiting room to create a lobby.\n"
+                f"──────────────────────\n"
+                f"🔊  **Available Rooms:**\n{rooms_text}"
+            ),
+            color=COLORS["warning"]
+        ), delete_after=20)
+
+
+======================================================================
+[EMBED] line 6245
+======================================================================
+            await ctx.send(embed=discord.Embed(
+                title="⏳  Wrong Voice Channel",
+                description=(
+                    f"> You're in `{member.voice.channel.name}` — that's not a waiting room.\n"
+                    f"──────────────────────\n"
+                    f"🔊  **Available Rooms:**\n{rooms_text}"
+                ),
+                color=COLORS["warning"]
+            ), delete_after=20)
+
+
+======================================================================
+[SEND] line 6245
+======================================================================
+            await ctx.send(embed=discord.Embed(
+                title="⏳  Wrong Voice Channel",
+                description=(
+                    f"> You're in `{member.voice.channel.name}` — that's not a waiting room.\n"
+                    f"──────────────────────\n"
+                    f"🔊  **Available Rooms:**\n{rooms_text}"
+                ),
+                color=COLORS["warning"]
+            ), delete_after=20)
+
+
+======================================================================
+[EMBED] line 6257
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Already in Lobby",
+            description=(
+                f"> You're already in a lobby. Leave it first.\n"
+                f"> Use  `{PREFIX}leave`  to leave."
+            ),
+            color=COLORS["error"]
+        ), delete_after=10)
+
+
+======================================================================
+[SEND] line 6257
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Already in Lobby",
+            description=(
+                f"> You're already in a lobby. Leave it first.\n"
+                f"> Use  `{PREFIX}leave`  to leave."
+            ),
+            color=COLORS["error"]
+        ), delete_after=10)
+
+
+======================================================================
+[EMBED] line 6284
+======================================================================
+    prompt = await ctx.send(embed=discord.Embed(
+        title=f"🎮  Create  {mode.upper()}  Lobby",
+        description=(
+            f"> اضغط الزر تحت لإدخال بيانات الغرفة وإنشاء اللوبي.\n"
+            f"──────────────────────\n"
+            f"> 💡  **تحتاج:**\n"
+            f"> ›  Room ID  (أرقام)\n"
+            f"> ›  Password  (اختياري)\n"
+            f"> ›  Private Key  (اختياري)\n"
+            f"{separator()}\n"
+            f"> ⏱️  **تختفي هذه الرسالة تلقائياً بعد `{CREATE_PROMPT_DELETE_AFTER}` ثانية**"
+            f" إذا ما ضغطت الزر.\n"
+            f"> ✅  وإذا أنشأت الغرفة — تنحذف مع انتهاء الروم."
+        ),
+        color=COLORS["info"]
+    ), view=create_view)
+
+
+======================================================================
+[SEND] line 6284
+======================================================================
+    prompt = await ctx.send(embed=discord.Embed(
+        title=f"🎮  Create  {mode.upper()}  Lobby",
+        description=(
+            f"> اضغط الزر تحت لإدخال بيانات الغرفة وإنشاء اللوبي.\n"
+            f"──────────────────────\n"
+            f"> 💡  **تحتاج:**\n"
+            f"> ›  Room ID  (أرقام)\n"
+            f"> ›  Password  (اختياري)\n"
+            f"> ›  Private Key  (اختياري)\n"
+            f"{separator()}\n"
+            f"> ⏱️  **تختفي هذه الرسالة تلقائياً بعد `{CREATE_PROMPT_DELETE_AFTER}` ثانية**"
+            f" إذا ما ضغطت الزر.\n"
+            f"> ✅  وإذا أنشأت الغرفة — تنحذف مع انتهاء الروم."
+        ),
+        color=COLORS["info"]
+    ), view=create_view)
+
+
+======================================================================
+[EMBED] line 6323
+======================================================================
+        no_mode_embed = discord.Embed(
+            title="❌  أمر غير صحيح",
+            description=(
+                f"> الأمر  `{PREFIX}play`  غير صالح.\n"
+                f"> يجب تحديد نوع الماتش بوضوح.\n"
+                f"{separator()}\n"
+                f"> 🎮  **الأوامر الصحيحة:**\n"
+                f"> ─  `{PREFIX}play1v1`  —  ماتش 1 ضد 1  🔒  (للـ roles العالية)\n"
+                f"> ─  `{PREFIX}play2v2`  —  ماتش 2 ضد 2\n"
+                f"> ─  `{PREFIX}play3v3`  —  ماتش 3 ضد 3\n"
+                f"> ─  `{PREFIX}play4v4`  —  ماتش 4 ضد 4  (الافتراضي)\n"
+                f"> 💡  مثال:  `{PREFIX}play4v4`"
+            ),
+            color=COLORS["error"],
+            timestamp=discord.utils.utcnow()
+        )
+
+
+======================================================================
+[SEND] line 6341
+======================================================================
+        await ctx.send(embed=no_mode_embed, delete_after=15)
+
+
+======================================================================
+[EMBED] line 6352
+======================================================================
+        invalid_mode_embed = discord.Embed(
+            title="❌  مود غير صحيح",
+            description=(
+                f"> المود  `{mode}`  غير صالح.\n"
+                f"> يجب استخدام أحد المودات التالية:\n"
+                f"{separator()}\n"
+                f"> 🎮  **المودات الصحيحة:**\n"
+                f"> ─  `{PREFIX}play 1v1`  أو  `{PREFIX}play1v1`  🔒\n"
+                f"> ─  `{PREFIX}play 2v2`  أو  `{PREFIX}play2v2`\n"
+                f"> ─  `{PREFIX}play 3v3`  أو  `{PREFIX}play3v3`\n"
+                f"> ─  `{PREFIX}play 4v4`  أو  `{PREFIX}play4v4`\n"
+                f"> 💡  مثال:  `{PREFIX}play 4v4`"
+            ),
+            color=COLORS["error"],
+            timestamp=discord.utils.utcnow()
+        )
+
+
+======================================================================
+[SEND] line 6370
+======================================================================
+        await ctx.send(embed=invalid_mode_embed, delete_after=15)
+
+
+======================================================================
+[EMBED] line 6382
+======================================================================
+        restricted_embed = discord.Embed(
+            title="🔒  أمر محمي",
+            description=(
+                f"> **الأمر:**  `{PREFIX}play 1v1`\n"
+                f"> هذا الأمر مخصص فقط للأعضاء ذوي **الـ roles العالية** في السيرفر.\n"
+                f"{separator()}\n"
+                f"> 🎯  **شروط الاستخدام:**  تحقق أحد الشروط التالية:\n"
+                f"> ─  صلاحية  `Administrator`  في السيرفر\n"
+                f"> ─  صلاحية  `Manage Guild`  (إدارة السيرفر)\n"
+                f"> ─  role تبعك في النصف العلوي من الهرم\n"
+                f">    (مطلوب position  `≥ {threshold}`  —  أنت حالياً  `{member_top}`)\n"
+                f"> 💡 Use  `{PREFIX}play 4v4`  للعب العادي  (متاح للجميع)."
+            ),
+            color=COLORS["error"],
+            timestamp=discord.utils.utcnow()
+        )
+
+
+======================================================================
+[SEND] line 6400
+======================================================================
+        await ctx.send(embed=restricted_embed, delete_after=20)
+
+
+======================================================================
+[EMBED] line 6417
+======================================================================
+        restricted_embed = discord.Embed(
+            title="🔒  أمر محمي",
+            description=(
+                f"> **الأمر:**  `{PREFIX}play1v1`\n"
+                f"> هذا الأمر مخصص فقط للأعضاء ذوي **الـ roles العالية** في السيرفر.\n"
+                f"{separator()}\n"
+                f"> 🎯  **شروط الاستخدام:**  تحقق أحد الشروط التالية:\n"
+                f"> ─  صلاحية  `Administrator`  في السيرفر\n"
+                f"> ─  صلاحية  `Manage Guild`  (إدارة السيرفر)\n"
+                f"> ─  role تبعك في النصف العلوي من الهرم\n"
+                f">    (مطلوب position  `≥ {threshold}`  —  أنت حالياً  `{member_top}`)\n"
+                f"> 💡 Use  `{PREFIX}play`  للعب 4v4 العادي  (متاح للجميع)."
+            ),
+            color=COLORS["error"],
+            timestamp=discord.utils.utcnow()
+        )
+
+
+======================================================================
+[SEND] line 6435
+======================================================================
+        await ctx.send(embed=restricted_embed, delete_after=20)
+
+
+======================================================================
+[SEND] line 6457
+======================================================================
+    await ctx.send(embed=create_profile_embed(player, target, ctx.guild.id))
+
+
+======================================================================
+[EMBED] line 6477
+======================================================================
+    embed = discord.Embed(
+        title=f"💰  نقاط اللاعب",
+        description=(
+            f"> 👤  **اللاعب:**  {target.mention}\n"
+            f"> 🏅  **الرانك:**  {rank_emoji}  `{rank_title}`  —  `#{level}`\n"
+            f"> 💰  **النقاط:**  `{points:,}`  pts\n"
+            f"{separator()}"
+        ),
+        color=rank_color,
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[SEND] line 6523
+======================================================================
+    await ctx.send(embed=embed)
+
+
+======================================================================
+[SEND] line 6532
+======================================================================
+    await ctx.send(embed=create_profile_embed(player, target, ctx.guild.id))
+
+
+======================================================================
+[EMBED] line 6542
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="🏆  Leaderboard",
+            description=(
+                f"> No players yet!\n"
+                f"> Use `{PREFIX}play` to start your first match.\n"
+                f"{separator()}"
+            ),
+            color=COLORS["leaderboard"]
+        ))
+
+
+======================================================================
+[SEND] line 6542
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="🏆  Leaderboard",
+            description=(
+                f"> No players yet!\n"
+                f"> Use `{PREFIX}play` to start your first match.\n"
+                f"{separator()}"
+            ),
+            color=COLORS["leaderboard"]
+        ))
+
+
+======================================================================
+[EMBED] line 6552
+======================================================================
+    embed = discord.Embed(
+        title="🏆  Free Fire  —  Top 10 Leaderboard",
+        color=COLORS["leaderboard"],
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[SEND] line 6578
+======================================================================
+    await ctx.send(embed=embed)
+
+
+======================================================================
+[EMBED] line 6586
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Not in Lobby",
+            description=(
+                f"> You're not currently in any lobby.\n"
+                f"> Use `{PREFIX}play` to create one."
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[SEND] line 6586
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Not in Lobby",
+            description=(
+                f"> You're not currently in any lobby.\n"
+                f"> Use `{PREFIX}play` to create one."
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[EMBED] line 6600
+======================================================================
+            await ctx.send(embed=discord.Embed(
+                title="🗑️  Lobby Cancelled",
+                description=(
+                    f"> Lobby `#{lobby['id']}` was cancelled."
+                ),
+                color=COLORS["warning"]
+            ))
+
+
+======================================================================
+[SEND] line 6600
+======================================================================
+            await ctx.send(embed=discord.Embed(
+                title="🗑️  Lobby Cancelled",
+                description=(
+                    f"> Lobby `#{lobby['id']}` was cancelled."
+                ),
+                color=COLORS["warning"]
+            ))
+
+
+======================================================================
+[EMBED] line 6612
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="✅  Left Lobby",
+        description=(
+            f"> You left lobby `#{lobby['id']}`."
+        ),
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[SEND] line 6612
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="✅  Left Lobby",
+        description=(
+            f"> You left lobby `#{lobby['id']}`."
+        ),
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[EMBED] line 6625
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="🎮  Active Lobbies",
+            description=(
+                f"> No active lobbies right now.\n"
+                f"> Use `{PREFIX}play` to start one."
+            ),
+            color=COLORS["info"]
+        ))
+
+
+======================================================================
+[SEND] line 6625
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="🎮  Active Lobbies",
+            description=(
+                f"> No active lobbies right now.\n"
+                f"> Use `{PREFIX}play` to start one."
+            ),
+            color=COLORS["info"]
+        ))
+
+
+======================================================================
+[EMBED] line 6634
+======================================================================
+    embed = discord.Embed(title="🎮  Active Lobbies", color=COLORS["match"])
+
+
+======================================================================
+[SEND] line 6645
+======================================================================
+    await ctx.send(embed=embed)
+
+
+======================================================================
+[EMBED] line 6661
+======================================================================
+    embed = discord.Embed(
+        title=f"{rank_emoji}  RANK  —  {target.display_name}",
+        description=(
+            f"> 🏅  **Rank:**  `{rank_title}`  —  `#{level}`\n"
+            f"> 💰  **Points:**  `{player['points']:,}`  pts\n"
+            f"{separator()}"
+        ),
+        color=rank_color,
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[SEND] line 6682
+======================================================================
+    await ctx.send(embed=embed)
+
+
+======================================================================
+[EMBED] line 6693
+======================================================================
+    embed = discord.Embed(
+        title="📝  Your Rank",
+        description=(
+            f"> 👤  **Member:**  {target.mention}\n"
+            f"> 🏅  **RANK:**  `#{level}`\n"
+            f"──────────────────────\n"
+            f"📝  **Current Nickname:**  `{target.display_name}`\n"
+            f"🎯  **Target Nickname:**  `{target_nick}`"
+        ),
+        color=COLORS["profile"]
+    )
+
+
+======================================================================
+[SEND] line 6706
+======================================================================
+    await ctx.send(embed=embed)
+
+
+======================================================================
+[EMBED] line 6717
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="🔱  Server Owner",
+            description=(
+                f"> {target.mention} → **RANK `#{level}`**\n"
+                f"──────────────────────\n"
+                f"> 📝  **Target Nickname:**  `{target_nick}`\n"
+                f"> Apply manually:  *Right-click → Edit Profile → Nickname*"
+            ),
+            color=COLORS["warning"]
+        ))
+
+
+======================================================================
+[SEND] line 6717
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="🔱  Server Owner",
+            description=(
+                f"> {target.mention} → **RANK `#{level}`**\n"
+                f"──────────────────────\n"
+                f"> 📝  **Target Nickname:**  `{target_nick}`\n"
+                f"> Apply manually:  *Right-click → Edit Profile → Nickname*"
+            ),
+            color=COLORS["warning"]
+        ))
+
+
+======================================================================
+[EMBED] line 6729
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="🔧  Rank Applied",
+        description=(
+            f"> {target.mention} → **RANK `#{level}`**"
+        ),
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[SEND] line 6729
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="🔧  Rank Applied",
+        description=(
+            f"> {target.mention} → **RANK `#{level}`**"
+        ),
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[EMBED] line 6741
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing ID",
+            description=(
+                f"> Please provide a lobby ID.\n"
+                f"> Usage:  `{PREFIX}matchinfo <id>`"
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[SEND] line 6741
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing ID",
+            description=(
+                f"> Please provide a lobby ID.\n"
+                f"> Usage:  `{PREFIX}matchinfo <id>`"
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[EMBED] line 6752
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Not Found",
+            description=(
+                f"> Lobby `#{lobby_id}` doesn't exist."
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[SEND] line 6752
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Not Found",
+            description=(
+                f"> Lobby `#{lobby_id}` doesn't exist."
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[EMBED] line 6760
+======================================================================
+    embed = discord.Embed(
+        title=f"📋  Match  —  `#{lobby_id}`",
+        description=(
+            f"> 📊  **Status:**  `{lobby['status']}`\n"
+            f"> 🎮 Mode:  `{lobby.get('game_mode', DEFAULT_MODE).upper()}`\n"
+            f"──────────────────────"
+        ),
+        color=COLORS["info"]
+    )
+
+
+======================================================================
+[SEND] line 6773
+======================================================================
+    await ctx.send(embed=embed)
+
+
+======================================================================
+[EMBED] line 6786
+======================================================================
+    embed = discord.Embed(
+        title="🛡️  قواعد السيرفر",
+        description=(
+            f"> مرحباً بك في  **{guild_name}**  🔥\n"
+            f"> يرجى الالتزام بالقواعد التالية:\n"
+            f"{separator()}\n"
+            f"> **1️⃣  الاحترام المتبادل**\n"
+            f"> ─  احترم جميع اللاعبين والأدمنز.\n"
+            f"> ─  ممنوع السب، الشتم، أو الإساءة.\n\n"
+            f"> **2️⃣  قواعد اللعب**\n"
+            f"> ─  ادخل غرفة انتظار قبل اللعب.\n"
+            f"> ─  استخدم  `{PREFIX}play 4v4`  لبدء ماتش.\n"
+            f"> ─  التزم بنتيجة التصويت.\n\n"
+            f"> **3️⃣  عدم الغش**\n"
+            f"> ─  ممنوع التلاعب بالتصويت.\n"
+            f"> ─  ممنوع مغادرة الماتش في المنتصف.\n\n"
+            f"> **4️⃣  استخدام الأوامر**\n"
+            f"> ─  الأوامر تعمل فقط في قنوات play.\n\n"
+            f"> **5️⃣  العقوبات**\n"
+            f"> ─  مخالفة القواعد = تحذير / كتم / طرد.\n"
+            f"> ─  القرار النهائي للأدمن.\n\n"
+            f"> 💬  لأي استفسار، تواصل مع الأدمن."
+        ),
+        color=COLORS["warning"],
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[SEND] line 6844
+======================================================================
+        await ch.send(embed=build_rules_embed(guild.name))
+
+
+======================================================================
+[EMBED] line 6923
+======================================================================
+    setup_embed = discord.Embed(
+        title="✅  Setup Complete!",
+        description=(
+            f"> Created  `{len(created)}`  channels successfully.\n"
+            f"{separator()}\n"
+            f"> 🛡️  **Rules channel:**  `{RULES_CHANNEL_NAME}`  — للقراءة فقط، وإن لم تُنشأ استخدم  `{PREFIX}rules`\n"
+            f"> 🔇  **Blacklist Role:**  `{BLACKLIST_ROLE_NAME}`\n"
+            f"> 🎮  Use  `{PREFIX}play4v4`  in play channels to start."
+        ),
+        color=COLORS["success"],
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[SEND] line 6937
+======================================================================
+    await ctx.send(embed=setup_embed)
+
+
+======================================================================
+[EMBED] line 6945
+======================================================================
+    progress_embed = discord.Embed(
+        title="🔄  جارٍ فحص السيرفر...",
+        description=(
+            f"> 🔍  البحث عن القنوات والكاتيجوريات الناقصة...\n"
+            f"> 🔧  إنشاء Roles + JAIL لو غير موجودة...\n"
+            f"> ⏳  انتظر..."
+        ),
+        color=COLORS["warning"],
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[SEND] line 6957
+======================================================================
+    progress = await ctx.send(embed=progress_embed)
+
+
+======================================================================
+[EMBED] line 6962
+======================================================================
+        success_embed = discord.Embed(
+            title="✅  تم الفحص والإصلاح!",
+            description=(
+                f"> 🔍  تم فحص السيرفر بالكامل\n"
+                f"> ✅  كل القنوات الناقصة أُنشئت\n"
+                f"> ✅  كل الكاتيجوريات مُحدثة (TEXT + VOICE منفصلين)\n"
+                f"> ✅  Rank Roles مُحدثة\n"
+                f"> ✅  نظام JAIL مُفعّل\n"
+                f"> ✅  Blacklist Role `{BLACKLIST_ROLE_NAME}`\n"
+                f"> ✅  Leaderboard مُحدث\n"
+                f"{separator()}\n"
+                f"> 💡  لم تُمسح أي بيانات موجودة\n"
+                f"> 💡  النقاط والرانك والفويسات كما هي"
+            ),
+            color=COLORS["success"],
+            timestamp=discord.utils.utcnow()
+        )
+
+
+======================================================================
+[SEND] line 6981
+======================================================================
+        await progress.edit(embed=success_embed)
+
+
+======================================================================
+[EMBED] line 6984
+======================================================================
+        error_embed = discord.Embed(
+            title="❌  فشل Auto-setup",
+            description=f"> 🐛  **الخطأ:**  `{str(e)[:200]}`",
+            color=COLORS["error"],
+            timestamp=discord.utils.utcnow()
+        )
+
+
+======================================================================
+[SEND] line 6992
+======================================================================
+        await progress.edit(embed=error_embed)
+
+
+======================================================================
+[SEND] line 7003
+======================================================================
+                try: await ch.delete()
+
+
+======================================================================
+[SEND] line 7005
+======================================================================
+            try: await cat.delete(); deleted += 1
+
+
+======================================================================
+[EMBED] line 7007
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="🧹  Cleanup Complete!",
+        description=(
+            f"> Deleted  `{deleted}`  match categories."
+        ),
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[SEND] line 7007
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="🧹  Cleanup Complete!",
+        description=(
+            f"> Deleted  `{deleted}`  match categories."
+        ),
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[EMBED] line 7034
+======================================================================
+    embed = discord.Embed(
+        title=f"🔍  Server Scan  —  `{len(categories)}`  Categories",
+        description=(
+            f"> 🏠  **Server:**  {guild.name}\n"
+            f"> 📝  **Text Channels:**  `{len(guild.text_channels)}`\n"
+            f"> 🔊  **Voice Channels:**  `{len(guild.voice_channels)}`\n"
+            f"> 📄  **Page:**  `{page}/{total_pages}`\n"
+            f"──────────────────────"
+        ),
+        color=COLORS["info"]
+    )
+
+
+======================================================================
+[SEND] line 7087
+======================================================================
+    await ctx.send(embed=embed)
+
+
+======================================================================
+[EMBED] line 7095
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing Name",
+            description=(
+                f"> Please provide a category name.\n"
+                f"> Usage:  `{PREFIX}deletecat <category name>`\n"
+                f"> Use  `{PREFIX}scan`  to see all categories."
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[SEND] line 7095
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing Name",
+            description=(
+                f"> Please provide a category name.\n"
+                f"> Usage:  `{PREFIX}deletecat <category name>`\n"
+                f"> Use  `{PREFIX}scan`  to see all categories."
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[EMBED] line 7120
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Not Found",
+            description=(
+                f"> No category matching  `{category_name}`.\n"
+                f"> Use  `{PREFIX}scan`  to see all categories."
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[SEND] line 7120
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Not Found",
+            description=(
+                f"> No category matching  `{category_name}`.\n"
+                f"> Use  `{PREFIX}scan`  to see all categories."
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[EMBED] line 7135
+======================================================================
+    confirm_embed = discord.Embed(
+        title="⚠️  Confirm Deletion",
+        description=(
+            f"> 📁  **Category:**  `{target.name}`\n"
+            f"> 📊  **Channels:**  `{total_channels}`  (`{text_count}` text  +  `{voice_count}` voice)\n"
+            f"──────────────────────\n"
+            f"> ⚠️  **This will delete ALL channels inside!**\n"
+            f"> Type  `{PREFIX}confirmcat {target.name}`  to confirm."
+        ),
+        color=COLORS["warning"]
+    )
+
+
+======================================================================
+[SEND] line 7146
+======================================================================
+    await ctx.send(embed=confirm_embed)
+
+
+======================================================================
+[EMBED] line 7154
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing Name",
+            description=(
+                f"> Usage:  `{PREFIX}confirmcat <name>`"
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[SEND] line 7154
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing Name",
+            description=(
+                f"> Usage:  `{PREFIX}confirmcat <name>`"
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[EMBED] line 7171
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Not Found",
+            description=(
+                f"> No category matching  `{category_name}`."
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[SEND] line 7171
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Not Found",
+            description=(
+                f"> No category matching  `{category_name}`."
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[SEND] line 7185
+======================================================================
+            await ch.delete()
+
+
+======================================================================
+[SEND] line 7196
+======================================================================
+        await target.delete()
+
+
+======================================================================
+[EMBED] line 7197
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="🗑️  Category Deleted!",
+            description=(
+                f"> **{cat_name}** has been deleted.\n"
+                f"──────────────────────\n"
+                f"> ✅  **Channels deleted:**  `{deleted}`\n"
+                f"> ❌  **Errors:**  `{errors}`"
+            ),
+            color=COLORS["success"]
+        ))
+
+
+======================================================================
+[SEND] line 7197
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="🗑️  Category Deleted!",
+            description=(
+                f"> **{cat_name}** has been deleted.\n"
+                f"──────────────────────\n"
+                f"> ✅  **Channels deleted:**  `{deleted}`\n"
+                f"> ❌  **Errors:**  `{errors}`"
+            ),
+            color=COLORS["success"]
+        ))
+
+
+======================================================================
+[EMBED] line 7208
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="⚠️  Partial Delete",
+            description=(
+                f"> Deleted  `{deleted}`  channels but couldn't delete the category itself.\n"
+                f"> Error:  `{e}`"
+            ),
+            color=COLORS["warning"]
+        ))
+
+
+======================================================================
+[SEND] line 7208
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="⚠️  Partial Delete",
+            description=(
+                f"> Deleted  `{deleted}`  channels but couldn't delete the category itself.\n"
+                f"> Error:  `{e}`"
+            ),
+            color=COLORS["warning"]
+        ))
+
+
+======================================================================
+[EMBED] line 7222
+======================================================================
+    progress = await ctx.send(embed=discord.Embed(
+        title="🚀  Applying Ranks...",
+        description=(
+            f"> Processing  `{len(guild.members)}`  members.\n"
+            f"> Please wait..."
+        ),
+        color=COLORS["warning"]
+    ))
+
+
+======================================================================
+[SEND] line 7222
+======================================================================
+    progress = await ctx.send(embed=discord.Embed(
+        title="🚀  Applying Ranks...",
+        description=(
+            f"> Processing  `{len(guild.members)}`  members.\n"
+            f"> Please wait..."
+        ),
+        color=COLORS["warning"]
+    ))
+
+
+======================================================================
+[EMBED] line 7239
+======================================================================
+    await progress.edit(embed=discord.Embed(
+        title="✅  Done!",
+        description=(
+            f"> Updated  `{updated}`  members successfully."
+        ),
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[SEND] line 7239
+======================================================================
+    await progress.edit(embed=discord.Embed(
+        title="✅  Done!",
+        description=(
+            f"> Updated  `{updated}`  members successfully."
+        ),
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[EMBED] line 7254
+======================================================================
+    embed = discord.Embed(
+        title="🤖 Bot Info",
+        description=(
+            f"> 🔥  **Free Fire Matchmaking Bot**\n"
+            f"> نظام ماتشмейكنج متكامل لإدارة مباريات Free Fire\n"
+            f"{separator()}"
+        ),
+        color=COLORS["info"],
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[SEND] line 7294
+======================================================================
+    await ctx.send(embed=embed)
+
+
+======================================================================
+[EMBED] line 7303
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="✅  Channel Removed",
+            description=(
+                f"> {channel.mention}  has been removed from allowed command channels."
+            ),
+            color=COLORS["success"]
+        ))
+
+
+======================================================================
+[SEND] line 7303
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="✅  Channel Removed",
+            description=(
+                f"> {channel.mention}  has been removed from allowed command channels."
+            ),
+            color=COLORS["success"]
+        ))
+
+
+======================================================================
+[EMBED] line 7312
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="✅  Channel Added",
+            description=(
+                f"> {channel.mention}  has been added to allowed command channels."
+            ),
+            color=COLORS["success"]
+        ))
+
+
+======================================================================
+[SEND] line 7312
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="✅  Channel Added",
+            description=(
+                f"> {channel.mention}  has been added to allowed command channels."
+            ),
+            color=COLORS["success"]
+        ))
+
+
+======================================================================
+[EMBED] line 7326
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="✅  Leaderboard Set",
+        description=(
+            f"> {ctx.channel.mention}  is now the leaderboard channel.\n"
+            f"> It will update automatically."
+        ),
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[SEND] line 7326
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="✅  Leaderboard Set",
+        description=(
+            f"> {ctx.channel.mention}  is now the leaderboard channel.\n"
+            f"> It will update automatically."
+        ),
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[EMBED] line 7344
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing User",
+            description=(
+                f"> Usage:  `{PREFIX}report @user [reason]`\n"
+                f"> مثال:  `{PREFIX}report @user يستخدم هاك`"
+            ),
+            color=COLORS["error"]
+        ), delete_after=15)
+
+
+======================================================================
+[SEND] line 7344
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing User",
+            description=(
+                f"> Usage:  `{PREFIX}report @user [reason]`\n"
+                f"> مثال:  `{PREFIX}report @user يستخدم هاك`"
+            ),
+            color=COLORS["error"]
+        ), delete_after=15)
+
+
+======================================================================
+[EMBED] line 7354
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  لا يمكنك البلاغ عن نفسك",
+            color=COLORS["error"]
+        ), delete_after=10)
+
+
+======================================================================
+[SEND] line 7354
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  لا يمكنك البلاغ عن نفسك",
+            color=COLORS["error"]
+        ), delete_after=10)
+
+
+======================================================================
+[EMBED] line 7360
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  لا يمكنك البلاغ عن بوت",
+            color=COLORS["error"]
+        ), delete_after=10)
+
+
+======================================================================
+[SEND] line 7360
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  لا يمكنك البلاغ عن بوت",
+            color=COLORS["error"]
+        ), delete_after=10)
+
+
+======================================================================
+[EMBED] line 7371
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="⚠️  بلغت من قبل",
+            description=f"> لقد بلّغت على {member.mention} سابقاً.",
+            color=COLORS["warning"]
+        ), delete_after=10)
+
+
+======================================================================
+[SEND] line 7371
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="⚠️  بلغت من قبل",
+            description=f"> لقد بلّغت على {member.mention} سابقاً.",
+            color=COLORS["warning"]
+        ), delete_after=10)
+
+
+======================================================================
+[EMBED] line 7378
+======================================================================
+    report_embed = discord.Embed(
+        title="⚠️  تم تسجيل البلاغ",
+        description=(
+            f"> 👤  **اللاعب المُبلَّغ عنه:**  {member.mention}\n"
+            f"> 👮  **الـمُبلَّغ:**  {ctx.author.mention}\n"
+            + (f"> 📝  **السبب:**  {reason}\n" if reason else "")
+            + f"> 📊  **إجمالي البلاغات:**  `{total}/{REPORT_THRESHOLD}`\n"
+            + (f"> ⚠️  **يتبقى:**  `{remaining}`  بلاغ للحظر التلقائي" if remaining > 0 else f"> ⚠️  **وصل للحد!**  سيتم الحظر تلقائياً")
+        ),
+        color=COLORS["warning"] if remaining > 0 else COLORS["error"],
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[SEND] line 7392
+======================================================================
+    await ctx.send(embed=report_embed)
+
+
+======================================================================
+[EMBED] line 7413
+======================================================================
+    embed = discord.Embed(
+        title=f"⚠️  بلاغات اللاعب  —  {target.display_name}",
+        description=(
+            f"> 👤  **اللاعب:**  {target.mention}\n"
+            f"> 📊  **إجمالي البلاغات:**  `{count}/{REPORT_THRESHOLD}`\n"
+            + (f"> ⚠️  **محظور تلقائياً**" if count >= REPORT_THRESHOLD else f"> ⚠️  **يتبقى:**  `{REPORT_THRESHOLD - count}`  بلاغ للحظر")
+            + f"\n{separator()}"
+        ),
+        color=COLORS["error"] if count >= REPORT_THRESHOLD else COLORS["warning"],
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[SEND] line 7444
+======================================================================
+    await ctx.send(embed=embed)
+
+
+======================================================================
+[EMBED] line 7452
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing User",
+            description=f"> Usage:  `{PREFIX}banplayer @user أو ID [reason]`",
+            color=COLORS["error"]
+        ), delete_after=15)
+
+
+======================================================================
+[SEND] line 7452
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing User",
+            description=f"> Usage:  `{PREFIX}banplayer @user أو ID [reason]`",
+            color=COLORS["error"]
+        ), delete_after=15)
+
+
+======================================================================
+[SEND] line 7460
+======================================================================
+        await ctx.send("❌ لا يمكنك حظر نفسك!", delete_after=10)
+
+
+======================================================================
+[EMBED] line 7475
+======================================================================
+    ban_embed = discord.Embed(
+        title="🚫  تم حظر اللاعب",
+        description=(
+            f"> 👤  **اللاعب:**  <@{user_id}>\n"
+            f"> 👮  **حظره:**  {ctx.author.mention}\n"
+            + (f"> 📝  **السبب:**  `{reason}`\n" if reason else "")
+            + f"> 📊  **عدد البلاغات السابقة:**  `{report_count}`\n"
+            + (f"> 🔍  **فويس التفتيش:**  {assigned_channel.mention}\n> 🔒  **مقيّد:**  لا يمكنه مغادرة هذا الفويس" if assigned_channel else "")
+        ),
+        color=COLORS["error"],
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[SEND] line 7489
+======================================================================
+    await ctx.send(embed=ban_embed)
+
+
+======================================================================
+[EMBED] line 7497
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing User",
+            description=f"> Usage:  `{PREFIX}unbanplayer @user أو ID`",
+            color=COLORS["error"]
+        ), delete_after=15)
+
+
+======================================================================
+[SEND] line 7497
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing User",
+            description=f"> Usage:  `{PREFIX}unbanplayer @user أو ID`",
+            color=COLORS["error"]
+        ), delete_after=15)
+
+
+======================================================================
+[EMBED] line 7506
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="ℹ️  اللاعب غير محظور",
+            description=f"> <@{user_id}>  غير محظور أصلاً.",
+            color=COLORS["info"]
+        ), delete_after=10)
+
+
+======================================================================
+[SEND] line 7506
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="ℹ️  اللاعب غير محظور",
+            description=f"> <@{user_id}>  غير محظور أصلاً.",
+            color=COLORS["info"]
+        ), delete_after=10)
+
+
+======================================================================
+[EMBED] line 7514
+======================================================================
+    unban_embed = discord.Embed(
+        title="✅  تم فك الحظر",
+        description=(
+            f"> 👤  **اللاعب:**  <@{user_id}>\n"
+            f"> 👮  **فك الحظر:**  {ctx.author.mention}\n"
+            f"> 📊  **تم مسح كل البلاغات السابقة**\n"
+            f"> 🎮  اللاعب يستطيع اللعب الآن"
+        ),
+        color=COLORS["success"],
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[SEND] line 7527
+======================================================================
+    await ctx.send(embed=unban_embed)
+
+
+======================================================================
+[EMBED] line 7535
+======================================================================
+    embed = discord.Embed(
+        title="📋  قائمة المحظورين",
+        description=(
+            f"> 📊  **إجمالي المحظورين:**  `{len(banned)}`\n"
+            f"{separator()}"
+        ),
+        color=COLORS["error"] if banned else COLORS["success"],
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[SEND] line 7568
+======================================================================
+    await ctx.send(embed=embed)
+
+
+======================================================================
+[EMBED] line 7576
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing Voice Channel",
+            description=(
+                f"> Usage:  `{PREFIX}setreportchannel <#voice_channel>`\n"
+                f"> مثال:  `{PREFIX}setreportchannel #Investigation-Room`\n\n"
+                f"> 💡  اذكر فويس صوتي (Voice Channel) موجود"
+            ),
+            color=COLORS["error"]
+        ), delete_after=15)
+
+
+======================================================================
+[SEND] line 7576
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing Voice Channel",
+            description=(
+                f"> Usage:  `{PREFIX}setreportchannel <#voice_channel>`\n"
+                f"> مثال:  `{PREFIX}setreportchannel #Investigation-Room`\n\n"
+                f"> 💡  اذكر فويس صوتي (Voice Channel) موجود"
+            ),
+            color=COLORS["error"]
+        ), delete_after=15)
+
+
+======================================================================
+[EMBED] line 7588
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Not a Voice Channel",
+            description=f"> {channel.mention}  ليس فويس صوتي.\n> استخدم فويس صوتي (Voice Channel).",
+            color=COLORS["error"]
+        ), delete_after=10)
+
+
+======================================================================
+[SEND] line 7588
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Not a Voice Channel",
+            description=f"> {channel.mention}  ليس فويس صوتي.\n> استخدم فويس صوتي (Voice Channel).",
+            color=COLORS["error"]
+        ), delete_after=10)
+
+
+======================================================================
+[EMBED] line 7600
+======================================================================
+    embed = discord.Embed(
+        title="🎤  فويسات التفتيش",
+        description=(
+            f"> 🎤  **الفويس:**  {channel.mention}\n"
+            + (f"> ✅  **تمت الإضافة** لقائمة فويسات التفتيش\n" if added else f"> ⚠️  **موجود مسبقاً** في القائمة\n")
+            + f"{separator()}\n"
+            f"> 📊  **إجمالي الفويسات:**  `{len(all_channels)}`\n"
+            f"{channels_list}\n"
+            f"> 💡  اللاعبون المحظورون سيُنقلون لهذه الفويسات تلقائياً"
+        ),
+        color=COLORS["success"] if added else COLORS["warning"],
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[SEND] line 7616
+======================================================================
+    await ctx.send(embed=embed)
+
+
+======================================================================
+[EMBED] line 7624
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing Voice Channel",
+            description=f"> Usage:  `{PREFIX}removereportchannel <#voice_channel>`",
+            color=COLORS["error"]
+        ), delete_after=15)
+
+
+======================================================================
+[SEND] line 7624
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing Voice Channel",
+            description=f"> Usage:  `{PREFIX}removereportchannel <#voice_channel>`",
+            color=COLORS["error"]
+        ), delete_after=15)
+
+
+======================================================================
+[EMBED] line 7636
+======================================================================
+    embed = discord.Embed(
+        title="🗑️  حذف فويس التفتيش",
+        description=(
+            f"> 🎤  **الفويس:**  {channel.mention}\n"
+            + (f"> ✅  **تم الحذف** من القائمة\n" if removed else f"> ⚠️  **غير موجود** في القائمة\n")
+            + f"{separator()}\n"
+            f"> 📊  **الفويسات المتبقية:**  `{len(all_channels)}`\n"
+            f"{channels_list}"
+        ),
+        color=COLORS["success"] if removed else COLORS["warning"],
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[SEND] line 7651
+======================================================================
+    await ctx.send(embed=embed)
+
+
+======================================================================
+[EMBED] line 7659
+======================================================================
+    embed = discord.Embed(
+        title="📋  فويسات التفتيش المحددة",
+        description=(
+            f"> 📊  **إجمالي الفويسات:**  `{len(all_channels)}`\n"
+            + (f"> ⚠️  **لا توجد فويسات محددة** — سيتم إنشاء فويسات تلقائية عند الحظر\n" if not all_channels else "")
+            + f"{separator()}"
+        ),
+        color=COLORS["info"],
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[SEND] line 7688
+======================================================================
+    await ctx.send(embed=embed)
+
+
+======================================================================
+[SEND] line 7754
+======================================================================
+        try: await existing.delete(reason=f"JAIL voice deleted — {member} unjailed")
+
+
+======================================================================
+[EMBED] line 7763
+======================================================================
+        await ctx.send(embed=discord.Embed(title="❌ Missing User", description=f"> Usage: `{PREFIX}jail <@user أو ID> [سبب]`", color=COLORS["error"]), delete_after=15); return
+
+
+======================================================================
+[SEND] line 7763
+======================================================================
+        await ctx.send(embed=discord.Embed(title="❌ Missing User", description=f"> Usage: `{PREFIX}jail <@user أو ID> [سبب]`", color=COLORS["error"]), delete_after=15); return
+
+
+======================================================================
+[EMBED] line 7767
+======================================================================
+        await ctx.send(embed=discord.Embed(title="❌ اللاعب غير موجود في السيرفر", description=f"> <@{user_id}>  ليس عضو في هذا السيرفر.", color=COLORS["error"]), delete_after=10)
+
+
+======================================================================
+[SEND] line 7767
+======================================================================
+        await ctx.send(embed=discord.Embed(title="❌ اللاعب غير موجود في السيرفر", description=f"> <@{user_id}>  ليس عضو في هذا السيرفر.", color=COLORS["error"]), delete_after=10)
+
+
+======================================================================
+[SEND] line 7769
+======================================================================
+    if member.bot: await ctx.send("❌ لا يمكنك سجن بوت!", delete_after=10); return
+
+
+======================================================================
+[SEND] line 7771
+======================================================================
+    if not jail_role: await ctx.send("❌ لم أستطع إنشاء نظام السجن!", delete_after=10); return
+
+
+======================================================================
+[SEND] line 7773
+======================================================================
+    except Exception as e: await ctx.send(f"❌ لم أستطع إعطاء الـ role! ({e})", delete_after=15); return
+
+
+======================================================================
+[EMBED] line 7781
+======================================================================
+    jail_embed = discord.Embed(title="🔒  تم إرسال اللاعب للسجن", description=(f"> 👤  **اللاعب:**  {member.mention}\n> 👮  **الأدمن:**  {ctx.author.mention}\n" + (f"> 📝  **السبب:**  `{reason}`\n" if reason else "") + f"{separator()}\n> 🔒  اللاعب الآن في السجن\n> 💬  يمكنه الكتابة في `{JAIL_CHAT_NAME}` و `{JAIL_PROUVES_NAME}`\n" + (f"> 🎤  فويس السجن: `{jail_voice.name}`\n" if jail_voice else "") + f"> ✅  لفك السجن:  `{PREFIX}unjail @user`"), color=COLORS["error"], timestamp=discord.utils.utcnow())
+
+
+======================================================================
+[SEND] line 7784
+======================================================================
+    await ctx.send(embed=jail_embed)
+
+
+======================================================================
+[EMBED] line 7788
+======================================================================
+            welcome = discord.Embed(title="🔒  مرحباً بك في السجن", description=(f"> {member.mention}  تم إرسالك للسجن\n" + (f"> 📝  **السبب:**  {reason}\n" if reason else "") + f"{separator()}\n> 💬  يمكنك الكلام هنا فقط\n> 📸  ارفع أدلتك في  `#{JAIL_PROUVES_NAME}`\n> ⏳  انتظر قرار الأدمن"), color=COLORS["warning"], timestamp=discord.utils.utcnow())
+
+
+======================================================================
+[SEND] line 7790
+======================================================================
+            await jail_chat.send(content=member.mention, embed=welcome)
+
+
+======================================================================
+[EMBED] line 7799
+======================================================================
+        await ctx.send(embed=discord.Embed(title="❌ Missing User", description=f"> Usage: `{PREFIX}unjail <@user أو ID>`", color=COLORS["error"]), delete_after=15); return
+
+
+======================================================================
+[SEND] line 7799
+======================================================================
+        await ctx.send(embed=discord.Embed(title="❌ Missing User", description=f"> Usage: `{PREFIX}unjail <@user أو ID>`", color=COLORS["error"]), delete_after=15); return
+
+
+======================================================================
+[EMBED] line 7803
+======================================================================
+        await ctx.send(embed=discord.Embed(title="ℹ️  اللاعب غير موجود", description=f"> <@{user_id}>  ليس في السيرفر.", color=COLORS["info"]), delete_after=10); return
+
+
+======================================================================
+[SEND] line 7803
+======================================================================
+        await ctx.send(embed=discord.Embed(title="ℹ️  اللاعب غير موجود", description=f"> <@{user_id}>  ليس في السيرفر.", color=COLORS["info"]), delete_after=10); return
+
+
+======================================================================
+[SEND] line 7805
+======================================================================
+    if not jail_role: await ctx.send("❌ نظام السجن غير مُفعّل!", delete_after=10); return
+
+
+======================================================================
+[SEND] line 7806
+======================================================================
+    if jail_role not in member.roles: await ctx.send(f"ℹ️ {member.mention} ليس في السجن!", delete_after=10); return
+
+
+======================================================================
+[SEND] line 7808
+======================================================================
+    except Exception as e: await ctx.send(f"❌ لم أستطع إزالة الـ role! ({e})", delete_after=15); return
+
+
+======================================================================
+[EMBED] line 7810
+======================================================================
+    unjail_embed = discord.Embed(title="✅  تم فك السجن", description=f"> 👤  **اللاعب:**  {member.mention}\n> 👮  **الأدمن:**  {ctx.author.mention}\n> 🎮  اللاعب حر الآن", color=COLORS["success"], timestamp=discord.utils.utcnow())
+
+
+======================================================================
+[SEND] line 7813
+======================================================================
+    await ctx.send(embed=unjail_embed)
+
+
+======================================================================
+[EMBED] line 7921
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing User",
+            description=f"> Usage:  `{PREFIX}blacklist @user أو ID [reason]`",
+            color=COLORS["error"]
+        ), delete_after=15)
+
+
+======================================================================
+[SEND] line 7921
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing User",
+            description=f"> Usage:  `{PREFIX}blacklist @user أو ID [reason]`",
+            color=COLORS["error"]
+        ), delete_after=15)
+
+
+======================================================================
+[SEND] line 7929
+======================================================================
+        await ctx.send("❌ لا يمكنك بلاك ليست نفسك!", delete_after=10)
+
+
+======================================================================
+[SEND] line 7933
+======================================================================
+        await ctx.send("❌ لا يمكنك بلاك ليست بوت!", delete_after=10)
+
+
+======================================================================
+[EMBED] line 7941
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  فشل",
+            description="> لم أستطع تطبيق البلاك ليست.",
+            color=COLORS["error"]
+        ), delete_after=10)
+
+
+======================================================================
+[SEND] line 7941
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  فشل",
+            description="> لم أستطع تطبيق البلاك ليست.",
+            color=COLORS["error"]
+        ), delete_after=10)
+
+
+======================================================================
+[EMBED] line 7947
+======================================================================
+    embed = discord.Embed(
+        title="🔇  تمت إضافة اللاعب للبلاك ليست",
+        description=(
+            f"> 👤  **اللاعب:**  <@{user_id}>\n"
+            f"> 👮  **بواسطة:**  {ctx.author.mention}\n"
+            + (f"> 📝  **السبب:**  `{reason}`\n" if reason else "")
+            + f"> ⏱️  **المدة:**  10 دقائق"
+        ),
+        color=COLORS["warning"],
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[SEND] line 7960
+======================================================================
+    await ctx.send(embed=embed)
+
+
+======================================================================
+[EMBED] line 7973
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing User",
+            description=f"> Usage:  `{PREFIX}unblacklist @user أو ID`",
+            color=COLORS["error"]
+        ), delete_after=15)
+
+
+======================================================================
+[SEND] line 7973
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing User",
+            description=f"> Usage:  `{PREFIX}unblacklist @user أو ID`",
+            color=COLORS["error"]
+        ), delete_after=15)
+
+
+======================================================================
+[EMBED] line 7985
+======================================================================
+    embed = discord.Embed(
+        title="✅  تمت إزالة البلاك ليست",
+        description=(
+            f"> 👤  **اللاعب:**  <@{user_id}>\n"
+            f"> 👮  **بواسطة:**  {ctx.author.mention}\n"
+            f"> 🎮  يمكنه استخدام البوت الآن"
+        ),
+        color=COLORS["success"],
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[SEND] line 7997
+======================================================================
+    await ctx.send(embed=embed)
+
+
+======================================================================
+[EMBED] line 8010
+======================================================================
+    embed = discord.Embed(
+        title="📋  قائمة البلاك ليست",
+        description=(
+            f"> 📊  **إجمالي:**  `{len(blacklisted)}`\n"
+            f"{separator()}"
+        ),
+        color=COLORS["warning"] if blacklisted else COLORS["success"],
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[SEND] line 8041
+======================================================================
+    await ctx.send(embed=embed)
+
+
+======================================================================
+[SEND] line 8049
+======================================================================
+    await ctx.send(embed=rules_embed)
+
+
+======================================================================
+[EMBED] line 8057
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing",
+            description=f"> Usage:  `{PREFIX}w <lobby_id> <@user/ID>`",
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[SEND] line 8057
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing",
+            description=f"> Usage:  `{PREFIX}w <lobby_id> <@user/ID>`",
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[EMBED] line 8066
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Lobby not active",
+            description=f"> Lobby `#{lobby_id}` ليس في حالة تصويت.",
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[SEND] line 8066
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Lobby not active",
+            description=f"> Lobby `#{lobby_id}` ليس في حالة تصويت.",
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[EMBED] line 8074
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  لاعب غير موجود في الماتش",
+            description=f"> <@{user_id}>  ليس من لاعبي هذا الماتش.",
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[SEND] line 8074
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  لاعب غير موجود في الماتش",
+            description=f"> <@{user_id}>  ليس من لاعبي هذا الماتش.",
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[EMBED] line 8083
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="✅  تم تعيين MVP WINNER",
+        description=f"> 🏆  **MVP WINNER:**  <@{user_id}>\n> 📌  **Lobby:**  `#{lobby_id}`",
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[SEND] line 8083
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="✅  تم تعيين MVP WINNER",
+        description=f"> 🏆  **MVP WINNER:**  <@{user_id}>\n> 📌  **Lobby:**  `#{lobby_id}`",
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[EMBED] line 8098
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing",
+            description=f"> Usage:  `{PREFIX}l <lobby_id> <@user/ID>`",
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[SEND] line 8098
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing",
+            description=f"> Usage:  `{PREFIX}l <lobby_id> <@user/ID>`",
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[EMBED] line 8107
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Lobby not active",
+            description=f"> Lobby `#{lobby_id}` ليس في حالة تصويت.",
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[SEND] line 8107
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Lobby not active",
+            description=f"> Lobby `#{lobby_id}` ليس في حالة تصويت.",
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[EMBED] line 8115
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  لاعب غير موجود في الماتش",
+            description=f"> <@{user_id}>  ليس من لاعبي هذا الماتش.",
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[SEND] line 8115
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  لاعب غير موجود في الماتش",
+            description=f"> <@{user_id}>  ليس من لاعبي هذا الماتش.",
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[EMBED] line 8124
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="✅  تم تعيين MVP LOSER",
+        description=f"> ✦  **MVP LOSER:**  <@{user_id}>\n> 📌  **Lobby:**  `#{lobby_id}`",
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[SEND] line 8124
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="✅  تم تعيين MVP LOSER",
+        description=f"> ✦  **MVP LOSER:**  <@{user_id}>\n> 📌  **Lobby:**  `#{lobby_id}`",
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[EMBED] line 8149
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  MVP من نفس الفريق!",
+            description="> MVP WINNER و MVP LOSER يجب أن يكونا من فريقين مختلفين.",
+            color=COLORS.get("danger", COLORS.get("error", 0xE74C3C))
+        ))
+
+
+======================================================================
+[SEND] line 8149
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  MVP من نفس الفريق!",
+            description="> MVP WINNER و MVP LOSER يجب أن يكونا من فريقين مختلفين.",
+            color=COLORS.get("danger", COLORS.get("error", 0xE74C3C))
+        ))
+
+
+======================================================================
+[EMBED] line 8156
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="⚙️  جارٍ تطبيق النقاط...",
+        description=(
+            f"> 🏆  **Winner Team:**  {w_team}\n"
+            f"> 🔱  **MVP WINNER:**  <@{winner_id}>\n"
+            f"> ✦  **MVP LOSER:**  <@{loser_id}>"
+        ),
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[SEND] line 8156
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="⚙️  جارٍ تطبيق النقاط...",
+        description=(
+            f"> 🏆  **Winner Team:**  {w_team}\n"
+            f"> 🔱  **MVP WINNER:**  <@{winner_id}>\n"
+            f"> ✦  **MVP LOSER:**  <@{loser_id}>"
+        ),
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[EMBED] line 8185
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  فشل تطبيق النقاط",
+            description=f"> 🐛  **الخطأ:**  `{str(e)[:200]}`\n> ✅  تم إنهاء الماتش وحذف القنوات",
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[SEND] line 8185
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  فشل تطبيق النقاط",
+            description=f"> 🐛  **الخطأ:**  `{str(e)[:200]}`\n> ✅  تم إنهاء الماتش وحذف القنوات",
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[EMBED] line 8203
+======================================================================
+            await ctx.send(embed=discord.Embed(
+                title="❌  Missing Lobby ID",
+                description=(
+                    f"> Usage:  `{PREFIX}startvote <lobby_id>`\n"
+                    f"> أو استخدم  `{PREFIX}startvote`  لو فيه ماتش نشط\n"
+                    f"> 💡 Use  `{PREFIX}matches`  لعرض الماتشات النشطة"
+                ),
+                color=COLORS["error"]
+            ), delete_after=15)
+
+
+======================================================================
+[SEND] line 8203
+======================================================================
+            await ctx.send(embed=discord.Embed(
+                title="❌  Missing Lobby ID",
+                description=(
+                    f"> Usage:  `{PREFIX}startvote <lobby_id>`\n"
+                    f"> أو استخدم  `{PREFIX}startvote`  لو فيه ماتش نشط\n"
+                    f"> 💡 Use  `{PREFIX}matches`  لعرض الماتشات النشطة"
+                ),
+                color=COLORS["error"]
+            ), delete_after=15)
+
+
+======================================================================
+[EMBED] line 8215
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Not Found",
+            description=f"> اللوبي `#{lobby_id}` غير موجود",
+            color=COLORS["error"]
+        ), delete_after=10)
+
+
+======================================================================
+[SEND] line 8215
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Not Found",
+            description=f"> اللوبي `#{lobby_id}` غير موجود",
+            color=COLORS["error"]
+        ), delete_after=10)
+
+
+======================================================================
+[EMBED] line 8222
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Not Active",
+            description=f"> اللوبي `#{lobby_id}` حالته: `{lobby['status']}`\n> يجب أن يكون `started`",
+            color=COLORS["error"]
+        ), delete_after=10)
+
+
+======================================================================
+[SEND] line 8222
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Not Active",
+            description=f"> اللوبي `#{lobby_id}` حالته: `{lobby['status']}`\n> يجب أن يكون `started`",
+            color=COLORS["error"]
+        ), delete_after=10)
+
+
+======================================================================
+[EMBED] line 8230
+======================================================================
+    embed = discord.Embed(
+        title="🗳️  تم بدء التصويت!",
+        description=(
+            f"> 🏠  **Lobby:**  `#{lobby_id}`\n"
+            f"> 👮  **Started by:**  {ctx.author.mention}\n"
+            f"> ⚡  تم تجاوز cooldown الـ 10 دقائق\n"
+            f"> 🗳️  الهوست وأول داخل يصوتان الآن!"
+        ),
+        color=COLORS["success"],
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[SEND] line 8243
+======================================================================
+    await ctx.send(embed=embed)
+
+
+======================================================================
+[EMBED] line 8252
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing",
+            description=(
+                f"> Usage:  `{PREFIX}resolve <id> <team1|team2>`"
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[SEND] line 8252
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing",
+            description=(
+                f"> Usage:  `{PREFIX}resolve <id> <team1|team2>`"
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[EMBED] line 8262
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Invalid",
+            description=(
+                f"> Winner must be  `team1`  or  `team2`."
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[SEND] line 8262
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Invalid",
+            description=(
+                f"> Winner must be  `team1`  or  `team2`."
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[EMBED] line 8272
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  No Dispute",
+            description=(
+                f"> Lobby `#{lobby_id}` is not in voting status."
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[SEND] line 8272
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  No Dispute",
+            description=(
+                f"> Lobby `#{lobby_id}` is not in voting status."
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[EMBED] line 8280
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="⚖️  Resolved!",
+        description=(
+            f"> **{ctx.author.mention}**  decided the winner:\n"
+            f"> **{'🟠 Team 1' if winner=='team1' else '🟢 Team 2'}**"
+        ),
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[SEND] line 8280
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="⚖️  Resolved!",
+        description=(
+            f"> **{ctx.author.mention}**  decided the winner:\n"
+            f"> **{'🟠 Team 1' if winner=='team1' else '🟢 Team 2'}**"
+        ),
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[EMBED] line 8295
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing User",
+            description=(
+                f"> Usage:  `{PREFIX}resetstats @user أو ID`"
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[SEND] line 8295
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing User",
+            description=(
+                f"> Usage:  `{PREFIX}resetstats @user أو ID`"
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[EMBED] line 8308
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="✅  Stats Reset",
+        description=(
+            f"> <@{user_id}>  —  RANK  `#{STARTING_LEVEL}`\n"
+            f"> All stats have been reset to default."
+        ),
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[SEND] line 8308
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="✅  Stats Reset",
+        description=(
+            f"> <@{user_id}>  —  RANK  `#{STARTING_LEVEL}`\n"
+            f"> All stats have been reset to default."
+        ),
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[EMBED] line 8325
+======================================================================
+    progress_embed = discord.Embed(
+        title="🚀  جارٍ تصفير النقاط والرانك...",
+        description=(
+            f"> 📊  **عدد الأعضاء:**  `{len(guild.members)}`\n"
+            f"> 💰  **سيتم تصفير:**  النقاط + الرانك\n"
+            f"> 🏅  **الرانك المستهدف:**  `#{STARTING_LEVEL}`  (نقاط = 0)\n"
+            f"> ⏳  **انتظر...**"
+        ),
+        color=COLORS["warning"],
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[SEND] line 8338
+======================================================================
+    progress = await ctx.send(embed=progress_embed)
+
+
+======================================================================
+[EMBED] line 8372
+======================================================================
+    success_embed = discord.Embed(
+        title="✅  تم تصفير كل البيانات!",
+        description=(
+            f"> 🏅  كل الأعضاء تم تصفيرهم إلى  `RANK #{STARTING_LEVEL}`  (نقاط = 0)\n"
+            f"{separator()}\n"
+            f"> ✅  **تم التصفير:**  `{reset_count}`\n"
+            f"> 🤖  **تم تخطي البوتات:**  `{skipped_bots}`\n"
+            f"> ⚠️  **فشل:**  `{failed}`\n"
+            f"> 💡  كل الستاتس (نقاط/فوز/خسارة/MVPs) صفرت أيضاً"
+        ),
+        color=COLORS["success"],
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[SEND] line 8394
+======================================================================
+    await progress.edit(embed=success_embed)
+
+
+======================================================================
+[EMBED] line 8402
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing",
+            description=(
+                f"> Usage:  `{PREFIX}setlevel @user أو ID <level>`"
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[SEND] line 8402
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing",
+            description=(
+                f"> Usage:  `{PREFIX}setlevel @user أو ID <level>`"
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[EMBED] line 8411
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Invalid Level",
+            description=(
+                f"> Level must be between  `1`  and  `9999`."
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[SEND] line 8411
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Invalid Level",
+            description=(
+                f"> Level must be between  `1`  and  `9999`."
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[EMBED] line 8431
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="✅  Level Updated",
+        description=(
+            f"> <@{user_id}> → **RANK  `#{level}`**"
+        ),
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[SEND] line 8431
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="✅  Level Updated",
+        description=(
+            f"> <@{user_id}> → **RANK  `#{level}`**"
+        ),
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[EMBED] line 8444
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing",
+            description=(
+                f"> Usage:  `{PREFIX}setpoints @user أو ID <points>`"
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[SEND] line 8444
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing",
+            description=(
+                f"> Usage:  `{PREFIX}setpoints @user أو ID <points>`"
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[EMBED] line 8453
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Invalid Points",
+            description=(
+                f"> Points must be between  `-99999`  and  `99999`."
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[SEND] line 8453
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Invalid Points",
+            description=(
+                f"> Points must be between  `-99999`  and  `99999`."
+            ),
+            color=COLORS["error"]
+        ))
+
+
+======================================================================
+[EMBED] line 8471
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="✅  Points Updated",
+        description=(
+            f"> <@{user_id}> → **`{points}` points**  (RANK `#{new_level}`)"
+        ),
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[SEND] line 8471
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="✅  Points Updated",
+        description=(
+            f"> <@{user_id}> → **`{points}` points**  (RANK `#{new_level}`)"
+        ),
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[EMBED] line 8491
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="✅  Synced",
+        description=(
+            f"> Synced  `{updated}`  members' nicknames successfully."
+        ),
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[SEND] line 8491
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="✅  Synced",
+        description=(
+            f"> Synced  `{updated}`  members' nicknames successfully."
+        ),
+        color=COLORS["success"]
+    ))
+
+
+======================================================================
+[EMBED] line 8504
+======================================================================
+    progress = await ctx.send(embed=discord.Embed(
+        title="🔄  جارٍ مزامنة الـ Roles...",
+        description=(
+            f"> 📊  جاري تحديث ألقاب كل اللاعبين حسب ترتيبهم...\n"
+            f"> ⏳  انتظر..."
+        ),
+        color=COLORS["warning"],
+        timestamp=discord.utils.utcnow()
+    ))
+
+
+======================================================================
+[SEND] line 8504
+======================================================================
+    progress = await ctx.send(embed=discord.Embed(
+        title="🔄  جارٍ مزامنة الـ Roles...",
+        description=(
+            f"> 📊  جاري تحديث ألقاب كل اللاعبين حسب ترتيبهم...\n"
+            f"> ⏳  انتظر..."
+        ),
+        color=COLORS["warning"],
+        timestamp=discord.utils.utcnow()
+    ))
+
+
+======================================================================
+[EMBED] line 8518
+======================================================================
+    synced_embed = discord.Embed(
+        title="✅  تمت مزامنة الـ Roles!",
+        description=(
+            f"> 🔄  كل اللاعبين تم تحديث ألقابهم حسب ترتيبهم.\n"
+            f"{separator()}\n"
+            f"> 🏆  **#1:**  Best Player\n"
+            f"> 💎  **#2-10:**  Goated Players  (SoundBoard + Waiting Prv)\n"
+            f"> ⭐  **#11-50:**  Skilled Players  (SoundBoard)\n"
+            f"> 🎯  **#51-100:**  Efficient Players"
+        ),
+        color=COLORS["success"],
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[SEND] line 8533
+======================================================================
+    await progress.edit(embed=synced_embed)
+
+
+======================================================================
+[EMBED] line 8542
+======================================================================
+    embed = discord.Embed(
+        title="🎮  Player Commands",
+        description=(
+            f"> 📌  **Prefix:**  `{PREFIX}`\n"
+            f"──────────────────────"
+        ),
+        color=0xFF6B00
+    )
+
+
+======================================================================
+[SEND] line 8588
+======================================================================
+    await ctx.send(embed=embed)
+
+
+======================================================================
+[EMBED] line 8594
+======================================================================
+    embed1 = discord.Embed(
+        title="🔥  Free Fire Bot v4.0  —  أوامر اللاعبين",
+        description=(
+            f"> 📌  **Prefix:**  `{PREFIX}`\n"
+            f"> 🎮  جميع الأوامر تعمل في قنوات play\n"
+            f"{separator()}"
+        ),
+        color=0xFF6B00,
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[SEND] line 8636
+======================================================================
+    await ctx.send(embed=embed1)
+
+
+======================================================================
+[EMBED] line 8639
+======================================================================
+    embed2 = discord.Embed(
+        title="🔧  Free Fire Bot v4.0  —  أوامر الأدمن",
+        description=(
+            f"> 📌  **Prefix:**  `{PREFIX}`\n"
+            f"> 🔒  جميع الأوامر التالية للأدمن فقط\n"
+            f"{separator()}"
+        ),
+        color=0xE74C3C,
+        timestamp=discord.utils.utcnow()
+    )
+
+
+======================================================================
+[SEND] line 8706
+======================================================================
+    await ctx.send(embed=embed2)
+
+
+======================================================================
+[EMBED] line 8714
+======================================================================
+        embed = discord.Embed(
+            title="☁️ Cloud Backup",
+            description="❌ Cloud backup not enabled!\n\nSet `MONGODB_URI` environment variable.",
+            color=COLORS["error"]
+        )
+
+
+======================================================================
+[SEND] line 8720
+======================================================================
+        await ctx.send(embed=embed)
+
+
+======================================================================
+[SEND] line 8723
+======================================================================
+    await ctx.send("☁️ Starting full cloud backup...")
+
+
+======================================================================
+[EMBED] line 8726
+======================================================================
+    embed = discord.Embed(
+        title="☁️ Cloud Backup",
+        description=f"{'✅' if success else '❌'} {msg}",
+        color=color
+    )
+
+
+======================================================================
+[SEND] line 8732
+======================================================================
+    await ctx.send(embed=embed)
+
+
+======================================================================
+[EMBED] line 8740
+======================================================================
+        embed = discord.Embed(
+            title="☁️ Cloud Restore",
+            description="❌ Cloud backup not enabled!\n\nSet `MONGODB_URI` environment variable.",
+            color=COLORS["error"]
+        )
+
+
+======================================================================
+[SEND] line 8746
+======================================================================
+        await ctx.send(embed=embed)
+
+
+======================================================================
+[EMBED] line 8749
+======================================================================
+    embed = discord.Embed(
+        title="⚠️ Cloud Restore",
+        description="This will **DELETE all local data** and replace it with cloud data.\n\nReact with ✅ to confirm.",
+        color=COLORS["warning"]
+    )
+
+
+======================================================================
+[SEND] line 8755
+======================================================================
+    msg = await ctx.send(embed=embed)
+
+
+======================================================================
+[SEND] line 8765
+======================================================================
+            await ctx.send("❌ Cancelled.")
+
+
+======================================================================
+[SEND] line 8768
+======================================================================
+        await ctx.send("⏰ Timed out.")
+
+
+======================================================================
+[SEND] line 8771
+======================================================================
+    await ctx.send("☁️ Restoring from cloud...")
+
+
+======================================================================
+[EMBED] line 8774
+======================================================================
+    embed = discord.Embed(
+        title="☁️ Cloud Restore",
+        description=f"{'✅' if success else '❌'} {msg}",
+        color=color
+    )
+
+
+======================================================================
+[SEND] line 8780
+======================================================================
+    await ctx.send(embed=embed)
+
+
+======================================================================
+[EMBED] line 8803
+======================================================================
+    embed = discord.Embed(
+        title="☁️ Cloud Status",
+        description=status,
+        color=COLORS["info"]
+    )
+
+
+======================================================================
+[SEND] line 8809
+======================================================================
+    await ctx.send(embed=embed)
+
+
+======================================================================
+[SEND] line 8817
+======================================================================
+        await ctx.send("❌ هذا الأمر يعمل في الـ DM فقط!")
+
+
+======================================================================
+[SEND] line 8821
+======================================================================
+        await ctx.send("❌ هذا الأمر لصاحب البوت فقط!")
+
+
+======================================================================
+[SEND] line 8828
+======================================================================
+            await ctx.send("البوت لا يوجد في أي سيرفر.")
+
+
+======================================================================
+[SEND] line 8834
+======================================================================
+        await ctx.send(msg)
+
+
+======================================================================
+[SEND] line 8840
+======================================================================
+        await ctx.send("❌ ID غير صحيح. استخدم رقم ID السيرفر.")
+
+
+======================================================================
+[SEND] line 8844
+======================================================================
+        await ctx.send(f"❌ السيرفر `{guild_id}` غير موجود.")
+
+
+======================================================================
+[SEND] line 8848
+======================================================================
+        await ctx.send(f"✅ تم مغادرة السيرفر **{guild.name}** بنجاح!")
+
+
+======================================================================
+[SEND] line 8851
+======================================================================
+        await ctx.send(f"❌ فشل مغادرة السيرفر: {e}")
