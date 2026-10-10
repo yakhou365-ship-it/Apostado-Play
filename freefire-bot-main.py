@@ -5594,7 +5594,7 @@ async def on_ready():
                 success_embed.add_field(name="📝 Commands", value=f"`{cmd_channels_count}`", inline=True)
                 success_embed.add_field(name="🎮 Play", value=f"`{play_channels_count}`", inline=True)
                 success_embed.add_field(name="🔊 Waiting rooms", value=f"`{len(waiting_rooms)}`", inline=True)
-                success_embed.add_field(name="🔍 Under check", value=f"`{len(report_channels)}`", inline=True)
+                success_embed.add_field(name="🔍 Under check", value=f"`{len(report_channels)}`", inline=False)
                 success_embed.set_footer(text=f"{BOT_FOOTER}  •  V3 MAX AUTO-DETECT")
                 # V0: لا صور
                 await success_ch.send(embed=success_embed)
@@ -6803,7 +6803,7 @@ async def setup_cmd(ctx):
         timestamp=discord.utils.utcnow()
     )
     setup_embed.add_field(name="🛡️ Rules channel", value=f"`{RULES_CHANNEL_NAME}` — للقراءة فقط، وإن لم تُنشأ استخدم `{PREFIX}rules`", inline=False)
-    setup_embed.add_field(name="🔇 Blacklist Role", value=f"`{BLACKLIST_ROLE_NAME}`", inline=True)
+    setup_embed.add_field(name="🔇 Blacklist Role", value=f"`{BLACKLIST_ROLE_NAME}`", inline=False)
     setup_embed.add_field(name="🎮 Next", value=f"Use `{PREFIX}play4v4` in play channels to start.", inline=False)
     setup_embed.set_footer(text=f"{BOT_FOOTER}  •  Setup complete")
     setup_embed = apply_branding(setup_embed, ctx.guild)
@@ -8208,7 +8208,7 @@ async def resetrankall_cmd(ctx):
         color=COLORS["warning"],
         timestamp=discord.utils.utcnow()
     )
-    progress_embed.add_field(name="📊 عدد الأعضاء", value=f"`{len(guild.members)}`", inline=True)
+    progress_embed.add_field(name="📊 عدد الأعضاء", value=f"`{len(guild.members)}`", inline=False)
     progress_embed.set_footer(text=f"{BOT_FOOTER}  •  Server-wide reset")
     progress_embed = apply_branding(progress_embed, ctx.guild)
     progress = await ctx.send(embed=progress_embed)
