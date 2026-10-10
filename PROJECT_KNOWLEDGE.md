@@ -3,7 +3,7 @@
 > **هذا الملف هو "ذاكرة المشروع".** اقرأه قبل أي تعديل.
 > **الكود الفعلي هو المصدر الأساسي للحقيقة.** إذا لم يطابق هذا الملف الكود، صحّح هذا الملف.
 
-Last updated: 2026-10-07 (v2 fixes: blacklist-channel dedupe + play-flow embed cleanup + v2b: fuzzy blacklist-channel matching for manually-named duplicates)
+Last updated: 2026-10-08 (v3: match-results channel shows **results only**; admin alerts → 🔇・Blacklisted channel)
 
 ---
 
@@ -411,6 +411,11 @@ Status legend: **FIXED** in this audit · **OPEN** (needs a product decision) ·
 | HIGH | **Duplicate `🔇・Blacklisted` channels** could exist — a race between concurrent `auto_setup_guild`/`!!setup`/blacklist calls could create two, old code never removed extras, and the dedupe only matched the **exact** channel name (manually-created `BLACKLISTED` / `blacklist-2` channels escaped it). | `update_blacklist_channel(guild)` runs its find/create under a **per-guild `asyncio.Lock`** (`_blacklist_channel_locks`) and **dedupes smartly**: candidates = channels matching the exact name **or** containing `"blacklist"` (case-insensitive); the settings-referenced channel is kept only if it actually looks like a blacklist channel (a bad pointer is repointed, never deleting an unrelated channel); otherwise the first exact-name channel wins, then any fuzzy candidate; all other candidates are deleted and `blacklist_channel_id` re-persisted. Verified in a stub harness (13/13). |
 | MEDIUM | **Match-flow embeds stayed in the play channel forever.** "Match Ready!" (sent at match start) was never deleted, cancel paths left an edited copy of the lobby embed, and embeds whose `message_id` was only in the DB (post-restart lobbies) were unreachable from memory. | New `_lobby_flow_msgs` registry — `{lobby_id: {(channel_id, msg_id)}}` — registers the lobby-join embed (modal + rematch) and the "Match Ready!" embed; `cleanup_lobby_memory` spawns `_delete_lobby_flow_msgs` so **any** match-end method removes them. Cancel now **deletes** the lobby embed instead of editing it (`delete_after=30` on the confirmation). `_delete_lobby_embed_for_lobby` falls back to `lobbies.message_id` in the DB when memory is empty. A post-restart task `recover_after_restart` (started in `on_ready`) deletes leftover embeds of terminal (`cancelled`/`completed`) lobbies and re-arms the 2-minute auto-close timer for `waiting` lobbies. |
 
+### FIXED in the 2026-10-08 session (part 3, user follow-up)
+| Sev | Issue | Fix |
+|---|---|---|
+| MEDIUM | **The `match-results` channel was full of admin-alert embeds** (`notify_admins` sent every ⚠️ error/failure alert there), while the **actual match results** were posted to the temporary match text channel (deleted at match end) or the play channel — i.e. the channel named "results" never showed results. | New `find_match_results_channel(guild)` locates the channel by normalized name (`match-results` / `match result` / `نتائج`) across **all** guild text channels. New `_post_match_result(guild, embed, channel)` posts the final 🏅 "Match Result"/"Match Finished" embed to that channel when found, else the original channel (never both). Both `process_match_result` and `process_match_result_with_mvps` route through it. `notify_admins` now targets the **🔇・Blacklisted** channel instead (`_resolve_blacklist_channel`: settings pointer → exact-name lookup → play-channel fallback → any writable text channel) — the results channel is now results-only. |
+
 ### OPEN — deliberately not changed (needs your decision)
 | Sev | Issue | Why it was not changed |
 |---|---|---|
@@ -451,6 +456,7 @@ Status legend: **FIXED** in this audit · **OPEN** (needs a product decision) ·
 13. **`sync_all_players_roles` takes a `player_ids` filter** so match-end and match-cancel paths can refresh only the players of the finished match instead of every player on the server — the main speedup for `!!w`/`!!l`.
 14. **The blacklist channel is part of setup**, not lazy-only: `auto_setup_guild` / `!!setup` create `🔇・Blacklisted` and record `blacklist_channel_id` + `blacklist_message_id` in `guild_settings`; `update_blacklist_channel` still self-heals if the channel is missing.
 15. **The periodic task is the only place a full nickname sweep runs** — commands `!!fixrank` / `!!syncnicknames` are interactive one-offs, while the loop re-syncs every 2 minutes so nicknames self-correct without an admin.
+16. **The `match-results` channel is results-only.** Name-based lookup (`find_match_results_channel`, tolerant of `-`/`_`/`・` and Arabic `نتائج`) decides where the final result embed lands; admin alerts were moved off it to `🔇・Blacklisted` so the channel's contents match its purpose.
 
 ---
 
@@ -494,6 +500,16 @@ Status legend: **FIXED** in this audit · **OPEN** (needs a product decision) ·
 | Match-start ("Match Ready!") and cancel/decline flows register/delete their play-channel embeds; `delete_after` on cancel + failed-start notices | OK (code walk-through) |
 | `recover_after_restart` (on_ready): queries terminal `lobbies.message_id` leftovers, evokes `_delete_lobby_embed_for_lobby` fallback, re-arms 2-min auto-close for `waiting` lobbies | OK (read-through + harness fallback path) |
 
+**Verification performed during the 2026-10-08 session (part 3):**
+
+| Check | Result |
+|---|---|
+| `ast.parse` + `py_compile` on the edited bot file; `pyflakes` undefined names | OK / none |
+| **Part 3 harness (stub-`discord`, throwaway DB, 6/6):** `find_match_results_channel` finds `🎯・Match-Results` by name | 6/6 |
+| result embed → `match-results` channel only (play channel untouched) | 6/6 |
+| `notify_admins` alert → `🔇・Blacklisted` channel only (results channel keeps only the result embed) | 6/6 |
+| fallback: no results channel → result goes to the original channel | 6/6 |
+
 **NOT TESTED — Reason:** everything requiring a live Discord connection.
 
 Specifically **NOT TESTED**: gateway login; any prefix command; any button/select/modal interaction; interaction lifecycle (defer/edit/ephemeral, expired tokens); voice state transitions and member moves; channel/role/category creation and deletion; rate-limit behaviour under load; nickname and role assignment against a real hierarchy; `notify_admins` delivery; SQLite behaviour on Railway's actual filesystem; MongoDB cloud sync; `!!botinfo` build fingerprint in production.
@@ -513,6 +529,7 @@ Specifically **NOT TESTED**: gateway login; any prefix command; any button/selec
 | `99d038a` | Dedupe `🔇・Blacklisted` channels (per-guild `asyncio.Lock` + duplicate deletion + settings re-point); delete **all** play-flow embeds at match end by any method — new `_lobby_flow_msgs` registry (lobby-join + "Match Ready!"), cancel deletes instead of editing, `_delete_lobby_embed_for_lobby` falls back to `lobbies.message_id`, post-restart `recover_after_restart` cleans terminal-lobby leftovers and re-arms 2-min auto-close for waiting lobbies |
 | `14d6d16` | Fuzzy blacklist-channel dedupe: match **any** channel name containing `blacklist` (covers manually-created `BLACKLISTED`/`blacklist-2`); keeps the settings-referenced channel only if it looks like a blacklist channel (never deletes unrelated channels); re-points bad pointers |
 | `77d6fef` | Harden `!!botinfo` against crash when `guild.member_count` is `None` (large servers) — reproducible-foundation for diagnosing what build is actually running |
+| `859ca0a` | **`match-results` channel = results only.** New `find_match_results_channel()` (name-tolerant) + `_post_match_result()` route the final result embed there (fallback: original channel); `notify_admins` alerts moved to `🔇・Blacklisted` (`_resolve_blacklist_channel()` helper) — the results channel no longer collects ⚠️ alerts |
 | *audit, uncommitted at time of writing* | Fixed the CRITICAL `voting`-lockout in `auto_trigger_vote`; fixed the duplicate periodic-task leak on reconnect; added `sanitize_user_text()` to close the mention-injection hole; guarded `CreateLobbyView` against `ctx=None` after restart; fixed the `play_channels` cache invalidation; made DM command handling explicit. Created this document. |
 
 ### Deployment reminder
