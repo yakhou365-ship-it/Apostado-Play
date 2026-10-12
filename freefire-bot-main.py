@@ -4592,9 +4592,13 @@ class MvpVoteView(discord.ui.View):
                 item.disabled = True if self._applied else False
         if interaction is None:
             return
+        # ✅ إصلاح: discord.Interaction ما عندها .edit() — نعدّل رسالة التصويت نفسها
         try:
-            await interaction.edit(view=self)
+            if interaction.message is not None:
+                await interaction.message.edit(view=self)
         except discord.HTTPException as e:
+            logger.warning(f"⚠️ _refresh edit failed (lobby {self.lobby_id}): {e}")
+        except Exception as e:
             logger.warning(f"⚠️ _refresh edit failed (lobby {self.lobby_id}): {e}")
 
     async def status_callback(self, interaction):
@@ -4723,26 +4727,37 @@ class MvpVoteView(discord.ui.View):
         self.loser_mvp_id = loser_mvp
         for item in self.children:
             item.disabled = True
+        # ✅ إصلاح: discord.Interaction ما عندها .edit() — نعدّل رسالة التصويت نفسها.
+        #    فشل تعديل الواجهة ما يجب أن يوقف إنهاء الماتش أبداً.
         try:
-            await interaction.edit(view=self)
+            if interaction.message is not None:
+                await interaction.message.edit(view=self)
         except discord.HTTPException as e:
             logger.warning(f"⚠️ _apply edit failed (lobby {self.lobby_id}): {e}")
+        except Exception as e:
+            logger.warning(f"⚠️ _apply edit failed (lobby {self.lobby_id}): {e}")
+
+        # القناة المستهدفة: قناة الماتش، وإلا أول قناة متاحة (نتفادى None)
+        target_channel = interaction.channel or getattr(interaction, "channel", None)
 
         try:
-            await interaction.channel.send(
-                embed=discord.Embed(
-                    title="✅ تم الاتفاق على MVP!",
-                    description=(
-                        f"🤝 اتفاق `{MVP_CONSENSUS_NEEDED}` أصوات من `{len(self.voters)}` مصوّتين\n"
-                        "\n"
-                        f"🏆 **MVP WINNER:** <@{winner_mvp}> → `+80` pts\n"
-                        f"✦ **MVP LOSER:** <@{loser_mvp}> → `+30` pts\n"
-                        "⚡ جارٍ تطبيق النقاط وتحديث الرانك..."
-                    ),
-                    color=COLORS["success"]
+            if target_channel is not None:
+                await target_channel.send(
+                    embed=discord.Embed(
+                        title="✅ تم الاتفاق على MVP!",
+                        description=(
+                            f"🤝 اتفاق `{MVP_CONSENSUS_NEEDED}` أصوات من `{len(self.voters)}` مصوّتين\n"
+                            "\n"
+                            f"🏆 **MVP WINNER:** <@{winner_mvp}> → `+80` pts\n"
+                            f"✦ **MVP LOSER:** <@{loser_mvp}> → `+30` pts\n"
+                            "⚡ جارٍ تطبيق النقاط وتحديث الرانك..."
+                        ),
+                        color=COLORS["success"]
+                    )
                 )
-            )
         except discord.HTTPException as e:
+            logger.warning(f"⚠️ _apply send failed (lobby {self.lobby_id}): {e}")
+        except Exception as e:
             logger.warning(f"⚠️ _apply send failed (lobby {self.lobby_id}): {e}")
 
         logger.info(
@@ -4759,18 +4774,21 @@ class MvpVoteView(discord.ui.View):
         try:
             await process_match_result_with_mvps(
                 guild, self.lobby_id, winner_team, winner_mvp, loser_mvp,
-                interaction.channel
+                target_channel
             )
         except Exception as e:
             logger.exception(f"❌ process_match_result_with_mvps failed in _apply: {e}")
-            await notify_admins(
-                guild,
-                f"❌ فشل تطبيق نقاط الماتش #{self.lobby_id}",
-                f"> 🐛  **الخطأ:**  `{str(e)[:200]}`\n"
-                f"> 🏆 Winner MVP:  <@{winner_mvp}>\n"
-                f"> ✦ Loser MVP:  <@{loser_mvp}>\n"
-                f"> 💡 Use  `!!w {self.lobby_id} @user`  و  `!!l {self.lobby_id} @user`  يدوياً"
-            )
+            try:
+                await notify_admins(
+                    guild,
+                    f"❌ فشل تطبيق نقاط الماتش #{self.lobby_id}",
+                    f"> 🐛  **الخطأ:**  `{str(e)[:200]}`\n"
+                    f"> 🏆 Winner MVP:  <@{winner_mvp}>\n"
+                    f"> ✦ Loser MVP:  <@{loser_mvp}>\n"
+                    f"> 💡 Use  `!!w {self.lobby_id} @user`  و  `!!l {self.lobby_id} @user`  يدوياً"
+                )
+            except Exception:
+                pass
 
     # ══════════════════════════════════════════════════════
     # 🆕 انتهاء الوقت = لا تفاهم → يُحال للأدمن
