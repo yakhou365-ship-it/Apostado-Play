@@ -3,6 +3,9 @@
 > **هذا الملف هو "ذاكرة المشروع".** اقرأه قبل أي تعديل.
 > **الكود الفعلي هو المصدر الأساسي للحقيقة.** إذا لم يطابق هذا الملف الكود، صحّح هذا الملف.
 
+Last updated: 2026-10-16 (v5: **V3 MAX Vote + Soft Blacklist** — كل اللاعبين يصوّتون، نصف الأصوات + cross-team، لا timeout، نظام 1v1 خاص، blacklist مُخفَّف بتحذيرات + reset + استثناء أدمن)
+
+
 Last updated: 2026-10-10 (v4: fixed `on_ready` re-running `auto_setup` on every Gateway reconnect — startup is now once per process; added Gateway disconnect/resume diagnostics and a `$PORT` health server)
 
 ---
@@ -553,3 +556,101 @@ Specifically **NOT TESTED**: gateway login; any prefix command; any button/selec
 
 ### Deployment reminder
 The bot on Railway only runs what was last deployed. After pushing, redeploy, then run `!!botinfo` and confirm **`🔨 Build`** shows the expected commit SHA — not `local-dev`. If it shows `local-dev`, the new code is not live.
+
+---
+
+## 18. V3 MAX Update — 2026-10-16
+
+### A. نظام التصويت الجديد (V3 MAX Vote)
+
+**القواعد:**
+- ✅ **كل لاعبي الماتش يصوّتون** (8/6/4/2 حسب الـ mode) — بدل أول 2 من كل فريق
+- ✅ **Threshold = نصف عدد المصوّتين** (dynamic، `max(1, len(voters) // 2)`)
+  - 1v1 (2) → 1 صوت
+  - 2v2 (4) → 2 صوت
+  - 3v3 (6) → 3 صوت
+  - 4v4 (8) → 4 صوت
+- ✅ **Cross-team validation**: لازم صوت واحد على الأقل من **كل فريق** على نفس اللاعب (لـ WINNER و LOSER)
+  - يمنع تحيّز فريق واحد (4 من team1 يصوّتون على لاعبهم = لا consensus)
+  - يمنع التصويت الذاتي في 1v1 (لاعب يصوّت لنفسه = لا cross-team)
+- ✅ **لا timeout** — التصويت مفتوح حتى الاكتمال أو تدخل الأدمن يدويًا
+  - حُذف `VOTE_TIMEOUT_SECONDS = 60` و `MVP_VOTERS_PER_TEAM = 2` و `MVP_CONSENSUS_NEEDED = 3`
+  - `MvpVoteView.on_timeout` حُذف بالكامل
+- ✅ **تطبيق فوري** — `fire-and-forget` UI edit + رسالة التأكيد في الخلفية، استدعاء فوري `process_match_result_with_mvps`
+- ✅ **زر "تاغ الأدمن" مبسّط**:
+  - لو أدمن حاضر (status=online/idle/dnd) + في فويس: **ينقله فورًا** + رسالة قصيرة (لا mention)
+  - لو أدمن حاضر لكن ليس في فويس: رسالة قصيرة في قناة الماتش
+  - لو لا أدمن حاضر: رسالة قصيرة "بانتظار أدمن" (لا mention للرولات)
+
+**كلاسات:**
+| الكلاس | السطر | الاستخدام |
+|---|---|---|
+| `MvpVoteView` | 4468 | 2v2/3v3/4v4 — Select WINNER + Select LOSER + زر تاغ + زر حالة |
+| `TeamWinnerVoteView` | 4938 | 1v1 — Select واحد "الفريق الفائز" + زر تاغ + زر حالة |
+| `VoteView` | 5412 | DEAD CODE (محذوف منطقيًا — يحتاج حذف فيزيائي لاحقًا) |
+
+### B. نظام الـ Blacklist المخفّف (V3 MAX Soft Blacklist)
+
+**التغييرات في Config (سطر 134-143):**
+| الثابت | قبل | بعد |
+|---|---|---|
+| `BLACKLIST_TIME_LIMIT` | 180s | **300s** (5 دقائق تراكمي) |
+| `BLACKLIST_MAX_LEAVES` | 5 | **8** |
+| `BLACKLIST_DURATION` | 600s (10 د) | **300s** (5 دقائق) |
+| `BLACKLIST_RESET_AFTER_STAY` | — | **60s** (جديد) |
+| `BLACKLIST_WARN_LEVEL_1_TIME` | — | **150s** (50% من 300) |
+| `BLACKLIST_WARN_LEVEL_2_TIME` | — | **240s** (80% من 300) |
+| `BLACKLIST_WARN_LEVEL_1_LEAVES` | — | **4** (50% من 8) |
+| `BLACKLIST_WARN_LEVEL_2_LEAVES` | — | **6** (75% من 8) |
+
+**المنطق الجديد في `on_voice_state_update` (سطر 6514+):**
+1. **استثناء BOT_OWNER_ID و Administrator** من الـ tracking (لا بلاك ليست على الأدمن/الأونر)
+2. **Reset تدريجي** عبر `_reset_blacklist_after_stay` (سطر 6380): لو بقي اللاعب 60 ثانية في الماتش دون مغادرة → يُصفّر `total_leave_time` و `leave_count` و `warned_1/2`. يُلغى تلقائيًا لو خرج قبل اكتمال المدة.
+3. **تحذيرات متدرّجة** عبر `_maybe_warn_blacklist` (سطر 6409):
+   - Level 1 عند 50% من الحد: رسالة `⚠️ تنبيه` في قناة الماتش
+   - Level 2 عند 80% من الحد: رسالة `🚨 تحذير أخير` في قناة الماتش
+   - تُرسل مرة واحدة فقط لكل level (flags في `track_entry`)
+
+**دوال مساعدة جديدة:**
+- `_find_match_text_channel_for_member(guild, member)` (سطر 6346): يجد قناة الماتش النصية لإرسال التحذيرات
+
+### C. تغييرات في `auto_trigger_vote` (سطر 3001)
+
+- ✅ كشف `team_size == 1` لاستخدام `TeamWinnerVoteView` بدل `MvpVoteView`
+- ✅ تحديث نص الـ embed ليعكس القواعد الجديدة (no timeout, نصف المصوّتين, cross-team)
+- ✅ Embed مخصّص لـ 1v1 (تصويت الفريق الفائز بدل MVP)
+
+### D. تحديثات `!!botinfo` و `!!help`
+
+- ✅ تحديث نص الـ features في `!!botinfo` (سطر 7734)
+- ✅ تحديث قسم "معلومات النظام" في `!!help` (سطر 9052)
+
+### E. ملاحظات وديون تقنية
+
+1. **أصوات التصويت لا تزال في الذاكرة** — `MvpVoteView.votes` و `TeamWinnerVoteView.votes` في RAM. لو restart أثناء voting، الماتش يعلّق حتى يتدخّل أدمن عبر `!!w/!!l/!!resolve`. الحل الكامل يحتاج جدول `mvp_votes` في DB (مُؤجّل).
+2. **`VoteView` و `MvpSelectionView` لا يزالان DEAD CODE** — مُتروكان لأن الحذف الفيزيائي يحتاج اختبار إضافي.
+3. **`_find_match_text_channel_for_member` يستعلم DB لكل تحذير** — لو تكرر كثيرًا قد يُبطّئ. حل بسيط: cache مؤقت per member.
+
+### F. اختبارات التحقق
+
+| الاختبار | النتيجة |
+|---|---|
+| `py_compile` + `ast.parse` على freefire-bot-main.py | OK |
+| AST scan: 15 كلاس (مضاف TeamWinnerVoteView) | OK |
+| اختبار منطق `_consensus` مع 5 حالات (deadlock, cross-team 3+1, 1v1 deadlock, 1v1 cross-team, 2v2 cross-team 2+1) | 5/5 PASS |
+| فحص عدم وجود references للثوابت المحذوفة | OK (تعليق توضيحي واحد فقط) |
+
+### G. ملخص التغييرات النهائي
+
+| الملف | التغيير | الأسطر |
+|---|---|---|
+| `freefire-bot-main.py` | حذف 3 ثوابت vote + تحديث 4 ثوابت blacklist + 4 ثوابت تحذير | 90-95, 134-143 |
+| `freefire-bot-main.py` | تبسيط `build_mvp_voters` (10→8 سطر) | 4266-4276 |
+| `freefire-bot-main.py` | تحديث `MvpVoteView` (init, _consensus cross-team, _apply fire-and-forget, tag_admin مبسّط, حذف on_timeout) | 4468-4895 |
+| `freefire-bot-main.py` | **إضافة `TeamWinnerVoteView`** (كلاس جديد كامل) | 4938-5254 |
+| `freefire-bot-main.py` | إضافة `_find_match_text_channel_for_member`, `_reset_blacklist_after_stay`, `_maybe_warn_blacklist` | 6346-6448 |
+| `freefire-bot-main.py` | تحديث `on_voice_state_update` (استثناء أدمن + reset + تحذيرات) | 6514-6619 |
+| `freefire-bot-main.py` | تحديث `auto_trigger_vote` (كشف 1v1 + استخدام TeamWinnerVoteView + embed مخصّص) | 3001-3122 |
+| `freefire-bot-main.py` | تحديث `!!botinfo` و `!!help` | 7734, 9052 |
+
+**الإجمالي:** ≈600 سطر معدّل/جديد/محذوف على ملف 9271 سطر (~6.5%).
