@@ -654,3 +654,83 @@ The bot on Railway only runs what was last deployed. After pushing, redeploy, th
 | `freefire-bot-main.py` | تحديث `!!botinfo` و `!!help` | 7734, 9052 |
 
 **الإجمالي:** ≈600 سطر معدّل/جديد/محذوف على ملف 9271 سطر (~6.5%).
+
+
+---
+
+## 19. Embed Redesign — 2026-10-16
+
+### A. تحسين شامل لكل الـ Embeds
+
+**الإحصائيات:**
+| المقياس | قبل | بعد |
+|---|---|---|
+| إجمالي الأسطر | 9270 | 8621 |
+| حجم الملف | 444.7 KB | 414.6 KB (6.8% أقل) |
+| عدد Embeds | 171 | 162 |
+| ذكر "V3 MAX" | 49 | 0 |
+| ذكر "cross-team ✓" | 2 | 0 |
+| عدد الكلاسات | 15 | 13 (حذف ميت) |
+
+### B. نظام الألوان الموحّد (Discord-style)
+
+**قبل (14 لون متناثر):** success, error, warning, info, play, profile, leaderboard, vote, admin, neutral, match, auto + 5 رانك
+
+**بعد (6 ألوان أساسية + 5 رانك + 3 aliases):**
+- `success` 0x57F287 (أخضر Discord)
+- `error` 0xED4245 (أحمر Discord)
+- `warning` 0xFEE75C (أصفر Discord)
+- `info` 0x5865F2 (أزرق Discord)
+- `play` 0xFF6B00 (برتقالي — ثابت)
+- `vote` 0x5865F2 (= info)
+- `leaderboard` 0xFAA61A (ذهبي Discord)
+- `admin` 0x4752C4 (بنفسجي Discord)
+- `neutral` 0x2B2D31
+- `rank_*` (5 رانك — ثابتة)
+- aliases: match=play, auto=play, profile=rank_high
+
+### C. الفوتر المبسّط
+
+- **قبل:** `✨ {server_name} • Dev By Aizen`
+- **بعد:** `{server_name}` (فقط اسم السيرفر)
+
+### D. حذف الكود الميت
+
+- `VoteView` (~273 سطر) — محذوف بالكامل
+- `MvpSelectionView` (~165 سطر) — محذوف بالكامل
+- **توفير:** ~418 سطر
+
+### E. تبسيط الـ Embeds (أمثلة)
+
+| Embed | قبل | بعد |
+|---|---|---|
+| تصويت 4v4 | 12 سطر + 4 fields + author | 4 سطر، 0 fields |
+| بعد consensus | 5 سطر | 4 سطر |
+| حالة التصويت | 8 سطر | 6 سطر |
+| tag_admin (A) | 91 حرف | 56 حرف |
+| tag_admin (C) | 71 حرف | 25 حرف |
+| AUTO-DETECT | 12 سطر | 7 سطر |
+| botinfo features | 7 سطر طويلة | 7 سطر قصيرة |
+| help system info | 9 سطر طويلة | 9 سطر قصيرة |
+
+### F. توحيد الـ Formatting
+
+- **فواصل:** `·` بدل `-` و `،` (موحّد Discord-style)
+- **عناوين:** مختصرة (بدون "الجماعي"، "الحصري"، "V3 MAX")
+- **أرقام:** `` `n` `` (code formatting) بدل نص عادي
+- **apply_branding:** موحّد على معظم الـ embeds
+
+### G. توثيق الإزالة
+
+تم إزالة كل ذكر لـ:
+- "V3 MAX" (49 → 0)
+- "cross-team ✓" (2 → 0)
+- "لا timeout" من الرسائل (واضح من السياق)
+- "نصف المصوّتين أصوات" (تبسيط لـ "نصف المصوّتين")
+- "أول 2 من كل فريق" (لم يعد صحيحًا — الكل يصوّت)
+
+### H. ملفات النسخ الاحتياطية
+
+- `freefire-bot-main.py.bak` — قبل V3 MAX
+- `freefire-bot-main.py.bak2` — قبل تحسين الـ Embeds
+- `freefire-bot-main.py` — الحالي (محسّن)
