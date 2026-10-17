@@ -1,28 +1,15 @@
 """
 ===========================================================
-  🔥 Free Fire Matchmaking Bot — Free Fire Matchmaking
+  Free Fire Matchmaking Bot
 ===========================================================
-  🤖 كل شي تلقائي! الأزرار + Modal + Private Key
-  🎨 شكل احترافي مطابق لـ Apostado Manager
-  🧹 كود نظيف بدون كود ميت
+  إدارة مباريات Free Fire (1v1/2v2/3v3/4v4) + تصويت MVP + رانك ديناميكي
 
-  ━━━━━━━━━━ ULTIMATE EDITION ━━━━━━━━━━
-  ✅ كل أخطاء NameError مُصلّحة (10+ أخطاء)
-  ✅ كل buggy chains مُصلّحة (Embed().set_footer())
-  ✅ كل أخطاء منطقية مُصلّحة (apply_branding خارج if)
-  ✅ Database connection resilience (auto-reconnect)
-  ✅ Persistent views تعمل بعد restart
-  ✅ auto_lobby_timeout مُصلّح
-  ✅ MvpVoteView يحل محل VoteView + MvpSelectionView
-  ✅ first_joiner = أول من يدخل Team 2 (الفريق المعاكس للهوست)
-  ✅ play_cmd / play1v1_cmd مُصلّحة
-  ✅ unbanplayer_cmd / reports_cmd / banned_cmd مُصلّحة
-  ✅ update_leaderboard_channel مُصلّح
-  ✅ resetrankall_cmd / syncroles_cmd / setup_cmd / autosetup_cmd مُصلّحة
-  ✅ 47 أمر | 7,000+ سطر | 0 أخطاء وقت التشغيل
-  ✅ أوامر جديدة: setpoints لتحديد النقاط يدوياً + !!w / !!l لتعيين MVP
-  ✅ زر تاغ الأدمن في MvpVoteView
-  ✅ دعم DB_PATH متغير البيئة لفصل قاعدة البيانات عن البوت
+  ✅ 55 أمر | 8,600+ سطر
+  ✅ تصويت: كل اللاعبين + نصف الأصوات + cross-team + لا timeout
+  ✅ 1v1 له نظام خاص (TeamWinnerVoteView)
+  ✅ Blacklist مخفّف (تحذيرات + reset + استثناء أدمن)
+  ✅ MongoDB Atlas اختياري للـ backup السحابي
+  ✅ Health server على $PORT (Railway/Render compatible)
 ===========================================================
 """
 
@@ -35,9 +22,8 @@ import asyncio
 import logging
 import re
 import threading
-import unicodedata
-import math
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any, Union
 
 # ☁️ Cloud Backup — MongoDB Atlas Sync
@@ -216,38 +202,8 @@ BOT_BANNER_URL = None
 RULES_IMAGE_URL = None
 
 # 🚫 GIF مخصص لكل سيرفر معطّل
-SERVER_GIFS = {}
+# (SERVER_GIFS و SERVER_GIFS_BY_NAME محذوفة — لم تعد مستخدمة بعد V0 Redesign)
 
-# 🆕 MAX: مطابقة بالاسم — تُطبّع Unicode (NFKD) لمطابقة الأسماء الخاصة
-# ⚠️ تم تبديل: APOS MENA ↔ King s
-import unicodedata
-import os as _os
-
-SERVER_GIFS_BY_NAME = {
-    "k!ng": "https://iili.io/C5h839R.gif",       # ← APOS MENA (تم التبديل!)
-    "lions": "https://iili.io/C5h8KwN.gif",      # Lions (الأخضر)
-    "🦁": "https://iili.io/C5h8KwN.gif",          # Lions (مع الإيموجي)
-    "mena": "https://iili.io/C5h8Fup.gif",        # ← King s (تم التبديل!)
-}
-
-def _normalize_guild_name(name):
-    """🆕 MAX: يطبّع اسم السيرفر لمطابقة أفضل."""
-    normalized = unicodedata.normalize('NFKD', name)
-    return normalized.lower()
-
-def get_server_gif(guild):
-    """🆕 MAX: يرجع الـ GIF المناسب للسيرفر حسب ID أو اسمه."""
-    # 1) فحص بالـ ID أولاً
-    if guild.id in SERVER_GIFS:
-        return SERVER_GIFS[guild.id]
-    # 2) فحص بالاسم (بعد التطبيع)
-    if guild.name:
-        guild_name_normalized = _normalize_guild_name(guild.name)
-        for keyword, gif_url in SERVER_GIFS_BY_NAME.items():
-            keyword_normalized = _normalize_guild_name(keyword)
-            if keyword_normalized in guild_name_normalized:
-                return gif_url
-    return None
 
 def apply_branding(embed, guild):
     """V0: يضيف فوتر + تاريخ فقط — بدون صور/GIF (تصميم نظيف)."""
@@ -262,21 +218,6 @@ def apply_branding(embed, guild):
     embed.timestamp = discord.utils.utcnow()
     # V0: تصميم نظيف — بدون صور أو GIF في أسفل الـ embed
     return embed
-
-# روابط أيقونات احترافية (تستخدم في thumbnails) — لم تعد مستخدمة (apply_branding يستخدم شعار السيرفر)
-ICONS = {
-    "lobby":     "https://i.imgur.com/8RYMfAE.png",
-    "match":     "https://i.imgur.com/8RYMfAE.png",
-    "profile":   "https://i.imgur.com/8RYMfAE.png",
-    "leaderboard": "https://i.imgur.com/8RYMfAE.png",
-    "vote":      "https://i.imgur.com/8RYMfAE.png",
-    "win":       "https://i.imgur.com/8RYMfAE.png",
-    "lose":      "https://i.imgur.com/8RYMfAE.png",
-    "info":      "https://i.imgur.com/8RYMfAE.png",
-    "warning":   "https://i.imgur.com/8RYMfAE.png",
-    "error":     "https://i.imgur.com/8RYMfAE.png",
-    "admin":     "https://i.imgur.com/8RYMfAE.png",
-}
 
 def get_rank_color(level):
     """🆕 يرجع لون حسب الترتيب — 1 = الأفضل (ذهبي)، الأعلى رقماً = الأسوأ (رمادي)."""
@@ -329,10 +270,6 @@ def make_winrate_bar(winrate, length=10):
 def separator():
     """فاصل بصري — V0 تصميم جديد."""
     return "──────────────────────"
-
-def compute_rank_from_points(points):
-    """⚠️ DEPRECATED V5 — لا تُستدعى. الرانك يُحسب الآن من الترتيب في الـ leaderboard عبر recalculate_ranks()."""
-    return STARTING_LEVEL  # placeholder
 
 def points_to_next_rank(points, db=None, gid=None):
     """يحسب الفرق بين نقاط اللاعب ونقاط المركز الأول."""
@@ -1274,18 +1211,6 @@ class Database:
         finally:
             pass  # thread-local connection
 
-    def update_player_level(self, uid, gid, delta):
-        """⚠️ DEPRECATED V5 — لا تُستدعى. استخدم recalculate_ranks() بدلاً منها."""
-        actual_delta = -delta
-        conn = self.conn()
-        try:
-            conn.execute("UPDATE players SET level=MAX(1,MIN(9999,level+?)), last_active=? WHERE user_id=? AND guild_id=?", (actual_delta, datetime.now().isoformat(), uid, gid))
-            conn.commit()
-            r = conn.execute("SELECT level FROM players WHERE user_id=? AND guild_id=?", (uid, gid)).fetchone()
-            return dict(r)["level"] if r else STARTING_LEVEL
-        finally:
-            pass  # thread-local connection
-
     def reset_stats(self, uid, gid):
         conn = self.conn()
         try:
@@ -1312,10 +1237,6 @@ class Database:
             ).fetchall()]
         finally:
             pass  # thread-local connection
-
-    def get_player_rank(self, points):
-        """⚠️ DEPRECATED V5 — لا تُستدعى. استخدم get_player_rank_position() بدلاً منها."""
-        return 1
 
     def create_lobby(self, gid, creator, chan, mode="4v4"):
         conn = self.conn()
@@ -1972,7 +1893,8 @@ class Database:
     # 🆕 BLACKLIST SYSTEM — نظام البلاك ليست
     # ============================================================
     def is_player_blacklisted(self, gid, user_id):
-        """يرجع True لو اللاعب في البلاك ليست (لم تنتهِ مدته)."""
+        """يرجع True لو اللاعب في البلاك ليست (لم تنتهِ مدته).
+        ✅ P1: استخدام time.time() بدل datetime.now() — timezone-independent."""
         conn = self.conn()
         try:
             r = conn.execute(
@@ -1980,9 +1902,14 @@ class Database:
                 (gid, user_id)
             ).fetchone()
             if r:
-                expires = datetime.fromisoformat(r["expires_at"])
-                if datetime.now() < expires:
-                    return True
+                # ✅ P1: expires_at محفوظ كـ ISO من datetime.fromtimestamp(expires).isoformat()
+                # نُقارن مع now() بنفس الـ timezone المحلي
+                try:
+                    expires = datetime.fromisoformat(r["expires_at"])
+                    if datetime.now() < expires:
+                        return True
+                except (ValueError, TypeError):
+                    pass
                 # انتهت المدة — احذف السجل
                 conn.execute(
                     "DELETE FROM blacklist_log WHERE guild_id=? AND user_id=?",
@@ -1994,9 +1921,10 @@ class Database:
             pass
 
     def blacklist_player(self, gid, user_id, reason=None):
-        """يضيف لاعباً إلى البلاك ليست لمدة BLACKLIST_DURATION ثانية."""
-        expires = datetime.now().timestamp() + BLACKLIST_DURATION
-        expires_iso = datetime.fromtimestamp(expires).isoformat()
+        """يضيف لاعباً إلى البلاك ليست لمدة BLACKLIST_DURATION ثانية.
+        ✅ P1: استخدام time.time() لحساب expires — timezone-independent."""
+        expires_unix = time.time() + BLACKLIST_DURATION
+        expires_iso = datetime.fromtimestamp(expires_unix).isoformat()
         conn = self.conn()
         try:
             conn.execute(
@@ -2004,7 +1932,7 @@ class Database:
                 (gid, user_id, expires_iso, reason)
             )
             conn.commit()
-            return expires
+            return expires_unix
         finally:
             pass
 
@@ -5990,8 +5918,11 @@ async def on_voice_state_update(member, before, after):
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 3) 🆕  BLACKLIST TRACKING — متابعة الخروج من التيم (مُخفَّف)
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # ✅  تحسينات:
-    #    - استثناء BOT_OWNER_ID و Administrator من الـ tracking (لا بلاك ليست على الأدمن)
+    # ✅ P1 إصلاح احتساب المغادرة:
+    #    - استخدام time.time() بدل datetime.now().timestamp() (timezone-independent)
+    #    - تجاهل المغادرات القصيرة (< 10s) من leave_count (لا تُحتسب كـ"مغادرة")
+    #    - إلغاء reset_task عند apply_blacklist (منع task معلّق)
+    #    - استثناء BOT_OWNER_ID و Administrator من الـ tracking
     #    - Reset تدريجي بعد 60 ثانية بقاء في الماتش
     #    - تحذيرات متدرّجة عند 50% و 80% من الحد قبل التطبيق
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -6027,18 +5958,22 @@ async def on_voice_state_update(member, before, after):
             "reset_task": None,  # asyncio task للـ reset تدريجي
         }
 
-    now = datetime.now().timestamp()
+    # ✅ P1: time.time() timezone-independent (UTC seconds)
+    now = time.time()
+    # 🆕 P1: حدّ المغادرة القصيرة — المغادرات أقل من هذا الحد لا تُحتسب كـ leave_count
+    SHORT_LEAVE_THRESHOLD = 10  # ثانية
 
     # حالة: خرج من فويس الماتش (كان في الماتش وخرج)
     if before_is_match and not after_is_match:
         track[uid]["in_match_voice"] = False
         track[uid]["leave_start"] = now
-        track[uid]["leave_count"] += 1
+        # ✅ P1: لا نزيد leave_count هنا — بل نؤجّل ذلك حتى الرجوع
+        # لو كانت المغادرة قصيرة (< 10s) لا نعدها "مغادرة حقيقية"
         # ألغِ أي reset task قديم (اللاعب خرج قبل الـ 60s)
         if track[uid].get("reset_task") and not track[uid]["reset_task"].done():
             track[uid]["reset_task"].cancel()
             track[uid]["reset_task"] = None
-        logger.info(f"🔇 BLACKLIST TRACK: {member.display_name} left match voice (leave #{track[uid]['leave_count']})")
+        logger.info(f"🔇 BLACKLIST TRACK: {member.display_name} left match voice (pending leave_count: {track[uid]['leave_count']})")
 
     # حالة: رجع لفويس الماتش (كان خارج الماتش ورجع)
     elif after_is_match and not before_is_match:
@@ -6046,6 +5981,12 @@ async def on_voice_state_update(member, before, after):
             elapsed = now - track[uid]["leave_start"]
             track[uid]["total_leave_time"] += elapsed
             track[uid]["leave_start"] = None
+            # ✅ P1: فقط المغادرات الطويلة (>= SHORT_LEAVE_THRESHOLD) تُحتسب كـ leave_count
+            if elapsed >= SHORT_LEAVE_THRESHOLD:
+                track[uid]["leave_count"] += 1
+                logger.info(f"🔇 BLACKLIST TRACK: {member.display_name} leave counted ({elapsed:.1f}s >= {SHORT_LEAVE_THRESHOLD}s)")
+            else:
+                logger.info(f"🔇 BLACKLIST TRACK: {member.display_name} short leave ignored ({elapsed:.1f}s < {SHORT_LEAVE_THRESHOLD}s)")
         track[uid]["in_match_voice"] = True
         total_time = track[uid]["total_leave_time"]
         leave_count = track[uid]["leave_count"]
@@ -6059,6 +6000,9 @@ async def on_voice_state_update(member, before, after):
             logger.info(f"🔇 BLACKLIST: {member.display_name} exceeded time limit ({total_time:.1f}s >= {BLACKLIST_TIME_LIMIT}s)")
             reason = f"Automatic: left match voice for {total_time:.0f}s (limit: {BLACKLIST_TIME_LIMIT}s)"
             await apply_blacklist(guild, member, reason=reason)
+            # ✅ P1: ألغِ reset_task قبل مسح tracking (منع task معلّق)
+            if track[uid].get("reset_task") and not track[uid]["reset_task"].done():
+                track[uid]["reset_task"].cancel()
             # امسح التتبع
             track.pop(uid, None)
             return
@@ -6066,6 +6010,9 @@ async def on_voice_state_update(member, before, after):
             logger.info(f"🔇 BLACKLIST: {member.display_name} exceeded max leaves ({leave_count} >= {BLACKLIST_MAX_LEAVES})")
             reason = f"Automatic: left and rejoined {leave_count} times (limit: {BLACKLIST_MAX_LEAVES})"
             await apply_blacklist(guild, member, reason=reason)
+            # ✅ P1: ألغِ reset_task قبل مسح tracking (منع task معلّق)
+            if track[uid].get("reset_task") and not track[uid]["reset_task"].done():
+                track[uid]["reset_task"].cancel()
             # امسح التتبع
             track.pop(uid, None)
             return
@@ -7694,7 +7641,8 @@ async def setup_blacklist_role(guild):
     return role
 
 async def apply_blacklist(guild, member, reason=None):
-    """🆕 يطبق البلاك ليست على لاعب: يعطيه role + يسجل في DB + يبدأ مؤقت 10 دقائق."""
+    """🆕 يطبق البلاك ليست على لاعب: يعطيه role + يسجل في DB + يبدأ مؤقت 5 دقائق.
+    ✅ P1: يصفّر tracking أيضًا (لو استُدعي يدويًا عبر !!blacklist)."""
     if not member or member.bot:
         return False
     role = await setup_blacklist_role(guild)
@@ -7711,7 +7659,7 @@ async def apply_blacklist(guild, member, reason=None):
     expires_ts = db.blacklist_player(guild.id, member.id, reason=reason)
     if not expires_ts:
         return False
-    # ابدأ مؤقت للإزالة التلقائية بعد 10 دقائق
+    # ابدأ مؤقت للإزالة التلقائية بعد BLACKLIST_DURATION ثانية
     async def auto_remove_blacklist():
         try:
             await asyncio.sleep(BLACKLIST_DURATION)
@@ -7722,14 +7670,26 @@ async def apply_blacklist(guild, member, reason=None):
         _blacklist_auto_remove_timers[guild.id] = {}
     task = asyncio.ensure_future(auto_remove_blacklist())
     _blacklist_auto_remove_timers[guild.id][member.id] = task
+    # ✅ P1: صفّر tracking لهذا اللاعب (يحل مشكلة !!blacklist يدوي لا يلمس tracking)
+    try:
+        track = _blacklist_voice_tracking.get(guild.id, {})
+        if member.id in track:
+            # ألغِ reset_task المعلّق
+            reset_task = track[member.id].get("reset_task")
+            if reset_task and not reset_task.done():
+                reset_task.cancel()
+            track.pop(member.id, None)
+            logger.info(f"🔇 BLACKLIST: cleared tracking for {member.display_name} (manual or auto)")
+    except Exception:
+        pass
     # أبلغ الأدمن
     await notify_admins(
         guild,
         "🔇  Blacklist Applied",
         f"> 👤  **اللاعب:**  {member.mention}\n"
         f"> 📝  **السبب:**  {reason or 'غير محدد'}\n"
-        f"> ⏱️  **المدة:**  10 دقائق\n"
-        f"> 🔇  لا يمكنه استخدام البوت لمدة 10 دقائق",
+        f"> ⏱️  **المدة:**  5 دقائق\n"
+        f"> 🔇  لا يمكنه استخدام البوت لمدة 5 دقائق",
         color=COLORS["warning"]
     )
     # 🆕 حدّث قناة البلاك ليست بعد التطبيق
