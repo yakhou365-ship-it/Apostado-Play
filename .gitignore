@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+freefire_bot.db
+*.db-shm
+*.db-wal

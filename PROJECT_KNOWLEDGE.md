@@ -1,0 +1,736 @@
+# PROJECT_KNOWLEDGE.md — Apostado-Play Discord Bot
+
+> **هذا الملف هو "ذاكرة المشروع".** اقرأه قبل أي تعديل.
+> **الكود الفعلي هو المصدر الأساسي للحقيقة.** إذا لم يطابق هذا الملف الكود، صحّح هذا الملف.
+
+Last updated: 2026-10-16 (v5: **V3 MAX Vote + Soft Blacklist** — كل اللاعبين يصوّتون، نصف الأصوات + cross-team، لا timeout، نظام 1v1 خاص، blacklist مُخفَّف بتحذيرات + reset + استثناء أدمن)
+
+
+Last updated: 2026-10-10 (v4: fixed `on_ready` re-running `auto_setup` on every Gateway reconnect — startup is now once per process; added Gateway disconnect/resume diagnostics and a `$PORT` health server)
+
+---
+
+## 1. Project Overview
+
+**What it is:** A Discord bot that manages competitive **Free Fire** matchmaking for Arabic-speaking gaming servers: players join private voice "waiting rooms", a host creates a lobby with a Free Fire room ID/password, other players join via buttons, a match starts, and after the match the group collectively votes on **MVP WINNER** and **MVP LOSER**. Points, rank, dynamic title roles, leaderboard, reports/bans, jail and blacklist systems follow from that.
+
+**Language:** Python. **Style:** Arabic-first UI text (embedded Discord Embeds), English code comments.
+
+**Stack:**
+| Concern | Technology |
+|---|---|
+| Discord | `discord.py >= 2.0.0` (classic `commands.Bot`, **prefix commands only**) |
+| Database | `sqlite3` (stdlib) — local file `freefire_bot.db`, WAL mode |
+| Optional cloud backup | `pymongo >= 4.0.0` (MongoDB Atlas) via `cloud_backup.py` |
+| DNS | `dnspython >= 2.0.0` (transitive/for Atlas SRV) |
+| Deploy | Railway — NIXPACKS builder, `python main.py` |
+
+**External APIs:** Discord Gateway/REST only. **No HTTP APIs, no webhooks, no aiohttp.**
+**Slash commands / application commands:** NONE.
+**Cogs:** NONE — single-module architecture.
+
+---
+
+## 2. Architecture
+
+The project is deliberately small but one file is very large:
+
+```
+Apostado-Play/
+├── main.py                  (27 lines)   ← ENTRY POINT (execs the big file)
+├── freefire-bot-main.py     (8,700+)   ← 100% of the application
+├── cloud_backup.py          (~501)       ← optional MongoDB Atlas sync layer
+├── requirements.txt         (3 lines)
+├── railway.json             (NIXPACKS build/start config)
+├── Procfile                 (empty)
+└── freefire_bot.db          (runtime, never commit)
+```
+
+**Why `main.py` execs the other file:** the bot file is named `freefire-bot-main.py`, which is **not** a valid Python module name (hyphens). `main.py` reads it, `compile()`s it, and `exec()`s it so the whole thing runs as one namespace. Consequences to remember:
+- `__file__` inside the exec'd code points at `freefire-bot-main.py` — used for the DB path.
+- Line numbers in logs/tracebacks refer to `freefire-bot-main.py`.
+- There is **no import boundary** between "bot file" and "entry point" — you cannot `import` the bot to unit-test it.
+
+### Internal structure of `freefire-bot-main.py` (top → bottom)
+
+| Region | Approx. lines | Contents |
+|---|---|---|
+| Module docstring + imports | 1–54 | incl. optional `cloud_backup` import guarded by `try/except` |
+| Logging | 56–64 | `logging.basicConfig(level=INFO)`, logger name `freefire` |
+| **CONFIG block** | 66–210 | all tunables: `PREFIX`, `BOT_OWNER_ID`, `GAME_MODES`, timeouts, `RANK_TITLES`, `COLORS`, `BUILD_ID` |
+| Rank/role helpers | 212–430 | colors, titles, progress bars, `get_role_tier_for_rank` |
+| **Role system (fixed)** | 410–660 | `create_role_if_not_exists`, `role_change_with_retry`, `sync_player_role`, `sync_all_players_roles`, `setup_rank_roles_permissions` |
+| `notify_admins` + `sanitize_user_text` | 658–750 | admin alerting |
+| **`class Database`** | ~800–1990 | every SQL statement lives here |
+| Nickname / embed builders | 2002–2300 | `extract_original_nickname`, `build_nickname_with_level`, `create_lobby_embed`, `create_profile_embed`, `update_member_nickname`, `update_leaderboard_channel` |
+| **Blacklist channel** | 2327–2462 | `update_leaderboard_channel` (blacklist-excluded), `update_blacklist_channel` (🔇・Blacklisted) |
+| **Create-prompt lifecycle** | 2344–2441 | `delete_message_safely`, `auto_hide_create_prompt`, `_delete_create_prompt_for_lobby`, `cleanup_lobby_memory` |
+| Channel lifecycle | 2448–2621 | `create_match_channels`, `delete_match_channels`, `move_to_banned_channels`, `check_and_apply_auto_ban` |
+| **Vote trigger** | 2696–2791 | `auto_trigger_vote` |
+| Lobby timeout | 2799–2831 | `auto_lobby_timeout` |
+| Match results | 2838–3008 | `process_match_result` (auto-MVP path) |
+| Modals | 3008–3204 | `RoomInfoModal`, `JoinKeyModal`, `ReportReasonModal`, `ReportPlayerSelectView` |
+| Report button | 3207–3231 | `ReportButtonView` |
+| **Lobby view** | 3234–3626 | `LobbyButtonsView` (join/leave/cancel/start) |
+| **Start-vote view** | 3626–3818 | `StartVoteView` |
+| `MvpSelectionView` (**DEAD**) | 3822–3983 | old host-only MVP picker |
+| **Collective MVP voting** | 3989–4557 | `build_mvp_voters`, `_collect_admin_members`, `escalate_mvp_dispute`, `MvpVoteView` |
+| **Points application** | 4563–4782 | `process_match_result_with_mvps` |
+| `VoteView` (**DEAD**) | 4768–5065 | old team1/team2 vote |
+| Lobby creation UI | 5068–5182 | `CreateLobbyView`, `LobbyCreateModal`, `RematchView` |
+| **Bot object + events** | 5202–5820 | `bot = commands.Bot(...)`, checks, `on_command_error`, `on_ready`, `auto_setup_guild`, `on_member_join`, `on_voice_state_update` |
+| `on_message` gate | 5791–5858 | channel allow-list + jail message deletion |
+| **Commands** | 5925–8480 | 55 prefix commands (full list in §4) |
+| Boot | 8500–8507 | `bot.run(os.getenv("DISCORD_TOKEN"))` |
+
+---
+
+## 3. Entry Points
+
+**Local:** `python main.py`
+**Railway:** `railway.json` → NIXPACKS, `buildCommand: pip install -r requirements.txt`, `startCommand: python main.py`.
+
+`main.py` first calls `ensure_dependencies()` which imports `discord` and, only if that raises `ImportError`, runs `pip install -r requirements.txt`. On Railway `pip install` has already run, so this is a no-op safety net.
+
+**Boot sequence inside the bot file:**
+1. Config constants evaluated (incl. `BUILD_ID` from `RAILWAY_GIT_COMMIT_SHA`).
+2. `db = Database()` at module level → opens/creates SQLite, WAL, `CREATE TABLE IF NOT EXISTS`, `_migrate()`.
+3. Optional cloud restore (`auto_restore_database`) if `MONGODB_URI` is set.
+4. All `@bot.command` decorators register commands; all `@discord.ui.button` classes are collected.
+5. `bot.run(TOKEN)` at the bottom, guarded by `if __name__ == "__main__"`.
+6. `on_ready` fires: registers 4 persistent views → `change_presence` → auto-detects channels in every guild → starts the 60 s periodic rank sync.
+
+**`DISCORD_TOKEN` is mandatory.** There is no fallback literal; the bot raises `RuntimeError` at boot if it is absent.
+
+---
+
+## 4. Commands
+
+55 command functions, prefix `!!`. **No name or alias collisions** (verified programmatically).
+
+### Player commands
+| Command | Aliases | Purpose |
+|---|---|---|
+| `!!play <mode>` | — | mode-aware entry; errors if no mode given |
+| `!!play1v1` `!!play2v2` `!!play3v3` `!!play4v4` | — | thin wrappers → `create_mode_lobby` |
+| `!!p` | — | alias command |
+| `!!points` | `mypoints`, `pts` | player's own points card |
+| `!!card [user]` | — | profile embed |
+| `!!top` | — | leaderboard embed |
+| `!!leave` | — | leave current lobby |
+| `!!matches` | — | list active lobbies in guild |
+| `!!mylevel` `!!myrank` | — | own rank |
+| `!!fixrank` | — | recompute own rank |
+| `!!matchinfo <id>` | — | lobby detail |
+| `!!report [@user] [reason]` | — | file a report |
+| `!!reports [user]` | — | list reports |
+| `!!rules` | — | print the rules embed |
+| `!!general` | — | general info |
+| `!!help` | — | 2-page command list |
+| `!!botinfo` | — | version, **build SHA**, live config |
+| `!!cloudstatus` | — | MongoDB connection status |
+
+### Moderation (admin)
+`!!banplayer`/`ban`, `!!unbanplayer`/`unban`, `!!banned`, `!!report @user`,
+`!!setreportchannel`/`setreportch`/`addreportch`, `!!removereportchannel`/`delreportch`/`rmreportch`,
+`!!reportchannels`/`reportch`/`listreportch`,
+`!!jail`/`sendtojail`/`cheater`, `!!unjail`/`release`/`free`,
+`!!blacklist`/`bl`, `!!unblacklist`/`ubl`/`removebl`, `!!blacklisted`/`bllist`/`blacklistlist`.
+
+### Match resolution (admin)
+`!!startvote`/`forcevote`/`sv` (bypass 10-min cooldown) · `!!resolve <id> <team1|team2>` ·
+`!!w <id> <@user>` (force MVP WINNER) · `!!l <id> <@user>` (force MVP LOSER).
+
+### Setup / data (admin or owner)
+`!!setup`, `!!autosetup`/`autoset`/`checksetup`, `!!cleanup`, `!!scan`, `!!deletecat`/`delcat`,
+`!!confirmcat`, `!!fixrankall`/`forcerankall`, `!!setcommandschannel`, `!!setleaderboard`,
+`!!resetstats`, `!!resetrankall`/`forceresetrankall`/`resetallranks`, `!!setlevel`, `!!setpoints`,
+`!!syncnicknames`, `!!syncroles`/`syncranks`/`updateroles`.
+
+### Owner-only
+`!!cloudbackup` (`@commands.is_owner()`), `!!cloudrestore` (`@commands.is_owner()`).
+
+### DM-only
+`!!serverleave` — refuses to run in a guild, requires `BOT_OWNER_ID`.
+
+### Guards
+```python
+is_admin_check              -> ctx.author.guild_permissions.administrator
+is_bot_owner_check          -> id == BOT_OWNER_ID
+is_bot_owner_or_admin_check -> either
+is_high_role_member         -> BOT_OWNER_ID / Administrator / Manage Guild (used by !!play 1v1)
+```
+Additionally a **global** `blacklist_global_check` is wired as a bot-wide check for command access, plus `on_voice_state_update` enforcement for banned/jailed members.
+
+---
+
+## 5. Events
+
+| Event | Line | Job |
+|---|---|---|
+| `on_ready` | 5309 | register 4 persistent views, presence, per-guild auto-detect, success messages, start periodic rank sync |
+| `on_command_error` | 5274 | friendly cooldown / permission / blacklist replies; `CommandNotFound` is silently ignored; everything else is logged with traceback |
+| `on_guild_join` | 5636 | logs membership |
+| `on_member_join` | 5641 | creates the player row, sets `RANK n \| name` nickname |
+| `on_voice_state_update` | 5663 | **3 enforcement blocks**: banned-player voice lock, jailed-player voice lock, blacklist leave/rejoin tracking |
+| `on_message` | 5791 | jail chat restriction (deletes messages outside jail channels), command-channel allow-list, DM handling |
+
+**No** `on_command`, `on_message_delete`, `on_raw_reaction_add`, `on_disconnect`, or `on_resumed`.
+`tasks.loop` is **not** used — the only background loop is a hand-rolled `while True` inside `on_ready`.
+
+---
+
+## 6. Features
+
+### 6.1 Lobby lifecycle
+1. `!!play <mode>` → `create_mode_lobby()` validates: not banned → channel allowed → inside a waiting voice room → no other active lobby.
+2. Posts a **"Create Lobby"** prompt with one button and starts a 60 s auto-delete timer (`CREATE_PROMPT_DELETE_AFTER`). Any older prompt from the same user is deleted first, so prompts never stack.
+3. `LobbyCreateModal` collects Room ID / Password / Private Key, creates the lobby, **links the prompt to the lobby** (so it survives to match end instead of being deleted), and schedules `auto_lobby_timeout` (30 min).
+4. `LobbyButtonsView` handles Join Team 1 / Join Team 2 / Leave / Cancel Game. Joining requires being in a waiting room and entering the private key when one exists.
+5. On a full lobby → `StartVoteView` offers **🗳️ Start Vote** and **❌ Cancel Match**.
+6. `StartVoteView` enforces a **10-minute cooldown** from match start (bypassable with `!!startvote`).
+7. `auto_lobby_timeout` cancels a stale `waiting` lobby after 30 minutes.
+
+### 6.2 Match channels
+`create_match_channels()` creates a category `🎮 Match #id`, two team voice channels, and **one shared text channel** stored as *both* `team1_text_id` and `team2_text_id`. `_active_match_voice_channels` tracks the voice channels so `on_voice_state_update` can attribute leave/rejoin events to the blacklist system. `_original_voice_channels` remembers where each player came from, and `delete_match_channels()` moves everyone back before deleting.
+
+### 6.3 Collective MVP voting (current system)
+- **Voters:** `build_mvp_voters()` takes the **first 2 players of each team** = 4 voters. The lobby creator is always ordered first within team 1. For tiny modes it back-fills so the count never drops below 2.
+- **Two selects + two buttons:** `🏆 MVP WINNER` select, `✦ MVP LOSER` select, `⚠️ تاغ الأدمن` button (`tag_admin_btn_{lobby_id}`), `📊 حالة التصويت` button (`mvp_status_btn_{lobby_id}`, ephemeral tally).
+- **Consensus:** `MVP_CONSENSUS_NEEDED = 3` of 4 identical choices → applied automatically.
+- **Escalation to an admin** (`escalate_mvp_dispute`) happens when: all voters have voted but no 3-way consensus (includes 2×2 deadlock), the consensus MVP WINNER and LOSER end up on the *same team*, or the 60 s view timeout expires. If an admin is present in a waiting room the bot moves them; otherwise it tags admins and hands over the exact `!!w` / `!!l` commands.
+- Votes live in the in-memory dict `self.votes` and are **lost on restart** (see Known Limitations).
+
+### 6.4 Points and rank
+| Outcome | Points |
+|---|---|
+| Winner-team MVP | `+80` |
+| Other winners | `+30` |
+| Loser-team MVP | `+30` |
+| Other losers | `-30` |
+
+`WINNER_MVP_POINTS`, `LOSER_MVP_POINTS` and the team constants live in the config block. The **winning team is derived from the MVP WINNER's team**. `db.recalculate_ranks(gid)` recomputes every player's `level` by counting players above them (negative points get pushed past 1000 so they sort below everybody). Nicknames and title roles are re-synced afterwards.
+
+### 6.5 Dynamic title roles
+`RANK_TITLES` tiers: `#1 🏆 Best Player` · `#2–10 💎 Goated` · `#11–50 ⭐ Skilled` · `#51–100 🎯 Efficient`; above 100 no role.
+
+The audit fixed the previously silent error handling here. `sync_player_role()` now:
+- removes the old tier with `role_change_with_retry()` (3 attempts, exponential backoff `1.5s × 2ⁿ`) for rate limits / transient HTTP errors;
+- treats `discord.Forbidden` and role-hierarchy errors as **permanent**, breaks out immediately and notifies admins;
+- **anti-accumulation guard:** if the old role cannot be removed, the new one is **not** added, so a player can never accumulate several title roles;
+- `setup_rank_roles_permissions()` grants soundboard / waiting-room permissions with `logger.warning()` on failure instead of `pass`.
+
+### 6.6 Reports, bans, jail, blacklist
+- `REPORT_THRESHOLD = 6` reports ⇒ auto-ban + move to an investigation voice + voice lock.
+- Report reasons are sanitized by `sanitize_user_text()` (see Security).
+- Jail: role `JAIL`, category `🔒 JAIL`, chats `・💬jail-chat` / `・💬jail-prouves`. `on_message` deletes jailed members' messages outside those chats; `on_voice_state_update` confines them to `🔒 Jail-<user_id>`.
+- Blacklist: 180 s cumulative absence **or** 5 leave/rejoin cycles inside a match voice ⇒ 10-minute ban.
+
+### 6.7 Rules channel
+`ensure_rules_channel()` is idempotent: it looks for a channel named `RULES_CHANNEL_NAME = "🛡️・rules"`, creates it only if absent, and **never deletes a pre-existing one**. It is read-only with respect to `guild.default_role`. The rules body has a single source of truth, `build_rules_embed(guild_name)`, used by `!!setup`, `!!autosetup` and `!!rules`. All failures are logged with context; none are swallowed.
+
+---
+
+## 7. Database
+
+SQLite file `freefire_bot.db` (override with `DB_PATH`). WAL, `synchronous=NORMAL`, `cache_size=10000`, `mmap_size=256MB`, `foreign_keys=ON`.
+
+**Connection model:** one `sqlite3.connect(..., isolation_level=None)` per thread via `threading.local()`. `conn()` validates with `SELECT 1` and transparently reopens if the handle was closed — verified working (this is what makes the stray `c.close()` in `_migrate()` harmless).
+
+**14 tables:**
+
+| Table | Purpose | Key constraint |
+|---|---|---|
+| `players` | per-guild stats, points, level, streaks, original nickname | **none** (see Known Issues) |
+| `lobbies` | room, status, both team rosters (JSON strings), private key, vote/startvote message ids | `id` PK |
+| `match_channels` | category + 2 voice + 2 text ids per lobby | `id` PK |
+| `player_reports` | reports | `UNIQUE(guild_id, reporter_id, reported_id)` |
+| `banned_players` | bans + assigned investigation voice | `PRIMARY KEY (guild_id, user_id)` |
+| `blacklist_log` | active blacklists | `UNIQUE(guild_id, user_id)` |
+| `lobby_votes` | legacy team votes | `PRIMARY KEY (lobby_id, user_id)` |
+| `vote_metadata` | creator / first joiner / vote message id | `lobby_id` PK |
+| `match_results` | match history | `id` PK, `CHECK(winner_team IN ('team1','team2'))` |
+| `guild_settings` | leaderboard channel + message id, report channel ids | `guild_id` PK |
+| `play_channels` / `bot_commands_channels` / `waiting_rooms` | channel allow-lists | `UNIQUE(guild_id, channel_id)` |
+| `allowed_guilds` | owner whitelist | `guild_id` PK |
+
+**Lobby `status` lifecycle:** `waiting` → `started` → `voting` → `completed`; also `cancelled`.
+`get_player_active_lobby()` treats `waiting`, `started` **and `voting`** as active — this is why a lobby stuck in `voting` locks its players out of new lobbies (fixed, see §14).
+
+**Key queries:** `recalculate_ranks()` (rank by points with a tiebreak column, negative points pushed below `STARTING_LEVEL`), `get_top_points()`, `get_leaderboard()`, `update_match_player()`, `get_lobby_id_by_lobby_message()` / `_by_start_vote_message()` / `_by_message()` (recover a lobby id from a message id after a restart).
+
+**Caching:** `Database._channels_cache` memoizes `get_commands_channels()` (`cmd_ch_<gid>`) and `get_play_channels()` (`play_ch_<gid>`). Both add/remove paths now invalidate their own key, and `auto_setup_guild()` flushes every key for the guild when it finishes.
+
+**No explicit transactions** (`BEGIN` is never issued). Multi-row updates (a whole match's worth of points) are therefore not atomic — see Known Issues.
+
+---
+
+## 8. External Services
+
+| Service | Used for | State |
+|---|---|---|
+| Discord Gateway + REST | everything | required |
+| MongoDB Atlas | optional cloud backup/restore via `cloud_backup.py`, needs `MONGODB_URI` | optional; degrades gracefully |
+
+`cloud_backup.py` exposes `_get_client`, `is_cloud_enabled`, `auto_restore_database`, `sync_guild_players_to_cloud`, `sync_player_to_cloud`, `sync_bans_to_cloud`, `sync_guild_settings_to_cloud`, `full_backup_to_cloud`, `full_restore_from_cloud`, `get_all_cloud_guilds`.
+
+**Important:** `sync_player_to_cloud`, `sync_bans_to_cloud` and `sync_guild_settings_to_cloud` are imported but **never called**. Only the bulk `sync_guild_players_to_cloud` (from `recalculate_ranks`), `auto_restore_database`, and the owner-only backup/restore commands are wired. **Bans and guild settings are not backed up.**
+
+---
+
+## 9. Permissions
+
+- Bot needs: `Manage Roles`, `Manage Nicknames`, `Move Members`, `Manage Channels`, `Manage Messages`, `Connect`/`Speak`, `Embed Links`, and `Administrator` is recommended for the auto-detect flow.
+- `guild.default_role` is granted **no** access to match categories or the rules channel. The bot never mutates `default_role`'s permissions — it only reads it.
+- Rank title roles are created with the bot's own colour and no special permissions beyond what `setup_rank_roles_permissions()` grants (soundboard, waiting-room access).
+- Only the lobby **creator** can cancel a match (`LobbyButtonsView.cancel_game_btn`), unless the clicker has `administrator`.
+- Only **admins** can vote-related arbitration (`!!resolve`, `!!w`, `!!l`, `!!startvote`).
+- `notify_admins()` targets: the role literally named `ADMIN_ROLE_NAME = "Admin"`, every non-managed role with `administrator`/`manage_guild`, the top 3 positioned roles, and the guild owner — de-duplicated. It falls back to a `match-results` channel, then a play channel, then the first writable text channel.
+
+---
+
+## 10. Configuration
+
+**Required environment variable:**
+
+| Variable | Purpose |
+|---|---|
+| `DISCORD_TOKEN` | bot token. **No fallback literal** — the bot refuses to boot without it. |
+
+**Optional:**
+
+| Variable | Purpose |
+|---|---|
+| `MONGODB_URI` | enables the cloud backup layer |
+| `DB_PATH` | overrides the SQLite file location |
+| `RAILWAY_GIT_COMMIT_SHA` | set automatically by Railway; displayed as `🔨 Build` in `!!botinfo` |
+| `BOT_BUILD_ID` | manual override for the build fingerprint |
+
+**Hard-coded identifiers that must be edited per deployment:** `BOT_OWNER_ID = 1077949215772250143`, `ADMIN_ROLE_NAME = "Admin"`, `BLACKLIST_ROLE_NAME`, `JAIL_ROLE_NAME`, `JAIL_CATEGORY_NAME`, `RANK_TITLES[*].name`, `RULES_CHANNEL_NAME`, `WAITING_PRV_CATEGORY_HINT`, `BOT_LOGO_URL`, `SERVER_GIFS_BY_NAME`.
+
+**No `.env` support:** `python-dotenv` is *not* in `requirements.txt`. Secrets must be real environment variables.
+
+---
+
+## 11. Important Dependencies
+
+| Package | Role |
+|---|---|
+| `discord.py` | Gateway client, commands framework, UI (View/Button/Select/Modal) |
+| `pymongo` | MongoDB Atlas driver for `cloud_backup.py` |
+| `dnspython` | DNS SRV resolution needed by Atlas connection strings |
+
+All three are declared with `>=` floors and no upper bounds, so a Railway rebuild can pick up a **breaking** new major version. This is a real deployment risk (see Known Issues).
+
+---
+
+## 12. Data Flow
+
+**Match flow (happy path):**
+```
+!!play 4v4  ──► create_mode_lobby ──► "Create Lobby" prompt (+60s auto-delete timer)
+      │ click 📋 ──► LobbyCreateModal ──► db.create_lobby / add_player_to_lobby
+      │                                      └─► links prompt → lobby (survives to match end)
+      ▼
+others press "Join Team 1/2" ──► LobbyButtonsView._handle_join
+      │  ├─ banned?          → ephemeral ban notice + move to investigation voice
+      │  ├─ not in waiting?  → list available waiting rooms
+      │  ├─ already in lobby?→ block (unless a started match lacks room info)
+      │  └─ private key set? → JoinKeyModal ─► _complete_join
+      ▼
+lobby full ──► StartVoteView (🗳️ Start Vote) ──► 10-min cooldown check
+      ▼
+auto_trigger_vote ──► status='voting'
+      ├─► build_mvp_voters ─► MvpVoteView (2 selects + 2 buttons) posted in the match text channel
+      │        ├─ 3/4 consensus          ─► _apply ─► process_match_result_with_mvps
+      │        ├─ 2×2 / same-team / all-voted-no-consensus ─► escalate_mvp_dispute
+      │        └─ on_timeout (60 s)       ─► escalate_mvp_dispute
+      └─► failure at any step ─► status reverted to 'started' + notify_admins   (audit fix)
+      ▼
+process_match_result_with_mvps
+      ├─ db.update_lobby_status('completed')  ← done FIRST so the match always closes
+      ├─ update_match_player per player (+80/+30/+30/-30)
+      ├─ db.recalculate_ranks(guild_id)
+      ├─ update_member_nickname per player (single post-recalc pass)
+      ├─ db.create_match_result
+      ├─ post result embed → match text channel   (must happen BEFORE channel deletion)
+      ├─ delete_match_channels (move everyone home, then delete)   ← fast close
+      ├─ cleanup_lobby_memory  →  deletes "Create Lobby" prompt + lobby embed
+      ├─ _original_voice_channels.pop
+      ├─ update_leaderboard_channel   (blacklist-excluded)
+      └─ sync_all_players_roles(guild, player_ids=all_players)   ← match players only
+```
+
+**Points → rank → roles:** `update_match_player` writes points/stats → `recalculate_ranks` rewrites every `level` in the guild → `update_member_nickname` sets `RANK n | name` → `sync_player_role` grants/removes the tier role.
+
+**Admin alerting:** any unrecoverable failure calls `notify_admins()`, which pings the admin roles and drops a message in the match-results channel. It has **no** rate limiting and is called from many failure paths.
+
+---
+
+## 13. Known Limitations
+
+1. **Votes do not survive a restart.** `MvpVoteView.votes` is in memory and the view is not persistent, so a redeploy during the 60 s window loses the vote and the lobby stays `voting` until an admin uses `!!w`/`!!l`/`!!resolve`.
+2. **Timers do not survive a restart.** `lobby_timeout_timers`, `vote_timeout_timers`, `_create_prompt_timers` are all in-memory `asyncio` tasks. `LobbyButtonsView`/`StartVoteView` re-resolve their lobby id from the message id, which is why those still work.
+3. **No cooldowns anywhere** — `@commands.cooldown` is used **zero** times. Any command (including `!!play`) can be spammed; only Discord's global rate limiter protects the bot.
+4. **No host transfer.** If the lobby creator leaves, `lobbies.creator_id` still points at them; only they or an admin can cancel, and the lobby waits out its 30-minute timeout.
+5. **`players` has no UNIQUE `(user_id, guild_id)` constraint.** Correctness relies entirely on `get_or_create_player()` checking first. Any concurrent/duplicate insert path would silently create duplicate rows and corrupt ranking.
+6. **No transactions.** A crash midway through `process_match_result_with_mvps` leaves some players updated and others not (the `!!setpoints` hint in the admin alert is the manual remedy).
+7. **SQLite on Railway is ephemeral.** The volume must be mounted or data is lost on redeploy. `MONGODB_URI` is the intended durable path.
+8. **MATCH channel limit.** Each match creates a category + 3 channels; Discord's 500-channel guild cap is the real ceiling.
+9. **Unbounded dependency versions** (`>=` with no ceiling) can break a build at any time.
+10. **`VOTE_TIMEOUT_SECONDS = 60`** is very tight for a 4-player consensus that requires **two** dropdown selections each.
+
+---
+
+## 14. Known Issues
+
+Status legend: **FIXED** in this audit · **OPEN** (needs a product decision) · **BY-DESIGN**.
+
+### FIXED in the 2026-10-05 audit
+| Sev | Issue | Fix |
+|---|---|---|
+| CRITICAL | `auto_trigger_vote` set status `voting` **before** verifying it could show the vote UI. Missing `match_channels` row or a deleted match text channel ⇒ early `return` with the lobby stuck in `voting` forever. Since `get_player_active_lobby()` counts `voting` as active, **every player in that lobby could never create a new lobby again.** | Revert to `started` + `notify_admins` on all three failure paths (no channels / missing text channel / send failure). The send is now wrapped in `try/except discord.HTTPException`. |
+| HIGH | `on_ready` ran `asyncio.create_task(periodic_rank_sync())` unconditionally, and `on_ready` fires again on **every reconnect**. Each reconnect added another 60-second loop doing `recalculate_ranks` + `sync_all_players_roles` for every guild ⇒ N loops, N× the Discord API calls, rate-limit pressure. | Module-level `_periodic_rank_task`; the previous task is cancelled and awaited before a new one starts. Regression-tested (see §16). |
+| HIGH | Role-hierarchy / Forbidden errors when granting or removing rank title roles were silently swallowed by bare `pass`. | `role_change_with_retry()` (3 attempts, exponential backoff), `discord.Forbidden` treated as permanent, surfaced via `notify_admins()`, plus the anti-accumulation guard (never add the new tier if the old one could not be removed). |
+| MEDIUM | **Mention injection:** `!!report <user> <reason>` and `ReportReasonModal` stored raw user text, which was then interpolated into `notify_admins()` output **sent non-ephemerally**. A player could mass-ping (`<@&id>`, `@everyone`) and could also exceed the 1024-char Discord field limit and trigger `HTTPException 400`. | New `sanitize_user_text()` inserts a zero-width space after `@` in `<@id>` / `<@!id>` / `<@&id>` / `@everyone` / `@here`, collapses newlines and caps at 200 chars. Applied at both input sites, so `!!reports` is protected too (sanitised at rest). |
+| MEDIUM | `CreateLobbyView` is registered as a persistent view with `ctx=None`. Pressing a leftover "Create Lobby" button after a restart hit `self.ctx.author.id` on `None` ⇒ unhandled `AttributeError`. | Explicit `if self.ctx is None` guard returning "run the command again". |
+| MEDIUM | `Database.get_play_channels()` caches under `play_ch_<gid>`, but `add_play_channel()` / `remove_play_channel()` never invalidated it — stale channel lists until restart (affects `RematchView` target channel and `notify_admins` fallback). | Both methods now pop `play_ch_<gid>`. |
+| MEDIUM | Every command touches `ctx.guild`, and **no** command guards `ctx.guild is None`, while `on_message` processed commands in DMs ⇒ `AttributeError` logged with no reply to the user. | DM branch now only forwards `!!serverleave` and otherwise explains that commands are guild-only. |
+
+### FIXED in the 2026-10-07 session (runtime issues reported by the users)
+| Sev | Issue | Fix |
+|---|---|---|
+| HIGH | **Voice-channel close was slow at match end**, especially the admin `!!w`/`!!l` path: channels were deleted at the *end* of the result pipeline, after per-player overlaps, leaderboard refresh and a full-server role sync. | Tail of `process_match_result` and `process_match_result_with_mvps` reordered: result embed is sent first, then `delete_match_channels` + `cleanup_lobby_memory` close voice channels and move players to waiting rooms immediately; the leaderboard refresh + role sync come after and are restricted to **match players only** via the new `player_ids=` filter on `sync_all_players_roles(guild, player_ids=...)` (no full-server loop). |
+| HIGH | **Blacklisted players still appeared on the leaderboard** (both `update_leaderboard_channel` and `!!top` fetched and displayed them). | Both now fetch 25, exclude the user_ids returned by `db.get_blacklisted_players(guild)` (expired rows already skipped by the query), then take the top 10. |
+| MEDIUM | **The "💬・general-chat" channel name was misleading** — it was actually used as the Teams chat inside match channels. | Renamed to "💬・Teams chat" in `create_match_channels` (the same text channel object is reused for both team text chats). |
+| MEDIUM | **Lobby-creation embeds never disappeared** after the match ended or when not enough players joined: `active_lobby_messages` (msg.id → lobby_id) entries were only dropped from memory, the actual messages were never deleted. | New `_delete_lobby_embed_for_lobby(lobby_id, msg_ids=...)` deletes the real messages; `cleanup_lobby_memory` now spawns it (IDs captured before the dict is cleared) alongside the existing "Create Lobby" prompt deletion. A new `_auto_hide_idle_lobby_embed` timer (via the shared `TEMP_EMBED_DELETE_AFTER = 120`) fires 2 minutes after a lobby embed is posted: if the lobby is still `waiting`, it cancels the lobby and deletes the embed + posts a "Lobby Closed — Not Enough Players" notice; the timer is also wired into `auto_lobby_timeout` (timeout notice now `delete_after=TEMP_EMBED_DELETE_AFTER`) and is auto-cancelled by `cleanup_lobby_memory`. Timers live in `_lobby_embed_hide_timers`. |
+| MEDIUM | **Blacklisted players were invisible to the community** — only admins saw them internally. | New dedicated text channel **`🔇・Blacklisted`** (created under the `🎮 FREE FIRE — TEXT` category). `update_blacklist_channel(guild)` finds/or-creates the channel and posts/edits an embed listing every blacklisted player with reason and expiry. Created during `auto_setup_guild` and `!!setup`, and refreshed after every `apply_blacklist` / `remove_blacklist` / `!!blacklist` / `!!unblacklist`. Settings columns `blacklist_channel_id` + `blacklist_message_id` added to `guild_settings` (schema + migration). |
+| MEDIUM | **`fixrank` / `syncnicknames` had to be run manually** — nicknames drifted to wrong rank numbers over time. | The periodic background task now runs `fixrank` + `syncnicknames` **every 2 minutes**: `periodic_rank_sync` (still every 60 s for `recalculate_ranks` + role sync) counts ticks and every 2nd iteration calls the new `sync_all_nicknames(guild)`, which walks guild members, re-reads each player's level and applies rank-based nicknames via `update_member_nickname` (throttled with a 0.05 s sleep). |
+| LOW | Two duplicate `recalculate_ranks`-adjacent nickname passes in the match-result flows (pre- and post-recalc) could fight. | Dropped the pre-`recalculate_ranks` inline nickname updates; a single post-recalc pass applies nicknames with the freshly computed level. |
+
+### FIXED in the 2026-10-07 session (part 2, user follow-up)
+| Sev | Issue | Fix |
+|---|---|---|
+| HIGH | **Duplicate `🔇・Blacklisted` channels** could exist — a race between concurrent `auto_setup_guild`/`!!setup`/blacklist calls could create two, old code never removed extras, and the dedupe only matched the **exact** channel name (manually-created `BLACKLISTED` / `blacklist-2` channels escaped it). | `update_blacklist_channel(guild)` runs its find/create under a **per-guild `asyncio.Lock`** (`_blacklist_channel_locks`) and **dedupes smartly**: candidates = channels matching the exact name **or** containing `"blacklist"` (case-insensitive); the settings-referenced channel is kept only if it actually looks like a blacklist channel (a bad pointer is repointed, never deleting an unrelated channel); otherwise the first exact-name channel wins, then any fuzzy candidate; all other candidates are deleted and `blacklist_channel_id` re-persisted. Verified in a stub harness (13/13). |
+| MEDIUM | **Match-flow embeds stayed in the play channel forever.** "Match Ready!" (sent at match start) was never deleted, cancel paths left an edited copy of the lobby embed, and embeds whose `message_id` was only in the DB (post-restart lobbies) were unreachable from memory. | New `_lobby_flow_msgs` registry — `{lobby_id: {(channel_id, msg_id)}}` — registers the lobby-join embed (modal + rematch) and the "Match Ready!" embed; `cleanup_lobby_memory` spawns `_delete_lobby_flow_msgs` so **any** match-end method removes them. Cancel now **deletes** the lobby embed instead of editing it (`delete_after=30` on the confirmation). `_delete_lobby_embed_for_lobby` falls back to `lobbies.message_id` in the DB when memory is empty. A post-restart task `recover_after_restart` (started in `on_ready`) deletes leftover embeds of terminal (`cancelled`/`completed`) lobbies and re-arms the 2-minute auto-close timer for `waiting` lobbies. |
+
+### FIXED in the 2026-10-08 session (part 3, user follow-up)
+| Sev | Issue | Fix |
+|---|---|---|
+| MEDIUM | **The `match-results` channel was full of admin-alert embeds** (`notify_admins` sent every ⚠️ error/failure alert there), while the **actual match results** were posted to the temporary match text channel (deleted at match end) or the play channel — i.e. the channel named "results" never showed results. | New `find_match_results_channel(guild)` locates the channel by normalized name (`match-results` / `match result` / `نتائج`) across **all** guild text channels. New `_post_match_result(guild, embed, channel)` posts the final 🏅 "Match Result"/"Match Finished" embed to that channel when found, else the original channel (never both). Both `process_match_result` and `process_match_result_with_mvps` route through it. `notify_admins` now targets the **🔇・Blacklisted** channel instead (`_resolve_blacklist_channel`: settings pointer → exact-name lookup → play-channel fallback → any writable text channel) — the results channel is now results-only. |
+
+### FIXED in the 2026-10-10 session (reconnect / autosetup loop)
+| Sev | Issue | Fix |
+|---|---|---|
+| HIGH | **`auto_setup` re-ran every few minutes.** `on_ready` is invoked on **every** Gateway (re)connection, and it unconditionally re-ran the full auto-setup scan, re-posted the "AUTO-DETECT Complete" embed to every guild, and (re)started the background loops. With silent auto-reconnects this looked like a periodic autosetup. | New module-level guard `_startup_done`: the heavy startup block (auto-setup scan, AUTO-DETECT message, `periodic_rank_sync` arming, `recover_after_restart`) now runs **once per process**. On a re-fire, `on_ready` only refreshes presence and returns early. `_on_ready_count` is logged to expose reconnects; new `on_disconnect` / `on_resumed` handlers log the connection lifecycle. |
+| MEDIUM | **Possible platform restart loop.** `Procfile` declares the process as `web:`, so Railway/Render expect a listening `$PORT`; the bot never opened one, which can make the platform treat the container as unhealthy and restart it (⇒ `on_ready` again ⇒ autosetup again). | New `_start_health_server()` (started before `bot.run()`): if `$PORT` is set, it opens a minimal threaded HTTP server answering `200 OK` on any path. No-ops when `$PORT` is absent (local). |
+
+### OPEN — deliberately not changed (needs your decision)
+| Sev | Issue | Why it was not changed |
+|---|---|---|
+| MEDIUM | **Host leaves the lobby ⇒ lobby unmanageable** (creator id is never reassigned; only an admin can cancel). | Auto-transferring the host changes game rules. Needs your call. |
+| MEDIUM | **No cooldowns on any command.** `!!play`/`!!report` spam can hit rate limits. | Adding `@commands.cooldown` changes UX; pick the limits you want. |
+| MEDIUM | **`players` has no UNIQUE `(user_id, guild_id)`** — duplicates would corrupt the leaderboard. | Needs a data migration; risky to do unattended. |
+| MEDIUM | **No transactions** in `process_match_result_with_mvps`. | Wrapping in BEGIN/COMMIT changes failure semantics. |
+| MEDIUM | **MongoDB backup is incomplete** — `sync_bans_to_cloud` and `sync_guild_settings_to_cloud` are imported but never called. | Wiring bans/settings to Atlas changes what is persisted. |
+| LOW | **Dead code:** `VoteView` (old team vote) and `MvpSelectionView` (old host-only MVP picker). Both are unreachable — zero instantiations on any live path, and neither is registered as persistent — but `VoteView.on_timeout` instantiates `MvpSelectionView`. | Deleting ~350 lines is a clean-up with a small regression risk; not done unilaterally. |
+| LOW | ~26 unused locals (`t1m`, `t2m`, `mode_info`, `banned`, `avatar_url`, `rank_title`) and ~44 f-strings with no placeholders. | Cosmetic. |
+| LOW | `on_command_error` uses a bare `logger.exception` for unknown errors — users get no feedback. | Needs a decision on what to expose. |
+| LOW | Result embeds label levels as `RANK #{old}→#{new}` although `old`/`new` are **levels**, not ranks. | Cosmetic wording. |
+| LOW | Remaining bare `except: pass` sites: `create_banned_voice_channels` / `move_to_banned_channels`, `_execute_cancel`, blacklist role removal, dead `MvpSelectionView`. | Same class of bug as the role fix, but each needs per-site review. |
+| LOW | Unbounded dependency versions in `requirements.txt`. | Pinning may break the current deploy. |
+
+### BY-DESIGN
+- Rules channel is read-only for `@everyone` and is never deleted by the bot.
+- The bot re-adds itself to the channel allow-lists on every start (auto-detect), so DB drift self-heals.
+- `!!play` deliberately **errors** when no mode is given, to steer users to `!!play4v4`.
+
+---
+
+## 15. Important Design Decisions
+
+1. **Single-file application with an `exec()` entry point.** The bot file has hyphens in its name, so it cannot be imported. `main.py` compiles and execs it. Preserved deliberately — splitting the file is the only real refactor that would pay off, and it is a large change.
+2. **`db = Database()` at module level**, before `bot.run()`. The whole design assumes the DB is always available and synchronous.
+3. **`get_player_active_lobby()` counts `voting` as active.** This is what makes "stuck in voting" a lockout rather than a cosmetic issue — the reason the CRITICAL fix above reverts state instead of just logging.
+4. **The winner team is derived from MVP WINNER's team**, not voted separately. With 4 voters picking two MVPs, this is the simplest consistent rule.
+5. **Consensus is 3 of 4, not unanimity.** Chosen so a single silent player cannot block a match, while still requiring genuine agreement.
+6. **A same-team MVP WINNER + MVP LOSER pair is treated as impossible** and escalates instead of applying obviously-wrong points.
+7. **Anti-accumulation guard on roles.** Refusing to add a new title role when the old one cannot be removed trades a missed cosmetic update for never showing a player several ranks at once.
+8. **`build_rules_embed()` is the single source of truth** for rules text (previously duplicated in three places).
+9. **`ensure_rules_channel()` never deletes.** It only ever creates when absent.
+10. **`BUILD_ID` reads `RAILWAY_GIT_COMMIT_SHA`** so `!!botinfo` reveals which build is actually running — added because we could not tell whether a redeploy had picked up new commits.
+11. **Legacy `lobby_votes` + `vote_metadata` tables are retained** even though the current system keeps votes in memory, so old rows are not lost and `!!resolve` still works.
+12. **`TEMP_EMBED_DELETE_AFTER = 120`** is the single knob for "every temporary embed self-deletes at match end **or** after max 2 minutes, whichever first". It covers the lobby create-prompt (`CREATE_PROMPT_DELETE_AFTER`, same value), the lobby-creation embed, the auto-close notice, and the lobby timeout notice. Some callers still opt out (channel/prop notices are not temporary).
+13. **`sync_all_players_roles` takes a `player_ids` filter** so match-end and match-cancel paths can refresh only the players of the finished match instead of every player on the server — the main speedup for `!!w`/`!!l`.
+14. **The blacklist channel is part of setup**, not lazy-only: `auto_setup_guild` / `!!setup` create `🔇・Blacklisted` and record `blacklist_channel_id` + `blacklist_message_id` in `guild_settings`; `update_blacklist_channel` still self-heals if the channel is missing.
+15. **The periodic task is the only place a full nickname sweep runs** — commands `!!fixrank` / `!!syncnicknames` are interactive one-offs, while the loop re-syncs every 2 minutes so nicknames self-correct without an admin.
+16. **The `match-results` channel is results-only.** Name-based lookup (`find_match_results_channel`, tolerant of `-`/`_`/`・` and Arabic `نتائج`) decides where the final result embed lands; admin alerts were moved off it to `🔇・Blacklisted` so the channel's contents match its purpose.
+17. **Startup is once-per-process.** `on_ready` fires again on every Gateway reconnect, so all heavy startup work (auto-setup, the AUTO-DETECT embed, background-task arming, post-restart recovery) is gated behind the module-level `_startup_done` flag; a reconnect only refreshes presence and returns. The bot also opens a `$PORT` health endpoint (`_start_health_server`) so web-process platforms (Procfile `web:`) do not treat the container as unhealthy and restart it.
+
+---
+
+## 16. Testing
+
+**No test suite exists in the repo.** There is no CI, no linter config, and no test runner configured.
+
+**Verification performed during the 2026-10-05 audit:**
+
+| Check | Result |
+|---|---|
+| `ast.parse` on `freefire-bot-main.py` | OK |
+| `pyflakes` — undefined names | **none** |
+| `pyflakes` — unused imports / locals / placeholder-less f-strings | informational only |
+| Schema build: extracted every `CREATE TABLE` into a temp SQLite DB | 14 tables created, columns confirmed |
+| Command inventory + name/alias collision scan (AST) | 55 commands, **0 collisions** |
+| Event / View / Button / Select / Modal inventory (AST) | 6 events, 9 views, 13 buttons, 5 selects, 4 modals |
+| `eval` / `exec` / `pickle` / `os.system` / `subprocess` scan | none in the bot file |
+| Hard-coded-secret scan (token/Mongo URI/API-key regexes) | none found |
+| `conn()` self-heal after a stray `close()` | reproduced and verified working |
+| `play_channels` cache consistency after add/remove | verified with a live SQLite harness |
+| `periodic_rank_sync` duplicate-task regression test | old code leaked 3/3 loops; fixed code keeps exactly 1 |
+| `sanitize_user_text` unit tests (6 injection vectors, length cap, whitespace, Arabic, email) | all pass |
+| `auto_trigger_vote` structural test (1 transition in, ≥3 recoveries out, send wrapped in try) | all pass |
+| `CreateLobbyView` null-ctx guard ordering | passes |
+
+**Verification performed during the 2026-10-07 session (stub-`discord` exec harness against a throwaway SQLite DB):**
+
+| Check | Result |
+|---|---|
+| `ast.parse` + `py_compile` on the edited bot file | OK |
+| `sync_all_players_roles` optional `player_ids` filter present and used at match end | OK (read-through) |
+| Leaderboard (`update_leaderboard_channel`) excludes blacklisted players, keeps clean players, top-10 cap | 15/15 harness checks pass |
+| `🔇・Blacklisted` channel embed lists banned player + reason; `blacklist_channel_id`/`blacklist_message_id` persisted | 15/15 harness checks pass |
+| `cleanup_lobby_memory` removes lobby-embed entries AND spawns real message deletion (+ create-prompt link) | 15/15 harness checks pass |
+| 2-min auto-hide: waiting lobby with too few players → cancelled + embed deleted + "Lobby Closed" notice | 15/15 harness checks pass |
+| `sync_all_nicknames` re-ranks a stale member nickname (`RANK n | name`) with throttle | 15/15 harness checks pass |
+| `_lobby_embed_hide_timers` self-cancel ordering (timer pops itself before `cleanup_lobby_memory` runs) | OK (read-through) |
+| **Part 2 harness (stub-`discord`, throwaway DB, 10/10):** blacklist-channel dedupe (2 duplicates → 1 survivor + settings re-pointed), no deadlock on re-entry, "Match Ready"/flow embeds deleted at match end + registry cleared, stale lobby embed deleted via DB `message_id` fallback | 10/10 |
+| **Part 2b harness (stub-`discord`, 13/13):** fuzzy blacklist-channel dedupe — manual names (`BLACKLISTED`, `blacklist-2`, `blacklist-نص`) deleted; exact-name survivor kept; unrelated channel (`general`) never deleted with a bad settings pointer; pointer re-pointed; creation when none exists | 13/13 |
+| Match-start ("Match Ready!") and cancel/decline flows register/delete their play-channel embeds; `delete_after` on cancel + failed-start notices | OK (code walk-through) |
+| `recover_after_restart` (on_ready): queries terminal `lobbies.message_id` leftovers, evokes `_delete_lobby_embed_for_lobby` fallback, re-arms 2-min auto-close for `waiting` lobbies | OK (read-through + harness fallback path) |
+
+**Verification performed during the 2026-10-08 session (part 3):**
+
+| Check | Result |
+|---|---|
+| `ast.parse` + `py_compile` on the edited bot file; `pyflakes` undefined names | OK / none |
+| **Part 3 harness (stub-`discord`, throwaway DB, 6/6):** `find_match_results_channel` finds `🎯・Match-Results` by name | 6/6 |
+| result embed → `match-results` channel only (play channel untouched) | 6/6 |
+| `notify_admins` alert → `🔇・Blacklisted` channel only (results channel keeps only the result embed) | 6/6 |
+| fallback: no results channel → result goes to the original channel | 6/6 |
+
+**Verification performed during the 2026-10-10 session (reconnect / autosetup fix):**
+
+| Check | Result |
+|---|---|
+| `ast.parse` + `py_compile` on the edited bot file | OK |
+| `_startup_done` / `_on_ready_count` defined at module level and declared `global` in `on_ready` | OK |
+| guard `if _startup_done:` sits directly in `on_ready`, its body returns, and it precedes the `auto_setup_guild` call | OK (AST ordering) |
+| `on_disconnect` / `on_resumed` handlers present | OK |
+| `_start_health_server` defined, called in `__main__`, and called before `bot.run` | OK |
+| simulation: startup runs once, subsequent `on_ready` calls skip | PASS |
+| **Part 4 harness (AST + logic simulation, 15/15)** | 15/15 |
+
+**NOT TESTED — Reason:** everything requiring a live Discord connection.
+
+Specifically **NOT TESTED**: gateway login; any prefix command; any button/select/modal interaction; interaction lifecycle (defer/edit/ephemeral, expired tokens); voice state transitions and member moves; channel/role/category creation and deletion; rate-limit behaviour under load; nickname and role assignment against a real hierarchy; `notify_admins` delivery; SQLite behaviour on Railway's actual filesystem; MongoDB cloud sync; `!!botinfo` build fingerprint in production.
+
+**Suggested first steps when you get a test token:** a `pytest` suite that imports `freefire-bot-main.py` via `importlib` (needed because of the hyphen) with `discord` mocked, plus one throwaway guild for manual interaction testing.
+
+---
+
+## 17. Change History
+
+| Commit / Date | Change |
+|---|---|
+| `35472be` | Rank-role error handling (no more silent `pass`), retry with backoff, admin notification, anti-accumulation guard; **collective 4-voter MVP voting** replaced the old team vote; `!!help` updated |
+| `a555d3b` | "Create Lobby" prompt auto-deletes after 60 s if no room was created, and is deleted when the match ends; rules channel restored and improved |
+| `c585615` | Build fingerprint (`BUILD_ID` from `RAILWAY_GIT_COMMIT_SHA`) surfaced in `!!botinfo`; Arabic text fix |
+| `77dd8e2` | Stop tracking compiled `__pycache__/*.pyc` artifacts (gitignore covers them now) |
+| `99d038a` | Dedupe `🔇・Blacklisted` channels (per-guild `asyncio.Lock` + duplicate deletion + settings re-point); delete **all** play-flow embeds at match end by any method — new `_lobby_flow_msgs` registry (lobby-join + "Match Ready!"), cancel deletes instead of editing, `_delete_lobby_embed_for_lobby` falls back to `lobbies.message_id`, post-restart `recover_after_restart` cleans terminal-lobby leftovers and re-arms 2-min auto-close for waiting lobbies |
+| `14d6d16` | Fuzzy blacklist-channel dedupe: match **any** channel name containing `blacklist` (covers manually-created `BLACKLISTED`/`blacklist-2`); keeps the settings-referenced channel only if it looks like a blacklist channel (never deletes unrelated channels); re-points bad pointers |
+| `77d6fef` | Harden `!!botinfo` against crash when `guild.member_count` is `None` (large servers) — reproducible-foundation for diagnosing what build is actually running |
+| `859ca0a` | **`match-results` channel = results only.** New `find_match_results_channel()` (name-tolerant) + `_post_match_result()` route the final result embed there (fallback: original channel); `notify_admins` alerts moved to `🔇・Blacklisted` (`_resolve_blacklist_channel()` helper) — the results channel no longer collects ⚠️ alerts |
+| *audit, uncommitted at time of writing* | Fixed the CRITICAL `voting`-lockout in `auto_trigger_vote`; fixed the duplicate periodic-task leak on reconnect; added `sanitize_user_text()` to close the mention-injection hole; guarded `CreateLobbyView` against `ctx=None` after restart; fixed the `play_channels` cache invalidation; made DM command handling explicit. Created this document. |
+| *2026-10-10 (this session)* | Fixed **`on_ready` re-running `auto_setup` on every Gateway reconnect** (reported as "autosetup every few minutes") with a once-per-process `_startup_done` guard; added `_on_ready_count` + `on_disconnect`/`on_resumed` diagnostics; added a `$PORT` health server (`_start_health_server`, started before `bot.run`) to prevent platform restart loops. Harness 15/15. |
+
+### Deployment reminder
+The bot on Railway only runs what was last deployed. After pushing, redeploy, then run `!!botinfo` and confirm **`🔨 Build`** shows the expected commit SHA — not `local-dev`. If it shows `local-dev`, the new code is not live.
+
+---
+
+## 18. V3 MAX Update — 2026-10-16
+
+### A. نظام التصويت الجديد (V3 MAX Vote)
+
+**القواعد:**
+- ✅ **كل لاعبي الماتش يصوّتون** (8/6/4/2 حسب الـ mode) — بدل أول 2 من كل فريق
+- ✅ **Threshold = نصف عدد المصوّتين** (dynamic، `max(1, len(voters) // 2)`)
+  - 1v1 (2) → 1 صوت
+  - 2v2 (4) → 2 صوت
+  - 3v3 (6) → 3 صوت
+  - 4v4 (8) → 4 صوت
+- ✅ **Cross-team validation**: لازم صوت واحد على الأقل من **كل فريق** على نفس اللاعب (لـ WINNER و LOSER)
+  - يمنع تحيّز فريق واحد (4 من team1 يصوّتون على لاعبهم = لا consensus)
+  - يمنع التصويت الذاتي في 1v1 (لاعب يصوّت لنفسه = لا cross-team)
+- ✅ **لا timeout** — التصويت مفتوح حتى الاكتمال أو تدخل الأدمن يدويًا
+  - حُذف `VOTE_TIMEOUT_SECONDS = 60` و `MVP_VOTERS_PER_TEAM = 2` و `MVP_CONSENSUS_NEEDED = 3`
+  - `MvpVoteView.on_timeout` حُذف بالكامل
+- ✅ **تطبيق فوري** — `fire-and-forget` UI edit + رسالة التأكيد في الخلفية، استدعاء فوري `process_match_result_with_mvps`
+- ✅ **زر "تاغ الأدمن" مبسّط**:
+  - لو أدمن حاضر (status=online/idle/dnd) + في فويس: **ينقله فورًا** + رسالة قصيرة (لا mention)
+  - لو أدمن حاضر لكن ليس في فويس: رسالة قصيرة في قناة الماتش
+  - لو لا أدمن حاضر: رسالة قصيرة "بانتظار أدمن" (لا mention للرولات)
+
+**كلاسات:**
+| الكلاس | السطر | الاستخدام |
+|---|---|---|
+| `MvpVoteView` | 4468 | 2v2/3v3/4v4 — Select WINNER + Select LOSER + زر تاغ + زر حالة |
+| `TeamWinnerVoteView` | 4938 | 1v1 — Select واحد "الفريق الفائز" + زر تاغ + زر حالة |
+| `VoteView` | 5412 | DEAD CODE (محذوف منطقيًا — يحتاج حذف فيزيائي لاحقًا) |
+
+### B. نظام الـ Blacklist المخفّف (V3 MAX Soft Blacklist)
+
+**التغييرات في Config (سطر 134-143):**
+| الثابت | قبل | بعد |
+|---|---|---|
+| `BLACKLIST_TIME_LIMIT` | 180s | **300s** (5 دقائق تراكمي) |
+| `BLACKLIST_MAX_LEAVES` | 5 | **8** |
+| `BLACKLIST_DURATION` | 600s (10 د) | **300s** (5 دقائق) |
+| `BLACKLIST_RESET_AFTER_STAY` | — | **60s** (جديد) |
+| `BLACKLIST_WARN_LEVEL_1_TIME` | — | **150s** (50% من 300) |
+| `BLACKLIST_WARN_LEVEL_2_TIME` | — | **240s** (80% من 300) |
+| `BLACKLIST_WARN_LEVEL_1_LEAVES` | — | **4** (50% من 8) |
+| `BLACKLIST_WARN_LEVEL_2_LEAVES` | — | **6** (75% من 8) |
+
+**المنطق الجديد في `on_voice_state_update` (سطر 6514+):**
+1. **استثناء BOT_OWNER_ID و Administrator** من الـ tracking (لا بلاك ليست على الأدمن/الأونر)
+2. **Reset تدريجي** عبر `_reset_blacklist_after_stay` (سطر 6380): لو بقي اللاعب 60 ثانية في الماتش دون مغادرة → يُصفّر `total_leave_time` و `leave_count` و `warned_1/2`. يُلغى تلقائيًا لو خرج قبل اكتمال المدة.
+3. **تحذيرات متدرّجة** عبر `_maybe_warn_blacklist` (سطر 6409):
+   - Level 1 عند 50% من الحد: رسالة `⚠️ تنبيه` في قناة الماتش
+   - Level 2 عند 80% من الحد: رسالة `🚨 تحذير أخير` في قناة الماتش
+   - تُرسل مرة واحدة فقط لكل level (flags في `track_entry`)
+
+**دوال مساعدة جديدة:**
+- `_find_match_text_channel_for_member(guild, member)` (سطر 6346): يجد قناة الماتش النصية لإرسال التحذيرات
+
+### C. تغييرات في `auto_trigger_vote` (سطر 3001)
+
+- ✅ كشف `team_size == 1` لاستخدام `TeamWinnerVoteView` بدل `MvpVoteView`
+- ✅ تحديث نص الـ embed ليعكس القواعد الجديدة (no timeout, نصف المصوّتين, cross-team)
+- ✅ Embed مخصّص لـ 1v1 (تصويت الفريق الفائز بدل MVP)
+
+### D. تحديثات `!!botinfo` و `!!help`
+
+- ✅ تحديث نص الـ features في `!!botinfo` (سطر 7734)
+- ✅ تحديث قسم "معلومات النظام" في `!!help` (سطر 9052)
+
+### E. ملاحظات وديون تقنية
+
+1. **أصوات التصويت لا تزال في الذاكرة** — `MvpVoteView.votes` و `TeamWinnerVoteView.votes` في RAM. لو restart أثناء voting، الماتش يعلّق حتى يتدخّل أدمن عبر `!!w/!!l/!!resolve`. الحل الكامل يحتاج جدول `mvp_votes` في DB (مُؤجّل).
+2. **`VoteView` و `MvpSelectionView` لا يزالان DEAD CODE** — مُتروكان لأن الحذف الفيزيائي يحتاج اختبار إضافي.
+3. **`_find_match_text_channel_for_member` يستعلم DB لكل تحذير** — لو تكرر كثيرًا قد يُبطّئ. حل بسيط: cache مؤقت per member.
+
+### F. اختبارات التحقق
+
+| الاختبار | النتيجة |
+|---|---|
+| `py_compile` + `ast.parse` على freefire-bot-main.py | OK |
+| AST scan: 15 كلاس (مضاف TeamWinnerVoteView) | OK |
+| اختبار منطق `_consensus` مع 5 حالات (deadlock, cross-team 3+1, 1v1 deadlock, 1v1 cross-team, 2v2 cross-team 2+1) | 5/5 PASS |
+| فحص عدم وجود references للثوابت المحذوفة | OK (تعليق توضيحي واحد فقط) |
+
+### G. ملخص التغييرات النهائي
+
+| الملف | التغيير | الأسطر |
+|---|---|---|
+| `freefire-bot-main.py` | حذف 3 ثوابت vote + تحديث 4 ثوابت blacklist + 4 ثوابت تحذير | 90-95, 134-143 |
+| `freefire-bot-main.py` | تبسيط `build_mvp_voters` (10→8 سطر) | 4266-4276 |
+| `freefire-bot-main.py` | تحديث `MvpVoteView` (init, _consensus cross-team, _apply fire-and-forget, tag_admin مبسّط, حذف on_timeout) | 4468-4895 |
+| `freefire-bot-main.py` | **إضافة `TeamWinnerVoteView`** (كلاس جديد كامل) | 4938-5254 |
+| `freefire-bot-main.py` | إضافة `_find_match_text_channel_for_member`, `_reset_blacklist_after_stay`, `_maybe_warn_blacklist` | 6346-6448 |
+| `freefire-bot-main.py` | تحديث `on_voice_state_update` (استثناء أدمن + reset + تحذيرات) | 6514-6619 |
+| `freefire-bot-main.py` | تحديث `auto_trigger_vote` (كشف 1v1 + استخدام TeamWinnerVoteView + embed مخصّص) | 3001-3122 |
+| `freefire-bot-main.py` | تحديث `!!botinfo` و `!!help` | 7734, 9052 |
+
+**الإجمالي:** ≈600 سطر معدّل/جديد/محذوف على ملف 9271 سطر (~6.5%).
+
+
+---
+
+## 19. Embed Redesign — 2026-10-16
+
+### A. تحسين شامل لكل الـ Embeds
+
+**الإحصائيات:**
+| المقياس | قبل | بعد |
+|---|---|---|
+| إجمالي الأسطر | 9270 | 8621 |
+| حجم الملف | 444.7 KB | 414.6 KB (6.8% أقل) |
+| عدد Embeds | 171 | 162 |
+| ذكر "V3 MAX" | 49 | 0 |
+| ذكر "cross-team ✓" | 2 | 0 |
+| عدد الكلاسات | 15 | 13 (حذف ميت) |
+
+### B. نظام الألوان الموحّد (Discord-style)
+
+**قبل (14 لون متناثر):** success, error, warning, info, play, profile, leaderboard, vote, admin, neutral, match, auto + 5 رانك
+
+**بعد (6 ألوان أساسية + 5 رانك + 3 aliases):**
+- `success` 0x57F287 (أخضر Discord)
+- `error` 0xED4245 (أحمر Discord)
+- `warning` 0xFEE75C (أصفر Discord)
+- `info` 0x5865F2 (أزرق Discord)
+- `play` 0xFF6B00 (برتقالي — ثابت)
+- `vote` 0x5865F2 (= info)
+- `leaderboard` 0xFAA61A (ذهبي Discord)
+- `admin` 0x4752C4 (بنفسجي Discord)
+- `neutral` 0x2B2D31
+- `rank_*` (5 رانك — ثابتة)
+- aliases: match=play, auto=play, profile=rank_high
+
+### C. الفوتر المبسّط
+
+- **قبل:** `✨ {server_name} • Dev By Aizen`
+- **بعد:** `{server_name}` (فقط اسم السيرفر)
+
+### D. حذف الكود الميت
+
+- `VoteView` (~273 سطر) — محذوف بالكامل
+- `MvpSelectionView` (~165 سطر) — محذوف بالكامل
+- **توفير:** ~418 سطر
+
+### E. تبسيط الـ Embeds (أمثلة)
+
+| Embed | قبل | بعد |
+|---|---|---|
+| تصويت 4v4 | 12 سطر + 4 fields + author | 4 سطر، 0 fields |
+| بعد consensus | 5 سطر | 4 سطر |
+| حالة التصويت | 8 سطر | 6 سطر |
+| tag_admin (A) | 91 حرف | 56 حرف |
+| tag_admin (C) | 71 حرف | 25 حرف |
+| AUTO-DETECT | 12 سطر | 7 سطر |
+| botinfo features | 7 سطر طويلة | 7 سطر قصيرة |
+| help system info | 9 سطر طويلة | 9 سطر قصيرة |
+
+### F. توحيد الـ Formatting
+
+- **فواصل:** `·` بدل `-` و `،` (موحّد Discord-style)
+- **عناوين:** مختصرة (بدون "الجماعي"، "الحصري"، "V3 MAX")
+- **أرقام:** `` `n` `` (code formatting) بدل نص عادي
+- **apply_branding:** موحّد على معظم الـ embeds
+
+### G. توثيق الإزالة
+
+تم إزالة كل ذكر لـ:
+- "V3 MAX" (49 → 0)
+- "cross-team ✓" (2 → 0)
+- "لا timeout" من الرسائل (واضح من السياق)
+- "نصف المصوّتين أصوات" (تبسيط لـ "نصف المصوّتين")
+- "أول 2 من كل فريق" (لم يعد صحيحًا — الكل يصوّت)
+
+### H. ملفات النسخ الاحتياطية
+
+- `freefire-bot-main.py.bak` — قبل V3 MAX
+- `freefire-bot-main.py.bak2` — قبل تحسين الـ Embeds
+- `freefire-bot-main.py` — الحالي (محسّن)

@@ -1,0 +1,1485 @@
+
+======================================================================
+## line 799  |  fn: notify_admins  |  .send on channel
+======================================================================
+        await channel.send(content=admin_mention_str, embed=embed)
+
+======================================================================
+## line 2318  |  fn: update_member_nickname  |  .edit on member
+======================================================================
+                await member.edit(nick=new_nick)
+
+======================================================================
+## line 2383  |  fn: update_leaderboard_channel  |  .edit on msg
+======================================================================
+                await msg.edit(embed=embed)
+
+======================================================================
+## line 2387  |  fn: update_leaderboard_channel  |  .send on channel
+======================================================================
+        msg = await channel.send(embed=embed)
+
+======================================================================
+## line 2427  |  fn: update_blacklist_channel  |  .delete on extra
+======================================================================
+                        await extra.delete(reason="🧹 Duplicate blacklist channel")
+
+======================================================================
+## line 2484  |  fn: update_blacklist_channel  |  .edit on msg
+======================================================================
+                await msg.edit(embed=embed)
+
+======================================================================
+## line 2488  |  fn: update_blacklist_channel  |  .send on channel
+======================================================================
+        msg = await channel.send(embed=embed)
+
+======================================================================
+## line 2500  |  fn: delete_message_safely  |  .delete on msg
+======================================================================
+        await msg.delete()
+
+======================================================================
+## line 2557  |  fn: _post_match_result  |  .send on results_ch
+======================================================================
+            await results_ch.send(embed=embed)
+
+======================================================================
+## line 2562  |  fn: _post_match_result  |  .send on channel
+======================================================================
+                    await channel.send(embed=embed)
+
+======================================================================
+## line 2689  |  fn: _auto_hide_idle_lobby_embed  |  .send on ch
+======================================================================
+            await ch.send(embed=closed_embed, delete_after=TEMP_EMBED_DELETE_AFTER)
+
+======================================================================
+## line 2975  |  fn: delete_match_channels  |  .delete on ch
+======================================================================
+                try: await ch.delete()
+
+======================================================================
+## line 2982  |  fn: delete_match_channels  |  .delete on ch
+======================================================================
+                try: await ch.delete()
+
+======================================================================
+## line 2988  |  fn: delete_match_channels  |  .delete on cat
+======================================================================
+            try: await cat.delete()
+
+======================================================================
+## line 3086  |  fn: auto_trigger_vote  |  .send on general_text
+======================================================================
+            vote_msg = await general_text.send(
+                f"🔱 {t1m} {t2m}",
+                embed=mvp_embed,
+                view=mvp_view
+            )
+
+======================================================================
+## line 3132  |  fn: auto_lobby_timeout  |  .send on ch
+======================================================================
+            await ch.send(embed=timeout_embed, delete_after=TEMP_EMBED_DELETE_AFTER)
+
+======================================================================
+## line 3585  |  fn: LobbyButtonsView.leave_lobby_btn  |  .edit on interaction.message
+======================================================================
+                try: await interaction.message.edit(embed=create_lobby_embed(lobby, interaction.guild), view=self)
+
+======================================================================
+## line 3758  |  fn: LobbyButtonsView._complete_join  |  .edit on interaction.message
+======================================================================
+        try: await interaction.message.edit(embed=create_lobby_embed(lobby, interaction.guild), view=self)
+
+======================================================================
+## line 3775  |  fn: LobbyButtonsView._complete_join  |  .send on interaction.followup
+======================================================================
+            await interaction.followup.send(embed=room_embed, ephemeral=True)
+
+======================================================================
+## line 3799  |  fn: LobbyButtonsView._complete_join  |  .edit on interaction.message
+======================================================================
+            try: await interaction.message.edit(view=self)
+
+======================================================================
+## line 3819  |  fn: LobbyButtonsView._complete_join  |  .send on interaction.channel
+======================================================================
+                await interaction.channel.send(embed=discord.Embed(
+                    title="❌  Failed to Start",
+                    description=(
+                        f"> Could not create match channels.\n"
+                        f"> Lobby `#{self.lobby_id}` has been cancelled."
+                    ),
+                    color=COLORS["error"]
+                ), delete_after=15)
+
+======================================================================
+## line 3833  |  fn: LobbyButtonsView._complete_join  |  .send on interaction.channel
+======================================================================
+                ready_msg = await interaction.channel.send(embed=discord.Embed(
+                    title="✅  Match Ready!",
+                    description=(
+                        f"> Lobby is full — match is starting now!\n"
+                        f"> Moving players to their team voice channels..."
+                    ),
+                    color=COLORS["success"],
+                    timestamp=discord.utils.utcnow()
+                ))
+
+======================================================================
+## line 3878  |  fn: LobbyButtonsView._complete_join  |  .send on channels['team1_text']
+======================================================================
+                    try: await channels["team1_text"].send(mentions, embed=room_embed)
+
+======================================================================
+## line 3916  |  fn: LobbyButtonsView._complete_join  |  .send on channels['team1_text']
+======================================================================
+                    sv_msg = await channels["team1_text"].send(embed=start_embed, view=start_vote_view)
+
+======================================================================
+## line 3935  |  fn: LobbyButtonsView._complete_join  |  .send on channels['team1_text']
+======================================================================
+                    await channels["team1_text"].send(embed=report_embed, view=report_view)
+
+======================================================================
+## line 4012  |  fn: StartVoteView.start_vote_btn  |  .edit on interaction.message
+======================================================================
+        try: await interaction.message.edit(view=self)
+
+======================================================================
+## line 4110  |  fn: StartVoteView._execute_cancel  |  .edit on interaction.message
+======================================================================
+        try: await interaction.message.edit(view=self)
+
+======================================================================
+## line 4200  |  fn: MvpSelectionView._try_apply  |  .edit on interaction.message
+======================================================================
+        try: await interaction.message.edit(view=self)
+
+======================================================================
+## line 4202  |  fn: MvpSelectionView._try_apply  |  .send on interaction.followup
+======================================================================
+        await interaction.followup.send(
+            embed=discord.Embed(
+                title="✅  تم تطبيق النقاط!",
+                description=(
+                    f"> 🏆  **MVP الفائز:**  <@{self.winner_mvp_id}>\n"
+                    f"> ✦  **MVP الخاسر:**  <@{self.loser_mvp_id}>\n"
+                    f"> ⚡  جارٍ تطبيق النقاط وتحديث الرانك..."
+                ),
+                color=COLORS["success"],
+                timestamp=discord.utils.utcnow()
+            )
+        )
+
+======================================================================
+## line 4439  |  fn: escalate_mvp_dispute  |  .send on txt
+======================================================================
+                    await txt.send(content=mentions, embed=embed)
+
+======================================================================
+## line 4442  |  fn: escalate_mvp_dispute  |  .send on channel
+======================================================================
+                await channel.send(content=mentions, embed=embed)
+
+======================================================================
+## line 4644  |  fn: MvpVoteView._refresh  |  .edit on interaction
+======================================================================
+            await interaction.edit(view=self)
+
+======================================================================
+## line 4780  |  fn: MvpVoteView._apply  |  .edit on interaction
+======================================================================
+            await interaction.edit(view=self)
+
+======================================================================
+## line 4785  |  fn: MvpVoteView._apply  |  .send on interaction.channel
+======================================================================
+            await interaction.channel.send(
+                embed=discord.Embed(
+                    title="✅  تم الاتفاق على MVP!",
+                    description=(
+                        f"> 🤝  **اتفاق `{MVP_CONSENSUS_NEEDED}` أصوات من `{len(self.voters)}` مصوّنين**\n"
+                        f"> 🏆  **MVP WINNER:**  <@{winner_mvp}> → `+80` pts\n"
+                        f"> ✦  **MVP LOSER:**  <@{loser_mvp}> → `+30` pts\n"
+                        f"> ⚡  جارٍ تطبيق النقاط وتحديث الرانك..."
+                    ),
+                    color=COLORS["success"]
+                )
+            )
+
+======================================================================
+## line 5075  |  fn: VoteView.on_timeout  |  .send on result_ch
+======================================================================
+                await result_ch.send(embed=no_votes_embed)
+
+======================================================================
+## line 5111  |  fn: VoteView.on_timeout  |  .send on result_ch
+======================================================================
+                await result_ch.send(embed=tie_embed)
+
+======================================================================
+## line 5136  |  fn: VoteView.on_timeout  |  .send on result_ch
+======================================================================
+            await result_ch.send(embed=vote_close_embed)
+
+======================================================================
+## line 5164  |  fn: VoteView.on_timeout  |  .send on result_ch
+======================================================================
+            await result_ch.send(embed=mvp_embed, view=mvp_view)
+
+======================================================================
+## line 5222  |  fn: VoteView._handle_vote  |  .send on interaction.channel
+======================================================================
+        await interaction.channel.send(embed=discord.Embed(
+            description=(
+                f"> 🗳️  **Vote Progress:**  🟠 `{t1v}`  —  🟢 `{t2v}`\n"
+                f"> Cast: `{votes_count}/{total_voters}`  (Host + First Joiner)"
+            ),
+            color=COLORS["vote"]
+        ))
+
+======================================================================
+## line 5252  |  fn: VoteView._handle_vote  |  .send on interaction.channel
+======================================================================
+                await interaction.channel.send(embed=tie_embed)
+
+======================================================================
+## line 5278  |  fn: VoteView._handle_vote  |  .send on interaction.channel
+======================================================================
+            await interaction.channel.send(embed=vote_complete_embed)
+
+======================================================================
+## line 5308  |  fn: VoteView._handle_vote  |  .send on result_ch
+======================================================================
+                await result_ch.send(embed=mvp_embed, view=mvp_view)
+
+======================================================================
+## line 5313  |  fn: VoteView._handle_vote  |  .edit on interaction.message
+======================================================================
+            try: await interaction.message.edit(view=self)
+
+======================================================================
+## line 5350  |  fn: CreateLobbyView.create_lobby_btn  |  .edit on interaction.message
+======================================================================
+        try: await interaction.message.edit(view=self)
+
+======================================================================
+## line 5398  |  fn: LobbyCreateModal.on_submit  |  .send on self.ctx
+======================================================================
+            msg = await self.ctx.send(embed=embed, view=view)
+
+======================================================================
+## line 5454  |  fn: RematchView.rematch_btn  |  .send on target_channel
+======================================================================
+            msg = await target_channel.send(embed=embed, view=view)
+
+======================================================================
+## line 5463  |  fn: RematchView.rematch_btn  |  .edit on interaction.message
+======================================================================
+            try: await interaction.message.edit(view=self)
+
+======================================================================
+## line 5543  |  fn: on_command_error  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="⏳  Cooldown",
+            description=(
+                f"> Please wait  `{error.retry_after:.1f}s`  before using this command again."
+            ),
+            color=COLORS["warning"]
+        ))
+
+======================================================================
+## line 5552  |  fn: on_command_error  |  .send on ctx
+======================================================================
+            await ctx.send(embed=discord.Embed(
+                title="🔇  أنت في البلاك ليست",
+                description=(
+                    f"> لا يمكنك استخدام البوت حالياً.\n"
+                    f"> أنت في قائمة البلاك ليست لمدة 10 دقائق.\n"
+                    f"> ⏱️  انتظر حتى انتهاء المدة."
+                ),
+                color=COLORS["error"]
+            ), delete_after=15)
+
+======================================================================
+## line 5562  |  fn: on_command_error  |  .send on ctx
+======================================================================
+            await ctx.send(embed=discord.Embed(
+                title="❌  No Permission",
+                description=(
+                    f"> You don't have permission to use this command."
+                ),
+                color=COLORS["error"]
+            ))
+
+======================================================================
+## line 5658  |  fn: send_success  |  .send on success_ch
+======================================================================
+                await success_ch.send(embed=success_embed)
+
+======================================================================
+## line 5983  |  fn: on_member_join  |  .edit on member
+======================================================================
+            await member.edit(nick=new_nick)
+
+======================================================================
+## line 6134  |  fn: on_message  |  .send on message.channel
+======================================================================
+        await message.channel.send(embed=discord.Embed(
+            title="📡  الأوامر داخل السيرفر فقط",
+            description=(
+                f"> هذه الرسالة خاصة (DM) — أوامر البوت كلها تحتاج قناة داخل السيرفر.\n"
+                f"> 💡  افتح قناة الأوامر واكتب  `{PREFIX}help`  لعرض كل الأوامر.\n"
+                f"> 📌  أوامر تعمل هنا:  `{PREFIX}serverleave`"
+            ),
+            color=COLORS["info"]
+        ), delete_after=20)
+
+======================================================================
+## line 6154  |  fn: on_message  |  .delete on message
+======================================================================
+                try: await message.delete()
+
+======================================================================
+## line 6172  |  fn: on_message  |  .reply on message
+======================================================================
+                await message.reply(embed=discord.Embed(
+                    title="❌  Not Allowed Here",
+                    description=(
+                        f"> Commands can only be used in play channels.\n"
+                        f"> Allowed:  `apostada-play`  •  `highlight-play`  •  `zelika-play`\n"
+                        f"> 💡  Use  `{PREFIX}general`  for help."
+                    ),
+                    color=COLORS["error"]
+                ), delete_after=10)
+
+======================================================================
+## line 6211  |  fn: create_mode_lobby  |  .send on ctx
+======================================================================
+        await ctx.send(embed=ban_embed, delete_after=20)
+
+======================================================================
+## line 6217  |  fn: create_mode_lobby  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Not Allowed Here",
+            description=(
+                f"> This command can only be used in play channels.\n"
+                f"> Allowed:  `apostada-play`  •  `highlight-play`  •  `zelika-play`"
+            ),
+            color=COLORS["error"]
+        ), delete_after=15)
+
+======================================================================
+## line 6230  |  fn: create_mode_lobby  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="⏳  Must Be in a Waiting Room",
+            description=(
+                f"> You need to be in a voice waiting room to create a lobby.\n"
+                f"──────────────────────\n"
+                f"🔊  **Available Rooms:**\n{rooms_text}"
+            ),
+            color=COLORS["warning"]
+        ), delete_after=20)
+
+======================================================================
+## line 6245  |  fn: create_mode_lobby  |  .send on ctx
+======================================================================
+            await ctx.send(embed=discord.Embed(
+                title="⏳  Wrong Voice Channel",
+                description=(
+                    f"> You're in `{member.voice.channel.name}` — that's not a waiting room.\n"
+                    f"──────────────────────\n"
+                    f"🔊  **Available Rooms:**\n{rooms_text}"
+                ),
+                color=COLORS["warning"]
+            ), delete_after=20)
+
+======================================================================
+## line 6257  |  fn: create_mode_lobby  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Already in Lobby",
+            description=(
+                f"> You're already in a lobby. Leave it first.\n"
+                f"> Use  `{PREFIX}leave`  to leave."
+            ),
+            color=COLORS["error"]
+        ), delete_after=10)
+
+======================================================================
+## line 6284  |  fn: create_mode_lobby  |  .send on ctx
+======================================================================
+    prompt = await ctx.send(embed=discord.Embed(
+        title=f"🎮  Create  {mode.upper()}  Lobby",
+        description=(
+            f"> اضغط الزر تحت لإدخال بيانات الغرفة وإنشاء اللوبي.\n"
+            f"──────────────────────\n"
+            f"> 💡  **تحتاج:**\n"
+            f"> ›  Room ID  (أرقام)\n"
+            f"> ›  Password  (اختياري)\n"
+            f"> ›  Private Key  (اختياري)\n"
+            f"{separator()}\n"
+            f"> ⏱️  **تختفي هذه الرسالة تلقائياً بعد `{CREATE_PROMPT_DELETE_AFTER}` ثانية**"
+            f" إذا ما ضغطت الزر.\n"
+            f"> ✅  وإذا أنشأت الغرفة — تنحذف مع انتهاء الروم."
+        ),
+        color=COLORS["info"]
+    ), view=create_view)
+
+======================================================================
+## line 6341  |  fn: play_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=no_mode_embed, delete_after=15)
+
+======================================================================
+## line 6370  |  fn: play_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=invalid_mode_embed, delete_after=15)
+
+======================================================================
+## line 6400  |  fn: play_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=restricted_embed, delete_after=20)
+
+======================================================================
+## line 6435  |  fn: play1v1_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=restricted_embed, delete_after=20)
+
+======================================================================
+## line 6457  |  fn: profile_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=create_profile_embed(player, target, ctx.guild.id))
+
+======================================================================
+## line 6523  |  fn: points_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=embed)
+
+======================================================================
+## line 6532  |  fn: card_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=create_profile_embed(player, target, ctx.guild.id))
+
+======================================================================
+## line 6542  |  fn: top_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="🏆  Leaderboard",
+            description=(
+                f"> No players yet!\n"
+                f"> Use `{PREFIX}play` to start your first match.\n"
+                f"{separator()}"
+            ),
+            color=COLORS["leaderboard"]
+        ))
+
+======================================================================
+## line 6578  |  fn: top_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=embed)
+
+======================================================================
+## line 6586  |  fn: leave_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Not in Lobby",
+            description=(
+                f"> You're not currently in any lobby.\n"
+                f"> Use `{PREFIX}play` to create one."
+            ),
+            color=COLORS["error"]
+        ))
+
+======================================================================
+## line 6600  |  fn: leave_cmd  |  .send on ctx
+======================================================================
+            await ctx.send(embed=discord.Embed(
+                title="🗑️  Lobby Cancelled",
+                description=(
+                    f"> Lobby `#{lobby['id']}` was cancelled."
+                ),
+                color=COLORS["warning"]
+            ))
+
+======================================================================
+## line 6612  |  fn: leave_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="✅  Left Lobby",
+        description=(
+            f"> You left lobby `#{lobby['id']}`."
+        ),
+        color=COLORS["success"]
+    ))
+
+======================================================================
+## line 6625  |  fn: matches_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="🎮  Active Lobbies",
+            description=(
+                f"> No active lobbies right now.\n"
+                f"> Use `{PREFIX}play` to start one."
+            ),
+            color=COLORS["info"]
+        ))
+
+======================================================================
+## line 6645  |  fn: matches_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=embed)
+
+======================================================================
+## line 6682  |  fn: mylevel_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=embed)
+
+======================================================================
+## line 6706  |  fn: myrank_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=embed)
+
+======================================================================
+## line 6717  |  fn: fixrank_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="🔱  Server Owner",
+            description=(
+                f"> {target.mention} → **RANK `#{level}`**\n"
+                f"──────────────────────\n"
+                f"> 📝  **Target Nickname:**  `{target_nick}`\n"
+                f"> Apply manually:  *Right-click → Edit Profile → Nickname*"
+            ),
+            color=COLORS["warning"]
+        ))
+
+======================================================================
+## line 6729  |  fn: fixrank_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="🔧  Rank Applied",
+        description=(
+            f"> {target.mention} → **RANK `#{level}`**"
+        ),
+        color=COLORS["success"]
+    ))
+
+======================================================================
+## line 6741  |  fn: matchinfo_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing ID",
+            description=(
+                f"> Please provide a lobby ID.\n"
+                f"> Usage:  `{PREFIX}matchinfo <id>`"
+            ),
+            color=COLORS["error"]
+        ))
+
+======================================================================
+## line 6752  |  fn: matchinfo_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Not Found",
+            description=(
+                f"> Lobby `#{lobby_id}` doesn't exist."
+            ),
+            color=COLORS["error"]
+        ))
+
+======================================================================
+## line 6773  |  fn: matchinfo_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=embed)
+
+======================================================================
+## line 6844  |  fn: ensure_rules_channel  |  .send on ch
+======================================================================
+        await ch.send(embed=build_rules_embed(guild.name))
+
+======================================================================
+## line 6937  |  fn: setup_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=setup_embed)
+
+======================================================================
+## line 6957  |  fn: autosetup_cmd  |  .send on ctx
+======================================================================
+    progress = await ctx.send(embed=progress_embed)
+
+======================================================================
+## line 6981  |  fn: autosetup_cmd  |  .edit on progress
+======================================================================
+        await progress.edit(embed=success_embed)
+
+======================================================================
+## line 6992  |  fn: autosetup_cmd  |  .edit on progress
+======================================================================
+        await progress.edit(embed=error_embed)
+
+======================================================================
+## line 7003  |  fn: cleanup_cmd  |  .delete on ch
+======================================================================
+                try: await ch.delete()
+
+======================================================================
+## line 7005  |  fn: cleanup_cmd  |  .delete on cat
+======================================================================
+            try: await cat.delete(); deleted += 1
+
+======================================================================
+## line 7007  |  fn: cleanup_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="🧹  Cleanup Complete!",
+        description=(
+            f"> Deleted  `{deleted}`  match categories."
+        ),
+        color=COLORS["success"]
+    ))
+
+======================================================================
+## line 7087  |  fn: scan_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=embed)
+
+======================================================================
+## line 7095  |  fn: deletecat_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing Name",
+            description=(
+                f"> Please provide a category name.\n"
+                f"> Usage:  `{PREFIX}deletecat <category name>`\n"
+                f"> Use  `{PREFIX}scan`  to see all categories."
+            ),
+            color=COLORS["error"]
+        ))
+
+======================================================================
+## line 7120  |  fn: deletecat_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Not Found",
+            description=(
+                f"> No category matching  `{category_name}`.\n"
+                f"> Use  `{PREFIX}scan`  to see all categories."
+            ),
+            color=COLORS["error"]
+        ))
+
+======================================================================
+## line 7146  |  fn: deletecat_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=confirm_embed)
+
+======================================================================
+## line 7154  |  fn: confirmcat_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing Name",
+            description=(
+                f"> Usage:  `{PREFIX}confirmcat <name>`"
+            ),
+            color=COLORS["error"]
+        ))
+
+======================================================================
+## line 7171  |  fn: confirmcat_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Not Found",
+            description=(
+                f"> No category matching  `{category_name}`."
+            ),
+            color=COLORS["error"]
+        ))
+
+======================================================================
+## line 7185  |  fn: confirmcat_cmd  |  .delete on ch
+======================================================================
+            await ch.delete()
+
+======================================================================
+## line 7196  |  fn: confirmcat_cmd  |  .delete on target
+======================================================================
+        await target.delete()
+
+======================================================================
+## line 7197  |  fn: confirmcat_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="🗑️  Category Deleted!",
+            description=(
+                f"> **{cat_name}** has been deleted.\n"
+                f"──────────────────────\n"
+                f"> ✅  **Channels deleted:**  `{deleted}`\n"
+                f"> ❌  **Errors:**  `{errors}`"
+            ),
+            color=COLORS["success"]
+        ))
+
+======================================================================
+## line 7208  |  fn: confirmcat_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="⚠️  Partial Delete",
+            description=(
+                f"> Deleted  `{deleted}`  channels but couldn't delete the category itself.\n"
+                f"> Error:  `{e}`"
+            ),
+            color=COLORS["warning"]
+        ))
+
+======================================================================
+## line 7222  |  fn: fixrankall_cmd  |  .send on ctx
+======================================================================
+    progress = await ctx.send(embed=discord.Embed(
+        title="🚀  Applying Ranks...",
+        description=(
+            f"> Processing  `{len(guild.members)}`  members.\n"
+            f"> Please wait..."
+        ),
+        color=COLORS["warning"]
+    ))
+
+======================================================================
+## line 7239  |  fn: fixrankall_cmd  |  .edit on progress
+======================================================================
+    await progress.edit(embed=discord.Embed(
+        title="✅  Done!",
+        description=(
+            f"> Updated  `{updated}`  members successfully."
+        ),
+        color=COLORS["success"]
+    ))
+
+======================================================================
+## line 7294  |  fn: botinfo_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=embed)
+
+======================================================================
+## line 7303  |  fn: setcommandschannel_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="✅  Channel Removed",
+            description=(
+                f"> {channel.mention}  has been removed from allowed command channels."
+            ),
+            color=COLORS["success"]
+        ))
+
+======================================================================
+## line 7312  |  fn: setcommandschannel_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="✅  Channel Added",
+            description=(
+                f"> {channel.mention}  has been added to allowed command channels."
+            ),
+            color=COLORS["success"]
+        ))
+
+======================================================================
+## line 7326  |  fn: setleaderboard_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="✅  Leaderboard Set",
+        description=(
+            f"> {ctx.channel.mention}  is now the leaderboard channel.\n"
+            f"> It will update automatically."
+        ),
+        color=COLORS["success"]
+    ))
+
+======================================================================
+## line 7344  |  fn: report_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing User",
+            description=(
+                f"> Usage:  `{PREFIX}report @user [reason]`\n"
+                f"> مثال:  `{PREFIX}report @user يستخدم هاك`"
+            ),
+            color=COLORS["error"]
+        ), delete_after=15)
+
+======================================================================
+## line 7354  |  fn: report_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  لا يمكنك البلاغ عن نفسك",
+            color=COLORS["error"]
+        ), delete_after=10)
+
+======================================================================
+## line 7360  |  fn: report_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  لا يمكنك البلاغ عن بوت",
+            color=COLORS["error"]
+        ), delete_after=10)
+
+======================================================================
+## line 7371  |  fn: report_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="⚠️  بلغت من قبل",
+            description=f"> لقد بلّغت على {member.mention} سابقاً.",
+            color=COLORS["warning"]
+        ), delete_after=10)
+
+======================================================================
+## line 7392  |  fn: report_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=report_embed)
+
+======================================================================
+## line 7444  |  fn: reports_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=embed)
+
+======================================================================
+## line 7452  |  fn: banplayer_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing User",
+            description=f"> Usage:  `{PREFIX}banplayer @user أو ID [reason]`",
+            color=COLORS["error"]
+        ), delete_after=15)
+
+======================================================================
+## line 7460  |  fn: banplayer_cmd  |  .send on ctx
+======================================================================
+        await ctx.send("❌ لا يمكنك حظر نفسك!", delete_after=10)
+
+======================================================================
+## line 7489  |  fn: banplayer_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=ban_embed)
+
+======================================================================
+## line 7497  |  fn: unbanplayer_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing User",
+            description=f"> Usage:  `{PREFIX}unbanplayer @user أو ID`",
+            color=COLORS["error"]
+        ), delete_after=15)
+
+======================================================================
+## line 7506  |  fn: unbanplayer_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="ℹ️  اللاعب غير محظور",
+            description=f"> <@{user_id}>  غير محظور أصلاً.",
+            color=COLORS["info"]
+        ), delete_after=10)
+
+======================================================================
+## line 7527  |  fn: unbanplayer_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=unban_embed)
+
+======================================================================
+## line 7568  |  fn: banned_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=embed)
+
+======================================================================
+## line 7576  |  fn: setreportchannel_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing Voice Channel",
+            description=(
+                f"> Usage:  `{PREFIX}setreportchannel <#voice_channel>`\n"
+                f"> مثال:  `{PREFIX}setreportchannel #Investigation-Room`\n\n"
+                f"> 💡  اذكر فويس صوتي (Voice Channel) موجود"
+            ),
+            color=COLORS["error"]
+        ), delete_after=15)
+
+======================================================================
+## line 7588  |  fn: setreportchannel_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Not a Voice Channel",
+            description=f"> {channel.mention}  ليس فويس صوتي.\n> استخدم فويس صوتي (Voice Channel).",
+            color=COLORS["error"]
+        ), delete_after=10)
+
+======================================================================
+## line 7616  |  fn: setreportchannel_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=embed)
+
+======================================================================
+## line 7624  |  fn: removereportchannel_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing Voice Channel",
+            description=f"> Usage:  `{PREFIX}removereportchannel <#voice_channel>`",
+            color=COLORS["error"]
+        ), delete_after=15)
+
+======================================================================
+## line 7651  |  fn: removereportchannel_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=embed)
+
+======================================================================
+## line 7688  |  fn: reportchannels_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=embed)
+
+======================================================================
+## line 7754  |  fn: delete_jail_voice_for_player  |  .delete on existing
+======================================================================
+        try: await existing.delete(reason=f"JAIL voice deleted — {member} unjailed")
+
+======================================================================
+## line 7763  |  fn: jail_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(title="❌ Missing User", description=f"> Usage: `{PREFIX}jail <@user أو ID> [سبب]`", color=COLORS["error"]), delete_after=15); return
+
+======================================================================
+## line 7767  |  fn: jail_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(title="❌ اللاعب غير موجود في السيرفر", description=f"> <@{user_id}>  ليس عضو في هذا السيرفر.", color=COLORS["error"]), delete_after=10)
+
+======================================================================
+## line 7769  |  fn: jail_cmd  |  .send on ctx
+======================================================================
+    if member.bot: await ctx.send("❌ لا يمكنك سجن بوت!", delete_after=10); return
+
+======================================================================
+## line 7771  |  fn: jail_cmd  |  .send on ctx
+======================================================================
+    if not jail_role: await ctx.send("❌ لم أستطع إنشاء نظام السجن!", delete_after=10); return
+
+======================================================================
+## line 7773  |  fn: jail_cmd  |  .send on ctx
+======================================================================
+    except Exception as e: await ctx.send(f"❌ لم أستطع إعطاء الـ role! ({e})", delete_after=15); return
+
+======================================================================
+## line 7784  |  fn: jail_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=jail_embed)
+
+======================================================================
+## line 7790  |  fn: jail_cmd  |  .send on jail_chat
+======================================================================
+            await jail_chat.send(content=member.mention, embed=welcome)
+
+======================================================================
+## line 7799  |  fn: unjail_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(title="❌ Missing User", description=f"> Usage: `{PREFIX}unjail <@user أو ID>`", color=COLORS["error"]), delete_after=15); return
+
+======================================================================
+## line 7803  |  fn: unjail_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(title="ℹ️  اللاعب غير موجود", description=f"> <@{user_id}>  ليس في السيرفر.", color=COLORS["info"]), delete_after=10); return
+
+======================================================================
+## line 7805  |  fn: unjail_cmd  |  .send on ctx
+======================================================================
+    if not jail_role: await ctx.send("❌ نظام السجن غير مُفعّل!", delete_after=10); return
+
+======================================================================
+## line 7806  |  fn: unjail_cmd  |  .send on ctx
+======================================================================
+    if jail_role not in member.roles: await ctx.send(f"ℹ️ {member.mention} ليس في السجن!", delete_after=10); return
+
+======================================================================
+## line 7808  |  fn: unjail_cmd  |  .send on ctx
+======================================================================
+    except Exception as e: await ctx.send(f"❌ لم أستطع إزالة الـ role! ({e})", delete_after=15); return
+
+======================================================================
+## line 7813  |  fn: unjail_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=unjail_embed)
+
+======================================================================
+## line 7921  |  fn: blacklist_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing User",
+            description=f"> Usage:  `{PREFIX}blacklist @user أو ID [reason]`",
+            color=COLORS["error"]
+        ), delete_after=15)
+
+======================================================================
+## line 7929  |  fn: blacklist_cmd  |  .send on ctx
+======================================================================
+        await ctx.send("❌ لا يمكنك بلاك ليست نفسك!", delete_after=10)
+
+======================================================================
+## line 7933  |  fn: blacklist_cmd  |  .send on ctx
+======================================================================
+        await ctx.send("❌ لا يمكنك بلاك ليست بوت!", delete_after=10)
+
+======================================================================
+## line 7941  |  fn: blacklist_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  فشل",
+            description="> لم أستطع تطبيق البلاك ليست.",
+            color=COLORS["error"]
+        ), delete_after=10)
+
+======================================================================
+## line 7960  |  fn: blacklist_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=embed)
+
+======================================================================
+## line 7973  |  fn: unblacklist_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing User",
+            description=f"> Usage:  `{PREFIX}unblacklist @user أو ID`",
+            color=COLORS["error"]
+        ), delete_after=15)
+
+======================================================================
+## line 7997  |  fn: unblacklist_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=embed)
+
+======================================================================
+## line 8041  |  fn: blacklisted_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=embed)
+
+======================================================================
+## line 8049  |  fn: rules_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=rules_embed)
+
+======================================================================
+## line 8057  |  fn: winner_mvp_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing",
+            description=f"> Usage:  `{PREFIX}w <lobby_id> <@user/ID>`",
+            color=COLORS["error"]
+        ))
+
+======================================================================
+## line 8066  |  fn: winner_mvp_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Lobby not active",
+            description=f"> Lobby `#{lobby_id}` ليس في حالة تصويت.",
+            color=COLORS["error"]
+        ))
+
+======================================================================
+## line 8074  |  fn: winner_mvp_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  لاعب غير موجود في الماتش",
+            description=f"> <@{user_id}>  ليس من لاعبي هذا الماتش.",
+            color=COLORS["error"]
+        ))
+
+======================================================================
+## line 8083  |  fn: winner_mvp_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="✅  تم تعيين MVP WINNER",
+        description=f"> 🏆  **MVP WINNER:**  <@{user_id}>\n> 📌  **Lobby:**  `#{lobby_id}`",
+        color=COLORS["success"]
+    ))
+
+======================================================================
+## line 8098  |  fn: loser_mvp_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing",
+            description=f"> Usage:  `{PREFIX}l <lobby_id> <@user/ID>`",
+            color=COLORS["error"]
+        ))
+
+======================================================================
+## line 8107  |  fn: loser_mvp_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Lobby not active",
+            description=f"> Lobby `#{lobby_id}` ليس في حالة تصويت.",
+            color=COLORS["error"]
+        ))
+
+======================================================================
+## line 8115  |  fn: loser_mvp_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  لاعب غير موجود في الماتش",
+            description=f"> <@{user_id}>  ليس من لاعبي هذا الماتش.",
+            color=COLORS["error"]
+        ))
+
+======================================================================
+## line 8124  |  fn: loser_mvp_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="✅  تم تعيين MVP LOSER",
+        description=f"> ✦  **MVP LOSER:**  <@{user_id}>\n> 📌  **Lobby:**  `#{lobby_id}`",
+        color=COLORS["success"]
+    ))
+
+======================================================================
+## line 8149  |  fn: _apply_admin_mvp  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  MVP من نفس الفريق!",
+            description="> MVP WINNER و MVP LOSER يجب أن يكونا من فريقين مختلفين.",
+            color=COLORS.get("danger", COLORS.get("error", 0xE74C3C))
+        ))
+
+======================================================================
+## line 8156  |  fn: _apply_admin_mvp  |  .send on ctx
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="⚙️  جارٍ تطبيق النقاط...",
+        description=(
+            f"> 🏆  **Winner Team:**  {w_team}\n"
+            f"> 🔱  **MVP WINNER:**  <@{winner_id}>\n"
+            f"> ✦  **MVP LOSER:**  <@{loser_id}>"
+        ),
+        color=COLORS["success"]
+    ))
+
+======================================================================
+## line 8185  |  fn: _apply_admin_mvp  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  فشل تطبيق النقاط",
+            description=f"> 🐛  **الخطأ:**  `{str(e)[:200]}`\n> ✅  تم إنهاء الماتش وحذف القنوات",
+            color=COLORS["error"]
+        ))
+
+======================================================================
+## line 8203  |  fn: startvote_cmd  |  .send on ctx
+======================================================================
+            await ctx.send(embed=discord.Embed(
+                title="❌  Missing Lobby ID",
+                description=(
+                    f"> Usage:  `{PREFIX}startvote <lobby_id>`\n"
+                    f"> أو استخدم  `{PREFIX}startvote`  لو فيه ماتش نشط\n"
+                    f"> 💡 Use  `{PREFIX}matches`  لعرض الماتشات النشطة"
+                ),
+                color=COLORS["error"]
+            ), delete_after=15)
+
+======================================================================
+## line 8215  |  fn: startvote_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Not Found",
+            description=f"> اللوبي `#{lobby_id}` غير موجود",
+            color=COLORS["error"]
+        ), delete_after=10)
+
+======================================================================
+## line 8222  |  fn: startvote_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Not Active",
+            description=f"> اللوبي `#{lobby_id}` حالته: `{lobby['status']}`\n> يجب أن يكون `started`",
+            color=COLORS["error"]
+        ), delete_after=10)
+
+======================================================================
+## line 8243  |  fn: startvote_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=embed)
+
+======================================================================
+## line 8252  |  fn: resolve_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing",
+            description=(
+                f"> Usage:  `{PREFIX}resolve <id> <team1|team2>`"
+            ),
+            color=COLORS["error"]
+        ))
+
+======================================================================
+## line 8262  |  fn: resolve_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Invalid",
+            description=(
+                f"> Winner must be  `team1`  or  `team2`."
+            ),
+            color=COLORS["error"]
+        ))
+
+======================================================================
+## line 8272  |  fn: resolve_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  No Dispute",
+            description=(
+                f"> Lobby `#{lobby_id}` is not in voting status."
+            ),
+            color=COLORS["error"]
+        ))
+
+======================================================================
+## line 8280  |  fn: resolve_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="⚖️  Resolved!",
+        description=(
+            f"> **{ctx.author.mention}**  decided the winner:\n"
+            f"> **{'🟠 Team 1' if winner=='team1' else '🟢 Team 2'}**"
+        ),
+        color=COLORS["success"]
+    ))
+
+======================================================================
+## line 8295  |  fn: resetstats_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing User",
+            description=(
+                f"> Usage:  `{PREFIX}resetstats @user أو ID`"
+            ),
+            color=COLORS["error"]
+        ))
+
+======================================================================
+## line 8308  |  fn: resetstats_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="✅  Stats Reset",
+        description=(
+            f"> <@{user_id}>  —  RANK  `#{STARTING_LEVEL}`\n"
+            f"> All stats have been reset to default."
+        ),
+        color=COLORS["success"]
+    ))
+
+======================================================================
+## line 8338  |  fn: resetrankall_cmd  |  .send on ctx
+======================================================================
+    progress = await ctx.send(embed=progress_embed)
+
+======================================================================
+## line 8394  |  fn: resetrankall_cmd  |  .edit on progress
+======================================================================
+    await progress.edit(embed=success_embed)
+
+======================================================================
+## line 8402  |  fn: setlevel_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing",
+            description=(
+                f"> Usage:  `{PREFIX}setlevel @user أو ID <level>`"
+            ),
+            color=COLORS["error"]
+        ))
+
+======================================================================
+## line 8411  |  fn: setlevel_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Invalid Level",
+            description=(
+                f"> Level must be between  `1`  and  `9999`."
+            ),
+            color=COLORS["error"]
+        ))
+
+======================================================================
+## line 8431  |  fn: setlevel_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="✅  Level Updated",
+        description=(
+            f"> <@{user_id}> → **RANK  `#{level}`**"
+        ),
+        color=COLORS["success"]
+    ))
+
+======================================================================
+## line 8444  |  fn: setpoints_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Missing",
+            description=(
+                f"> Usage:  `{PREFIX}setpoints @user أو ID <points>`"
+            ),
+            color=COLORS["error"]
+        ))
+
+======================================================================
+## line 8453  |  fn: setpoints_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=discord.Embed(
+            title="❌  Invalid Points",
+            description=(
+                f"> Points must be between  `-99999`  and  `99999`."
+            ),
+            color=COLORS["error"]
+        ))
+
+======================================================================
+## line 8471  |  fn: setpoints_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="✅  Points Updated",
+        description=(
+            f"> <@{user_id}> → **`{points}` points**  (RANK `#{new_level}`)"
+        ),
+        color=COLORS["success"]
+    ))
+
+======================================================================
+## line 8491  |  fn: syncnicknames_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=discord.Embed(
+        title="✅  Synced",
+        description=(
+            f"> Synced  `{updated}`  members' nicknames successfully."
+        ),
+        color=COLORS["success"]
+    ))
+
+======================================================================
+## line 8504  |  fn: syncroles_cmd  |  .send on ctx
+======================================================================
+    progress = await ctx.send(embed=discord.Embed(
+        title="🔄  جارٍ مزامنة الـ Roles...",
+        description=(
+            f"> 📊  جاري تحديث ألقاب كل اللاعبين حسب ترتيبهم...\n"
+            f"> ⏳  انتظر..."
+        ),
+        color=COLORS["warning"],
+        timestamp=discord.utils.utcnow()
+    ))
+
+======================================================================
+## line 8533  |  fn: syncroles_cmd  |  .edit on progress
+======================================================================
+    await progress.edit(embed=synced_embed)
+
+======================================================================
+## line 8588  |  fn: general_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=embed)
+
+======================================================================
+## line 8636  |  fn: help_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=embed1)
+
+======================================================================
+## line 8706  |  fn: help_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=embed2)
+
+======================================================================
+## line 8720  |  fn: cloudbackup_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=embed)
+
+======================================================================
+## line 8723  |  fn: cloudbackup_cmd  |  .send on ctx
+======================================================================
+    await ctx.send("☁️ Starting full cloud backup...")
+
+======================================================================
+## line 8732  |  fn: cloudbackup_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=embed)
+
+======================================================================
+## line 8746  |  fn: cloudrestore_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(embed=embed)
+
+======================================================================
+## line 8755  |  fn: cloudrestore_cmd  |  .send on ctx
+======================================================================
+    msg = await ctx.send(embed=embed)
+
+======================================================================
+## line 8765  |  fn: cloudrestore_cmd  |  .send on ctx
+======================================================================
+            await ctx.send("❌ Cancelled.")
+
+======================================================================
+## line 8768  |  fn: cloudrestore_cmd  |  .send on ctx
+======================================================================
+        await ctx.send("⏰ Timed out.")
+
+======================================================================
+## line 8771  |  fn: cloudrestore_cmd  |  .send on ctx
+======================================================================
+    await ctx.send("☁️ Restoring from cloud...")
+
+======================================================================
+## line 8780  |  fn: cloudrestore_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=embed)
+
+======================================================================
+## line 8809  |  fn: cloudstatus_cmd  |  .send on ctx
+======================================================================
+    await ctx.send(embed=embed)
+
+======================================================================
+## line 8817  |  fn: serverleave_cmd  |  .send on ctx
+======================================================================
+        await ctx.send("❌ هذا الأمر يعمل في الـ DM فقط!")
+
+======================================================================
+## line 8821  |  fn: serverleave_cmd  |  .send on ctx
+======================================================================
+        await ctx.send("❌ هذا الأمر لصاحب البوت فقط!")
+
+======================================================================
+## line 8828  |  fn: serverleave_cmd  |  .send on ctx
+======================================================================
+            await ctx.send("البوت لا يوجد في أي سيرفر.")
+
+======================================================================
+## line 8834  |  fn: serverleave_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(msg)
+
+======================================================================
+## line 8840  |  fn: serverleave_cmd  |  .send on ctx
+======================================================================
+        await ctx.send("❌ ID غير صحيح. استخدم رقم ID السيرفر.")
+
+======================================================================
+## line 8844  |  fn: serverleave_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(f"❌ السيرفر `{guild_id}` غير موجود.")
+
+======================================================================
+## line 8848  |  fn: serverleave_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(f"✅ تم مغادرة السيرفر **{guild.name}** بنجاح!")
+
+======================================================================
+## line 8851  |  fn: serverleave_cmd  |  .send on ctx
+======================================================================
+        await ctx.send(f"❌ فشل مغادرة السيرفر: {e}")
