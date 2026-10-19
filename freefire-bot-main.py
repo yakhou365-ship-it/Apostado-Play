@@ -2,14 +2,14 @@
 ===========================================================
   Free Fire Matchmaking Bot
 ===========================================================
-  إدارة مباريات Free Fire (1v1/2v2/3v3/4v4) + تصويت MVP + رانك ديناميكي
+  Manage Free Fire matches (1v1/2v2/3v3/4v4) + MVP voting + dynamic ranks
 
-  ✅ 55 أمر | 8,600+ سطر
-  ✅ تصويت: كل اللاعبين + نصف الأصوات + cross-team + لا timeout
-  ✅ 1v1 له نظام خاص (TeamWinnerVoteView)
-  ✅ Blacklist مخفّف (تحذيرات + reset + استثناء أدمن)
-  ✅ MongoDB Atlas اختياري للـ backup السحابي
-  ✅ Health server على $PORT (Railway/Render compatible)
+  ✅ 55 commands | 8,600+ lines
+  ✅ Vote: all players + half+1 + cross-team + no timeout
+  ✅ 1v1 has dedicated system (TeamWinnerVoteView)
+  ✅ Soft Blacklist (warnings + reset + admin exemption)
+  ✅ MongoDB Atlas optional cloud backup
+  ✅ Health server on $PORT (Railway/Render compatible)
 ===========================================================
 """
 
@@ -31,6 +31,7 @@ try:
     from cloud_backup import (
         is_cloud_enabled, auto_restore_database, sync_guild_players_to_cloud,
         sync_player_to_cloud, sync_bans_to_cloud, sync_guild_settings_to_cloud,
+        sync_blacklist_to_cloud, sync_reports_to_cloud,
         full_backup_to_cloud, full_restore_from_cloud
     )
     _CLOUD_AVAILABLE = True
@@ -57,8 +58,8 @@ BOT_OWNER_ID = 1077949215772250143
 BOT_OWNER_NAME = "aizenx000"
 GUILD_WHITELIST_ENABLED = False
 
-# 🆕 اسم الـ role الذي يتم تاغه عند حدوث مشاكل
-ADMIN_ROLE_NAME = "Admin"  # غيّر هذا حسب اسم الـ role في سيرفرك
+# 🆕 Name of the role that gets tagged when an issue occurs
+ADMIN_ROLE_NAME = "Admin"  # change this to match the role name in your server
 
 STARTING_LEVEL = 1000
 MIN_RANK = 1
@@ -75,160 +76,160 @@ DEFAULT_MODE = "4v4"
 
 LOBBY_TIMEOUT_SECONDS = 1800
 
-# 🆕 نظام تصويت MVP الجماعي — كل اللاعبين يصوّتون (لا timeout)
-# تم تحويل الـ threshold إلى dynamic (نصف عدد المصوّتين) داخل MvpVoteView
-# ✅ تم حذف VOTE_TIMEOUT_SECONDS و MVP_VOTERS_PER_TEAM و MVP_CONSENSUS_NEEDED
-# ✅ قاعدة cross-team: لازم صوت واحد من كل فريق على نفس اللاعب (WINNER و LOSER)
-# ✅ 1v1 له نظام خاص: TeamWinnerVoteView بـ Select واحد للفريق الفائز
+# 🆕 Group MVP voting system — every player votes (no timeout)
+# The threshold is dynamic (half the voter count) inside MvpVoteView
+# ✅ Removed VOTE_TIMEOUT_SECONDS, MVP_VOTERS_PER_TEAM and MVP_CONSENSUS_NEEDED
+# ✅ Cross-team rule: need one vote from each team on the same player (WINNER and LOSER)
+# ✅ 1v1 has its own dedicated system: TeamWinnerVoteView with a single Select for the winning team
 
-# 🆕 معرّف البناء — Railway يضع RAILWAY_GIT_COMMIT_SHA تلقائياً عند النشر من Git
-#    يُعرض في  !!botinfo  للتأكد أي نسخة شغّالة فعلياً (بدون هذا ما نعرف إذا نُشر التعديل)
+# 🆕 Build identifier — Railway sets RAILWAY_GIT_COMMIT_SHA automatically on deploy from Git
+#    Shown in !!botinfo to confirm exactly which version is running (otherwise we can't tell if a change was deployed)
 BUILD_ID = os.getenv("RAILWAY_GIT_COMMIT_SHA") or os.getenv("BOT_BUILD_ID") or "local-dev"
 BUILD_SHA = str(BUILD_ID)[:7]
 
-# 🆕 إعدادات إعادة محاولة تغيير الأدوار (إصلاح ابتلاع الأخطاء بصمت)
-ROLE_OP_RETRY_ATTEMPTS = 3   # عدد المحاولات عند rate limit / خطأ شبكة مؤقت
-ROLE_OP_RETRY_BASE_DELAY = 1.5  # ثواني الانتظار الأساسية (exponential backoff)
+# 🆕 Role-change retry settings (fixes errors being silently swallowed)
+ROLE_OP_RETRY_ATTEMPTS = 3   # number of retries on rate limit / temporary network error
+ROLE_OP_RETRY_BASE_DELAY = 1.5  # base wait in seconds (exponential backoff)
 
-# 🆕 رسالة "Create Lobby" — تختفي بعد هذه المدة إذا ما انشأ اللاعب الروم
-# ✅ تسريع: رُفع من 60 إلى 120 ثانية (دقيقتان) حسب طلب الأدمن — كل الـ embeds
-#    المؤقتة تختفي إما بانتهاء الماتش أو بعد دقيقتين على الأكثر.
-CREATE_PROMPT_DELETE_AFTER = 120   # ثانية (دقيقتان)
+# 🆕 "Create Lobby" message — disappears after this duration if no one created the room
+# ✅ Sped up: raised from 60 to 120 seconds (two minutes) per admin request — all
+#    temporary embeds disappear either when the match ends or after two minutes at most.
+CREATE_PROMPT_DELETE_AFTER = 120   # seconds (two minutes)
 
-# 🆕 الحد الأقصى لعمر أي embed مؤقت (رسائل مثل "Create Lobby"، رسائل اللوبي،
-#    إشعارات الإلغاء/التايم أوت) — تختفي تلقائياً بعدها لو ما انتهى الماتش قبلها
-TEMP_EMBED_DELETE_AFTER = 120   # ثانية (دقيقتان)
+# 🆕 Maximum lifetime of any temporary embed (messages like "Create Lobby", lobby messages,
+#    cancel/timeout notifications) — disappears automatically even if the match hasn't ended yet
+TEMP_EMBED_DELETE_AFTER = 120   # seconds (two minutes)
 
-# 🆕 نظام البلاغات والحظر
-REPORT_THRESHOLD = 6            # عدد البلاغات اللازمة للحظر التلقائي
-REPORT_CHANNELS_COUNT = 3       # عدد الفويسات التي يستطيع المحظور دخولها
-REPORT_CATEGORY_NAME = "⚠️  Reports & Bans"  # اسم كاتيجوري البلاغات
+# 🆕 Reports & Bans System
+REPORT_THRESHOLD = 6            # number of reports needed for an automatic ban
+REPORT_CHANNELS_COUNT = 3       # number of voice channels the banned player can still access
+REPORT_CATEGORY_NAME = "⚠️ Reports & Bans"  # name of the reports category
 
-# 🆕 نظام JAIL — معرّف هنا (قبل الأوامر والأحداث) ليعمل correctly
+# 🆕 JAIL system — defined here (before commands and events) to work correctly
 JAIL_ROLE_NAME = "JAIL"
 JAIL_CHAT_NAME = "・💬jail-chat"
 JAIL_PROUVES_NAME = "・💬jail-prouves"
 JAIL_CATEGORY_NAME = "🔒 JAIL"
 
-# 🆕 نظام BLACKLIST — منع المخالفين من استخدام البوت مؤقتاً
-# تم تقليل قسوة الـ blacklist قدر الإمكان:
-#    - رفع الحدود: 180→300s تراكمي، 5→8 مرات مغادرة
-#    - تقليل مدة الحظر: 600→300s (5 دقائق بدل 10)
-#    - Reset تدريجي بعد 60 ثانية بقاء في الماتش (يصفّر التراكمي)
-#    - استثناء الأدمن و Owner من الـ tracking
-#    - تحذيرات متدرّجة عند 50% و 80% من الحد قبل التطبيق
+# 🆕 BLACKLIST system — temporarily blocks offenders from using the bot
+# Softened as much as possible:
+#    - raised thresholds: 180→300s cumulative, 5→8 leave count
+#    - shortened ban duration: 600→300s (5 minutes instead of 10)
+#    - gradual reset after 60 seconds staying in a match (zeroes the cumulative counter)
+#    - admins and the Owner are excluded from tracking
+#    - staged warnings at 50% and 80% of the threshold before it's applied
 BLACKLIST_ROLE_NAME = "🔇 Blacklisted"
-BLACKLIST_CHANNEL_NAME = "🔇・Blacklisted"  # 🆕 شات مخصص يعرض اللاعبين في البلاك ليست
-BLACKLIST_TIME_LIMIT = 300   # 5 دقائق غياب تراكمي (كان 180s)
-BLACKLIST_MAX_LEAVES = 8     # 8 مرات خروج/دخول (كان 5)
-BLACKLIST_DURATION = 300     # 5 دقائق مدة المنع (كان 600s)
-BLACKLIST_RESET_AFTER_STAY = 60  # 🆕 مدة بقاء اللاعب في الماتش قبل reset الـ tracking (ثانية)
-BLACKLIST_WARN_LEVEL_1_TIME = 150   # 🆕 تحذير أول عند 150s تراكمي (50% من 300)
-BLACKLIST_WARN_LEVEL_2_TIME = 240   # 🆕 تحذير أخير عند 240s تراكمي (80% من 300)
-BLACKLIST_WARN_LEVEL_1_LEAVES = 4   # 🆕 تحذير أول عند 4 مغادرات (50% من 8)
-BLACKLIST_WARN_LEVEL_2_LEAVES = 6   # 🆕 تحذير أخير عند 6 مغادرات (75% من 8)
+BLACKLIST_CHANNEL_NAME = "🔇 Blacklisted"  # 🆕 dedicated channel listing blacklisted players
+BLACKLIST_TIME_LIMIT = 300   # 5 minutes cumulative absence (was 180s)
+BLACKLIST_MAX_LEAVES = 8     # 8 leave/join cycles (was 5)
+BLACKLIST_DURATION = 300     # 5 minute ban duration (was 600s)
+BLACKLIST_RESET_AFTER_STAY = 60  # 🆕 time staying in a match before the tracking resets (seconds)
+BLACKLIST_WARN_LEVEL_1_TIME = 150   # 🆕 first warning at 150s cumulative (50% of 300)
+BLACKLIST_WARN_LEVEL_2_TIME = 240   # 🆕 final warning at 240s cumulative (80% of 300)
+BLACKLIST_WARN_LEVEL_1_LEAVES = 4   # 🆕 first warning at 4 leaves (50% of 8)
+BLACKLIST_WARN_LEVEL_2_LEAVES = 6   # 🆕 final warning at 6 leaves (75% of 8)
 
-# 🆕 نظام الألقاب الديناميكي (Roles)
-# البوت يصنع هذه الـ Roles ويعطيها/يسحبها تلقائياً حسب الترتيب
+# 🆕 Dynamic Title Roles System
+# Bot creates these Roles and grants/revokes automatically based on rank
 RANK_TITLES = {
     1: {
         "name": "🏆 Best Player",
-        "arabic": "أفضل لاعب",
-        "color": 0xE74C3C,  # أحمر
+        "arabic": "",
+        "color": 0xE74C3C,  # red
         "permissions": ["soundboard", "waiting_prv"],
-        "max_rank": 1,  # فقط الـ #1
+        "max_rank": 1,  # only the #1
     },
     2: {
         "name": "💎 Goated Players",
-        "arabic": "لاعبون أسطوريون",
-        "color": 0xF1C40F,  # ذهبي
+        "arabic": "",
+        "color": 0xF1C40F,  # gold
         "permissions": ["soundboard", "waiting_prv"],
-        "max_rank": 10,  # من #1 إلى #10
+        "max_rank": 10,  # from #1 to #10
     },
     3: {
         "name": "⭐ Skilled Players",
-        "arabic": "لاعبون مهاريون",
-        "color": 0x9B59B6,  # بنفسجي
+        "arabic": "",
+        "color": 0x9B59B6,  # purple
         "permissions": ["soundboard"],
-        "max_rank": 50,  # من #11 إلى #50
+        "max_rank": 50,  # from #11 to #50
     },
     4: {
         "name": "🎯 Efficient Players",
-        "arabic": "لاعبون فعّالون",
-        "color": 0x3498DB,  # أزرق
+        "arabic": "",
+        "color": 0x3498DB,  # blue
         "permissions": [],
-        "max_rank": 100,  # من #51 إلى #100
+        "max_rank": 100,  # from #51 to #100
     },
 }
 
-# 🆕 أسماء كاتيجوري غرف الانتظار الخاصة (للتحقق منها عند إعطاء الصلاحية)
+# names of the private waiting-room categories (used to verify them when granting permissions)
 WAITING_PRV_CATEGORY_HINT = "Waiting Prv"
 
 # ══════════════════════════════════════════════
 # V0 DESIGN SYSTEM — Color Palette
 # ══════════════════════════════════════════════
-# 🎨 نظام الألوان الموحّد (6 ألوان أساسية + 5 رانك)
+# 🎨 Unified color palette (6 base + 5 rank)
 # ══════════════════════════════════════════════
 COLORS = {
-    "success":     0x57F287,  # ✅ نجاح
-    "error":       0xED4245,  # ❌ خطأ
-    "warning":     0xFEE75C,  # ⚠️ تحذير
-    "info":        0x5865F2,  # ℹ️ معلومات
-    "play":        0xFF6B00,  # 🎮 لعب
-    "vote":        0x5865F2,  # 🗳️ تصويت (= info)
-    "leaderboard": 0xFAA61A,  # 🏆 لوحة الصدارة
-    "admin":       0x4752C4,  # 🔧 أدمن
-    "neutral":     0x2B2D31,  # محايد
-    # رانك اللاعب (ديناميكي حسب الترتيب)
-    "rank_low":    0x95A5A6,  # رمادي - رانك منخفض
-    "rank_mid":    0x3498DB,  # أزرق - رانك متوسط
-    "rank_high":   0x9B59B6,  # بنفسجي - رانك عالي
-    "rank_elite":  0xF1C40F,  # ذهبي - رانك نخبة
-    "rank_legend": 0xE74C3C,  # أحمر - أسطورة
-    # ── aliases (للـ compatibility مع الكود القديم) ──
+    "success":     0x57F287,  # success
+    "error":       0xED4245,  # error
+    "warning":     0xFEE75C,  # warning
+    "info":        0x5865F2,  # info
+    "play":        0xFF6B00,  # play
+    "vote":        0x5865F2,  # vote (= info)
+    "leaderboard": 0xFAA61A,  # leaderboard
+    "admin":       0x4752C4,  # admin
+    "neutral":     0x2B2D31,  # neutral
+    # player rank colors (dynamic, by rank)
+    "rank_low":    0x95A5A6,  # gray - low rank
+    "rank_mid":    0x3498DB,  # blue - mid rank
+    "rank_high":   0x9B59B6,  # purple - high rank
+    "rank_elite":  0xF1C40F,  # gold - elite rank
+    "rank_legend": 0xE74C3C,  # red - legend
+    # aliases (for compatibility with old code)
     "match":       0xFF6B00,  # = play
     "auto":        0xFF6B00,  # = play
     "profile":     0x9B59B6,  # = rank_high
 }
 
-# شعار البوت الرسمي (يستخدم في كل الembeds)
+# official bot branding (used in all embeds)
 BOT_LOGO_URL = "https://i.imgur.com/8RYMfAE.png"
-BOT_FOOTER = "{server_name}"   # فوتر بسيط — اسم السيرفر فقط
+BOT_FOOTER = "{server_name}"   # simple footer: server name only
 
-# 🚫 صور/GIF معطّلة — تم إزالتها من كل الـ embeds (V0 تصميم نظيف)
+# images/GIFs disabled - removed from all embeds (V0 clean design)
 BOT_BANNER_URL = None
 
-# 🚫 صورة القواعد معطّلة
+# rules image disabled
 RULES_IMAGE_URL = None
 
-# 🚫 GIF مخصص لكل سيرفر معطّل
-# (SERVER_GIFS و SERVER_GIFS_BY_NAME محذوفة — لم تعد مستخدمة بعد V0 Redesign)
+# per-server custom GIF disabled
+# (SERVER_GIFS and SERVER_GIFS_BY_NAME removed - no longer used after the V0 redesign)
 
 
 def apply_branding(embed, guild):
-    """V0: يضيف فوتر + تاريخ فقط — بدون صور/GIF (تصميم نظيف)."""
+    """V0: Adds footer + timestamp only — no images/GIFs (clean design)."""
     if not guild:
         return embed
-    # فوتر ديناميكي حسب اسم السيرفر
+    # Dynamic footer based on server name
     try:
         footer_text = BOT_FOOTER.format(server_name=guild.name)
     except Exception:
         footer_text = BOT_FOOTER
     embed.set_footer(text=footer_text)
     embed.timestamp = discord.utils.utcnow()
-    # V0: تصميم نظيف — بدون صور أو GIF في أسفل الـ embed
+    # Clean design — no images or GIFs at the bottom of the embed
     return embed
 
 def get_rank_color(level):
-    """🆕 يرجع لون حسب الترتيب — 1 = الأفضل (ذهبي)، الأعلى رقماً = الأسوأ (رمادي)."""
+    """🆕 Returns a color based on rank."""
     if level <= 1:    return COLORS["rank_legend"]   # 🔱 #1
     if level <= 3:    return COLORS["rank_elite"]    # 💎 Top 3
     if level <= 10:   return COLORS["rank_high"]     # 🔥 Top 10
     if level <= 50:   return COLORS["rank_mid"]      # ⭐ Top 50
-    return COLORS["rank_low"]                        # 🎯 باقي اللاعبين
+    return COLORS["rank_low"]                        # 🎯 remaining players
 
 def get_rank_title(level):
-    """🆕 يرجع لقب اللاعب حسب الترتيب (متوافق مع أسماء الـ Roles)."""
+    """🆕 Returns player title based on rank ( Roles)."""
     if level == 1:   return "Best Player"
     if level <= 10:  return "Goated Player"
     if level <= 50:  return "Skilled Player"
@@ -236,20 +237,19 @@ def get_rank_title(level):
     return "Rookie"
 
 def get_rank_emoji(level):
-    """🆕 يرجع إيموجي حسب الترتيب (متوافق مع RANK_TITLES tiers).
-    ✅ إصلاح V5: توحيد الإيموجي مع الـ Roles:
-    - #1 → 🏆 Best Player (tier 1)
-    - #2-10 → 💎 Goated Players (tier 2)
-    - #11-50 → ⭐ Skilled Players (tier 3)
-    - #51+ → 🎯 Efficient/Rookie (tier 4+)
-    """
+    """🆕 Returns emoji based on rank ( RANK_TITLES tiers).
+✅ V5: Roles:
+- #1 → 🏆 Best Player (tier 1)
+- #2-10 → 💎 Goated Players (tier 2)
+- #11-50 → ⭐ Skilled Players (tier 3)
+- #51+ → 🎯 Efficient/Rookie (tier 4+)"""
     if level == 1:    return "🏆"  # #1 — Best Player
     if level <= 10:   return "💎"  # #2-10 — Goated Players
     if level <= 50:   return "⭐"  # #11-50 — Skilled Players
     return "🎯"  # #51+ — Efficient/Rookie
 
 def make_progress_bar(current, total, length=10):
-    """يصنع شريط تقدم بصري احترافي."""
+    """Creates professional visual progress bar."""
     if total == 0:
         return "░" * length
     filled = int((current / total) * length)
@@ -257,7 +257,7 @@ def make_progress_bar(current, total, length=10):
     return "█" * filled + "░" * (length - filled)
 
 def make_winrate_bar(winrate, length=10):
-    """شريط نسبة الفوز بألوان متدرجة."""
+    """Win-rate bar with gradient colors."""
     filled = round(winrate / 10)
     filled = min(filled, length)
     if winrate >= 70:
@@ -268,11 +268,11 @@ def make_winrate_bar(winrate, length=10):
         return "🟥" * filled + "⬛" * (length - filled)
 
 def separator():
-    """فاصل بصري — V0 تصميم جديد."""
+    """Visual separator — V0 new design."""
     return "──────────────────────"
 
 def points_to_next_rank(points, db=None, gid=None):
-    """يحسب الفرق بين نقاط اللاعب ونقاط المركز الأول."""
+    """Calculates difference between player points and top points."""
     if db is not None and gid is not None:
         top = db.get_top_points(gid)
         if top > points:
@@ -280,9 +280,8 @@ def points_to_next_rank(points, db=None, gid=None):
     return 0
 
 def get_mvp_player(players_list, guild, db, gid):
-    """🆕 يحدد MVP الفريق — أعلى رانك (أي أقل رقم رانك)، ولو تعادل → أعلى streak.
-    يعالج حالة الفريق الفارغ بإرجاع None.
-    """
+    """🆕 Determines team MVP — highest rank (lowest rank number), tie broken by highest streak.
+None."""
     if not players_list:
         return None
     best = None
@@ -291,8 +290,8 @@ def get_mvp_player(players_list, guild, db, gid):
         player = db.get_player(pid, gid)
         if not player:
             continue
-        # 🆕 في النظام الجديد: رانك أقل = أفضل. نضرب في -1 لنحوّله لأعلى = أفضل
-        # Score = -level (لأن level أقل = أفضل) + win_streak (للتفريق بين المتعادلين)
+        # in the new system a lower rank number is better; multiply by -1 so higher = better
+        # Score = -level (lower level is better) + win_streak (tiebreaker between equal players)
         score = -player.get("level", 9999) * 1000 + player.get("win_streak", 0)
         if score > best_score:
             best_score = score
@@ -300,8 +299,8 @@ def get_mvp_player(players_list, guild, db, gid):
     return best
 
 def get_mvp_badge(mvp_count):
-    """🆕 يرجع شارة MVP حسب عدد MVPs.
-    - 0 MVPs: لا شارة
+    """🆕 Returns MVP badge based on MVP count.
+    - 0 MVPs: no badge
     - 1-4 MVPs: 🥉 Bronze
     - 5-19 MVPs: 🥈 Silver
     - 20-49 MVPs: 🏅 Gold
@@ -321,7 +320,7 @@ def get_mvp_badge(mvp_count):
     return ""
 
 def get_mvp_title(mvp_count):
-    """🆕 يرجع لقب MVP حسب العدد."""
+    """🆕 Returns MVP title based on count."""
     if mvp_count >= 100:
         return "MVP Legend"
     if mvp_count >= 50:
@@ -335,13 +334,12 @@ def get_mvp_title(mvp_count):
     return "Rookie"
 
 # ============================================================
-# 🆕 RANK-BASED ROLES — نظام الألقاب الديناميكي
+# RANK-BASED ROLES - dynamic title roles
 # ============================================================
 
 def get_role_tier_for_rank(rank):
-    """🆕 يحدد أي tier من الـ Roles يجب أن يحصل عليه اللاعب حسب ترتيبه.
-    يرجع رقم الـ tier (1=Best, 2=Goated, 3=Skilled, 4=Efficient) أو None لو فوق #100.
-    """
+    """🆕 Determines which Role tier a player should get based on rank.
+tier (1=Best, 2=Goated, 3=Skilled, 4=Efficient) None #100."""
     if rank == 1:
         return 1  # Best Player
     if rank <= 10:
@@ -350,15 +348,15 @@ def get_role_tier_for_rank(rank):
         return 3  # Skilled Players
     if rank <= 100:
         return 4  # Efficient Players
-    return None  # فوق #100 = لا role
+    return None  # beyond #100 = no role
 
 async def create_role_if_not_exists(guild, role_name, color):
-    """🆕 ينشئ role لو غير موجود، ويرجعه."""
-    # ابحث عن role موجود بنفس الاسم
+    """🆕 Creates role if not exists, returns it."""
+    # look for an existing role with the same name
     for role in guild.roles:
         if role.name == role_name:
             return role
-    # أنشئ role جديد
+    # create a new role
     try:
         new_role = await guild.create_role(
             name=role_name,
@@ -375,18 +373,17 @@ async def create_role_if_not_exists(guild, role_name, color):
         return None
 
 async def role_change_with_retry(member, role, *, add: bool, reason: str, attempts: int = None):
-    """🆕 ينفّذ add_roles / remove_roles مع إعادة محاولة ذكية — بدل ابتلاع الأخطاء بصمت.
+    """🆕 Executes add_roles / remove_roles with smart retry — instead of silently swallowing errors.
 
-    ✅ يُرجع (ok: bool, permanent_error: bool) بدل None:
-       • rate limit (429) أو خطأ شبكة مؤقت  → إعادة محاولة بـ exponential backoff
-       • discord.Forbidden / HierarchyError  → خطأ **دائم** (needs admin fix)
-       • discord.NotFound                  → الـ role/العضو انحذف، ما ينفع نعيد
+✅ (ok: bool, permanent_error: bool) None:
+• rate limit (429) → exponential backoff
+• discord.Forbidden / HierarchyError → **** (needs admin fix)
+• discord.NotFound → role/
 
-    ⚠️ ما يرمي Exceptions — والمصنّف يمنع ابتلاع الأخطاء بصمت.
-    """
+⚠️ Exceptions — ."""
     if attempts is None:
         attempts = ROLE_OP_RETRY_ATTEMPTS
-    action = "إضافة" if add else "سحب"
+    action = "" if add else ""
     action_api = "add_roles" if add else "remove_roles"
     delay = ROLE_OP_RETRY_BASE_DELAY
     last_exc = None
@@ -397,13 +394,13 @@ async def role_change_with_retry(member, role, *, add: bool, reason: str, attemp
                 await member.add_roles(role, reason=reason)
             else:
                 await member.remove_roles(role, reason=reason)
-            logger.info(f"✅ {action} role {role.name!r} → {member.display_name} ({action_api}, محاولة {attempt}/{attempts})")
+            logger.info(f"✅ {action} role {role.name!r} → {member.display_name} ({action_api}, {attempt}/{attempts})")
             return True, False
 
         except discord.NotFound:
             logger.warning(
-                f"⚠️ NotFound في {action_api}: role={role.name!r} member={member.id} "
-                f"(الـ role أو العضو انحذف — تخطّي بلا إعادة)"
+                f"⚠️ NotFound {action_api}: role={role.name!r} member={member.id}"
+                f"(role not on the member - harmless)"
             )
             return False, False
 
@@ -411,7 +408,7 @@ async def role_change_with_retry(member, role, *, add: bool, reason: str, attemp
             msg = str(e).lower()
             hierarchy = ("highest" in msg) or ("hierarchy" in msg)
             logger.error(
-                f"❌ Forbidden في {action_api}: role={role.name!r} member={member.id} "
+                f"❌ Forbidden {action_api}: role={role.name!r} member={member.id}"
                 f"in_guild={getattr(member.guild, 'name', '?')} | hierarchy={hierarchy} | {e}"
             )
             return False, True
@@ -421,11 +418,11 @@ async def role_change_with_retry(member, role, *, add: bool, reason: str, attemp
             status = getattr(e, "status", None) or getattr(e, "code", None)
             if status == 429:
                 logger.warning(
-                    f"⏳ Rate limit في {action_api} (محاولة {attempt}/{attempts}): role={role.name!r} member={member.id}"
+                    f"⏳ Rate limit on {action_api} (attempt {attempt}/{attempts}): role={role.name!r} member={member.id}"
                 )
             else:
                 logger.warning(
-                    f"⚠️ HTTP {status} في {action_api} (محاولة {attempt}/{attempts}): "
+                    f"⚠️ HTTP {status} {action_api} (attempt {attempt}/{attempts}):"
                     f"role={role.name!r} member={member.id} | {e}"
                 )
             if attempt < attempts:
@@ -438,45 +435,44 @@ async def role_change_with_retry(member, role, *, add: bool, reason: str, attemp
                 delay *= 2
                 continue
             logger.error(
-                f"❌ فشل {action_api} بعد {attempts} محاولات: role={role.name!r} member={member.id} | {e}"
+                f"❌ Failed {action_api} after {attempts} attempts: role={role.name!r} member={member.id} | {e}"
             )
             return False, False
 
         except Exception as e:
             logger.exception(
-                f"❌ خطأ غير متوقع في {action_api}: role={role.name!r} member={member.id} | {e}"
+                f"❌ Unexpected error in {action_api}: role={role.name!r} member={member.id} | {e}"
             )
             return False, False
 
-    logger.error(f"❌ {action_api} نفد بلا نتيجة: role={role.name!r} member={member.id} | last={last_exc}")
+    logger.error(f"❌ {action_api} exhausted: role={role.name!r} member={member.id} | last={last_exc}")
     return False, False
 
 async def sync_player_role(guild, member, rank):
-    """🆕 يزامن role اللاعب حسب ترتيبه.
+    """🆕 Syncs player role based on rank.
 
-    ✅ إصلاح نهائي:
-       • كل عملية add/remove تمر عبر role_change_with_retry (rate limit + logging)
-       • **إذا فشل سحب الـ role القديم → ما نضيف الـ role الجديد أبداً**
-         (يمنع تراكم أكثر من Rank Role على نفس اللاعب)
-       • خطأ Forbidden الدائم → تاغ الأدمن مع رسالة تشرح السبب
-    """
+✅ :
+• add/remove role_change_with_retry (rate limit + logging)
+• ** role → role **
+( Rank Role )
+• Forbidden →"""
     if not member or member.bot:
         return
     target_tier = get_role_tier_for_rank(rank)
 
-    # اجمع كل أسماء الـ roles الخاصة بالألقاب
+    # collect the names of all title roles
     title_role_names = {tier: data["name"] for tier, data in RANK_TITLES.items()}
 
     # ─────────────────────────────────────────────
-    # 1) أزل من اللاعب أي role لقب لم يعد يستحقه
+    # 1) remove from the player any title role they no longer qualify for
     # ─────────────────────────────────────────────
-    removal_failed = []   # أسماء الـ roles التي فشل سحبها
+    removal_failed = []   # names of roles that failed to be removed
     permanent_error = None
 
     for tier, role_name in title_role_names.items():
         if tier == target_tier:
-            continue  # هذا الـ role اللي نبيه — اتركه
-        # لو اللاعب عنده هذا الـ role، اسحبه
+            continue  # this is the role we want - keep it
+        # if the player has this role, remove it
         role = discord.utils.get(guild.roles, name=role_name)
         if role is None:
             continue
@@ -490,41 +486,41 @@ async def sync_player_role(guild, member, rank):
             removal_failed.append(role_name)
             if is_perm:
                 permanent_error = role_name
-                break   # لا فائدة من إكمال — نفس السبب سي فشل مع كل role
+                break   # no point continuing - the same failure reason would apply to every role
 
     # ─────────────────────────────────────────────
-    # 2) 🔴 حارس منع التراكم — سحب فشل = ما نضيف
+    # 2) guard against accumulation - if a removal failed, do not add a new role
     # ─────────────────────────────────────────────
     if removal_failed:
         names = ", ".join(f"`{n}`" for n in removal_failed)
         logger.error(
-            f"🛑 SKIP add-role لـ {member.display_name} (RANK #{rank}): "
-            f"فشل سحب {names} — لو أضفنا الآن لتراكم أكثر من Rank Role"
+            f"🛑 SKIP add-role {member.display_name} (RANK #{rank}):"
+            f"{names} — Rank Role"
         )
         bot_position = guild.me.top_role.position if guild.me else 0
         if permanent_error:
             await notify_admins(
                 guild,
-                f"🛑 تعذّر مزامنة أدوار لاعب (RANK #{rank})",
-                f"> 👤  **اللاعب:**  {member.mention}  (`{member.id}`)\n"
-                f"> 🏷  **Role لم يُسحب:**  `{permanent_error}`\n"
-                f"> ⚠️  **السبب:**  البوت ما يقدر يسحب هذا الـ role — "
-                f"الـ role **أعلى** من role البوت في الهرمي (Hierarchy)\n"
+                f"🛑 Cannot remove rank role (RANK #{rank})",
+                f"> 👤 **Player:** {member.mention} (`{member.id}`)\n"
+                f"> 🏷 **Role:** `{permanent_error}`\n"
+                f"> ⚠️  **Reason:**  Bot cannot remove this role — "
+                f"the role is **higher** than bot role in hierarchy\n"
                 f"> 📊  **Bot role:**  `{guild.me.top_role.name}`  (position `{bot_position}`)\n"
-                f"> 🔧  **الحل:**  إما اسحب `{permanent_error}` لأسفل من role البوت، "
-                f"أو ارفع role البوت فوقه في  `Server Settings → Roles`\n"
-                f"> 🚫  **مؤقتاً:**  ما أضفت له rank role جديد عشان ما يتراكم عليه أكثر من role\n"
-                f"> 📋  **Logs:**  شغّل `{PREFIX}botinfo` أو راجع Railway logs للتفاصيل",
+                f"> 🔧 **Fix:** remove the `{permanent_error}` role manually "
+                f"or move bot role above it in `Server Settings → Roles`\n"
+                f"> 🚫  **Temporarily:**  Did not add new rank role to avoid accumulation\n"
+                f"> 📋 **Logs:** `{PREFIX}botinfo` Railway logs",
                 color=COLORS["error"]
             )
-        return  # ❌ لا تضيف أي role جديد — هذا هو الإصلاح الجذري
+        return  # do not add any new role - this is the root fix
 
     # ─────────────────────────────────────────────
-    # 3) أعطِ اللاعب الـ role المناسب لو يستحقه
+    # 3) give the player the appropriate role if they qualify
     # ─────────────────────────────────────────────
     if target_tier:
         target_role_name = RANK_TITLES[target_tier]["name"]
-        # تحقق إن ما عنده بالفعل
+        # check whether they already have it
         has_role = discord.utils.get(guild.roles, name=target_role_name) in member.roles
         if not has_role:
             role = await create_role_if_not_exists(guild, target_role_name, RANK_TITLES[target_tier]["color"])
@@ -537,26 +533,25 @@ async def sync_player_role(guild, member, rank):
                     bot_position = guild.me.top_role.position if guild.me else 0
                     await notify_admins(
                         guild,
-                        f"🛑 تعذّر إعطاء rank role للاعب (RANK #{rank})",
-                        f"> 👤  **اللاعب:**  {member.mention}  (`{member.id}`)\n"
+                        f"🛑 Cannot grant rank role (RANK #{rank})",
+                        f"> 👤 **Player:** {member.mention} (`{member.id}`)\n"
                         f"> 🏷  **Role:**  `{target_role_name}`\n"
-                        f"> ⚠️  **السبب:**  البوت ما يقدر يعطي هذا الـ role — "
-                        f"الـ role **أعلى** من role البوت في الهرمي (Hierarchy)\n"
+                        f"> ⚠️  **Reason:**  Bot cannot grant this role — "
+                        f"the role is **higher** than bot role in hierarchy\n"
                         f"> 📊  **Bot role:**  `{guild.me.top_role.name}`  (position `{bot_position}`)\n"
-                        f"> 🔧  **الحل:**  ارفع role البوت فوق `{target_role_name}` في  `Server Settings → Roles`",
+                        f"> 🔧  **Fix:**  Move bot role above `{target_role_name}` in `Server Settings → Roles`",
                         color=COLORS["error"]
                     )
 
 async def sync_all_players_roles(guild, player_ids=None):
-    """🆕 يزامن roles اللاعبين في السيرفر حسب ترتيبهم الحالي.
-    تُستدعى بعد كل recalculate_ranks().
+    """🆕 Syncs player roles in server based on current ranking.
+recalculate_ranks().
 
-    ⚡ تسريع: player_ids اختياري — يُمرَّر لتحديث أدوار مجموعة محددة فقط
-    (مثل لاعبي ماتش انتهى) بدل المرور على كل اللاعبين.
-    """
+⚡ : player_ids —
+( ) ."""
     try:
-        # اجلب كل اللاعبين مرتبين
-        players = db.get_leaderboard(guild.id, limit=None)  # كل اللاعبين
+        # fetch all players, ranked
+        players = db.get_leaderboard(guild.id, limit=None)  # all players
         if not players:
             return
         if player_ids is not None:
@@ -569,14 +564,13 @@ async def sync_all_players_roles(guild, player_ids=None):
             if member and not member.bot:
                 rank = player.get("level", 9999)
                 await sync_player_role(guild, member, rank)
-                await asyncio.sleep(0.1)  # تجنب rate limit
+                await asyncio.sleep(0.1)  # avoid rate limit
     except Exception as e:
         logger.exception(f"sync_all_players_roles failed: {e}")
 
 async def sync_all_nicknames(guild):
-    """🆕 fixrank + syncnicknames تلقائياً كل دقيقتين:
-    يصحّح نكات كل الأعضاء حسب رانكهم الحالي (للموجودين في السيرفر فقط).
-    """
+    """🆕 fixrank + syncnicknames :
+( )."""
     updated = 0
     title = "🔄 Nickname Sync"
     try:
@@ -586,7 +580,7 @@ async def sync_all_nicknames(guild):
                 player = db.get_or_create_player(member.id, guild.id, member.display_name)
                 await update_member_nickname(member, player.get("level", STARTING_LEVEL))
                 updated += 1
-                await asyncio.sleep(0.05)  # تجنب rate limit (تصحيح نكات كل الأعضاء)
+                await asyncio.sleep(0.05)  # avoid rate limit (fix for large member lists)
             except Exception as e:
                 logger.debug(f"sync_all_nicknames skip {member.id}: {e}")
         if updated:
@@ -595,21 +589,20 @@ async def sync_all_nicknames(guild):
         logger.warning(f"{title} failed for {guild.name}: {e}")
 
 async def setup_rank_roles_permissions(guild):
-    """🆕 ينشئ كل الـ roles ويحدّث صلاحيات Waiting Prv و SoundBoard.
-    تُستدعى من !!setup.
-    """
-    # أنشئ الـ roles
+    """🆕 roles Waiting Prv SoundBoard.
+!!setup."""
+    # create the roles
     for tier, data in RANK_TITLES.items():
         await create_role_if_not_exists(guild, data["name"], data["color"])
 
-    # 🆕 حدّث صلاحيات غرف Waiting Prv — أعطِ Best Player + Goated صلاحية Connect
+    # update Waiting Prv permissions - grant Best Player + Goated the Connect permission
     for role in guild.roles:
         if role.name in [RANK_TITLES[1]["name"], RANK_TITLES[2]["name"]]:
-            # اجلب كل غرف Waiting Prv
+            # fetch all Waiting Prv rooms
             for ch in guild.voice_channels:
                 if WAITING_PRV_CATEGORY_HINT.lower() in ch.name.lower():
                     try:
-                        # أعطِ role صلاحية Connect
+                        # grant the role Connect permission
                         overwrite = ch.overwrites_for(role)
                         overwrite.connect = True
                         overwrite.view_channel = True
@@ -625,23 +618,22 @@ async def setup_rank_roles_permissions(guild):
     logger.info(f"✅ Rank roles setup complete in {guild.name}")
 
 def sanitize_user_text(text, max_length=200):
-    """🔒 يمنع مدخلات اللاعبين من اختلاق Discord mentions.
+    """🔒 Prevents player input from creating Discord mentions.
 
-    السبب: مدخلات مثل سبب البلاغ تُخزَّن في DB ثم تُطبع داخل
-    `notify_admins()` / `!!reports` — فلو سمحنا بـ `<@&id>` أو `@everyone`
-    يقدر أي لاعب يعمل mass-ping للأدمنز أو أي role، ويكسر حد 1024 حرف
-    في حقل الـ embed ويسبب HTTPException 400.
+: DB
+`notify_admins()` / `!!reports` — `<@&id>` `@everyone`
+mass-ping role 1024
+embed HTTPException 400.
 
-    ✅FIX: نكسر بنية الـ mention بإدراج zero-width space بعد `‎@`
-    (يبقى النص مقروء بصرياً لكنه ما يفتح mention).
-    """
+✅FIX: mention zero-width space `‎@`
+( mention)."""
     if not text:
         return None
     cleaned = str(text)
     zws = "\u200b"  # zero-width space
-    # <@123> / <@!123> / <@&123>  ->  <@ZWS 123>  (ما عادش mention)
+    # <@123> / <@!123> / <@&123>  ->  <@ZWS 123>  (no longer triggers a mention)
     cleaned = re.sub(r"<([@!&#]+)(\d+)>", lambda m: f"<{m.group(1)}{zws}{m.group(2)}>", cleaned)
-    # @everyone / @here  ->  @ZWS everyone  (ما عادش mention)
+    # @everyone / @here  ->  @ZWS everyone  (no longer triggers a mention)
     cleaned = re.sub(
         r"@(everyone|here)\b",
         lambda m: f"@{zws}{m.group(1)}",
@@ -652,25 +644,24 @@ def sanitize_user_text(text, max_length=200):
     return cleaned[:max_length] or None
 
 async def notify_admins(guild, title, description, color=None):
-    """🆕 يرسل رسالة تاغ للأدمنز وكل الـ roles العالية في قناة 🔇・Blacklisted.
-    (سابقاً كانت تُرسل إلى قناة match-results — الآن مخصصة للنتائج فقط).
-    ✅ يُتاغ: الأونر + كل من لديه Administrator / Manage Guild + أعلى role في السيرفر.
-    """
+    """🆕 roles 🔇 Blacklisted.
+( match-results — ).
+✅ : + Administrator / Manage Guild + role ."""
     try:
         if color is None:
             color = COLORS["error"]
         
-        # ✅ إصلاح: اجمع كل الـ roles العالية للتاغ
+        # fix: collect all relevant roles for the tag
         admin_mentions = []
         
-        # 1) ابحث عن role الأدمن بالاسم
+        # 1) look up the admin role by name
         admin_role = None
         for role in guild.roles:
             if role.name.lower() == ADMIN_ROLE_NAME.lower():
                 admin_role = role
                 break
         
-        # 2) ابحث عن كل roles اللي فيها Administrator أو Manage Guild
+        # 2) find all roles with Administrator or Manage Guild
         high_roles = []
         for role in guild.roles:
             if role == guild.default_role or role.is_bot_managed() or role.is_integration():
@@ -678,38 +669,38 @@ async def notify_admins(guild, title, description, color=None):
             if role.permissions.administrator or role.permissions.manage_guild:
                 high_roles.append(role)
         
-        # 3) ابحث عن أعلى role في السيرفر (الأونر واللي تحته)
+        # 3) find the highest role in the server (the owner and those below it)
         if guild.roles:
-            # رتب الـ roles من الأعلى للأقل
+            # sort roles from highest to lowest
             sorted_roles = sorted([r for r in guild.roles if r != guild.default_role and not r.is_bot_managed() and not r.is_integration()], key=lambda r: r.position, reverse=True)
-            # خذ أعلى 3 roles (الأونر واللي تحته)
+            # take the top 3 roles (the owner and those below)
             for role in sorted_roles[:3]:
                 if role not in high_roles:
                     high_roles.append(role)
         
-        # 4) اجمع الـ mentions
+        # 4) collect the mentions
         if admin_role and admin_role not in high_roles:
             high_roles.append(admin_role)
         
         for role in high_roles:
             admin_mentions.append(role.mention)
         
-        # 5) أضف mention للأونر نفسه
+        # 5) add a mention for the owner as well
         if guild.owner:
             admin_mentions.append(guild.owner.mention)
         
-        # إزالة المكررات
+        # remove duplicates
         admin_mentions = list(dict.fromkeys(admin_mentions))
         admin_mention_str = " ".join(admin_mentions) if admin_mentions else "@here"
         
-        # 🆕 تُرسل التنبيهات إلى قناة البلاك ليست (طلب: قناة match-results = نتائج فقط)
+        # alerts are sent to the blacklist channel (request: match-results channel = results only)
         channel = _resolve_blacklist_channel(guild)
-        # fallback 1: أي قناة play
+        # fallback 1: any play channel
         if not channel:
             play_channels = db.get_play_channels(guild.id)
             if play_channels:
                 channel = guild.get_channel(play_channels[0])
-        # fallback 2: أول قناة نصية يقدر البوت يكتب فيها
+        # fallback 2: first text channel the bot can write to
         if not channel:
             for ch in guild.text_channels:
                 if ch.permissions_for(guild.me).send_messages:
@@ -737,9 +728,12 @@ async def notify_admins(guild, title, description, color=None):
 GUILD_SETTINGS_COLUMNS = {
     "form_channel_id", "announcement_role_id", "leaderboard_channel_id",
     "leaderboard_message_id", "auto_channel_category_id",
-    "report_channel_ids",  # 🆕 قائمة فويسات التفتيش المحددة من الأدمن (JSON array)
-    "blacklist_channel_id",   # 🆕 قناة عرض اللاعبين في البلاك ليست
-    "blacklist_message_id"    # 🆕 رسالة القائمة في تلك القناة
+    "report_channel_ids",  # list of investigation voice channels selected by an admin (JSON array)
+    "blacklist_channel_id",   # channel that displays blacklisted players
+    "blacklist_message_id",    # message holding the list in that channel
+    # P1: speeds up setup_jail_system and setup_blacklist_role by storing a "setup done" flag
+    "jail_setup_done",         # 1 if role + category + channels are created, 0/NULL otherwise
+    "blacklist_setup_done",    # 1 if Done Creating role black list
 }
 
 # ============================================================
@@ -747,19 +741,19 @@ GUILD_SETTINGS_COLUMNS = {
 # ============================================================
 class Database:
     def __init__(self, db_path=None):
-        # 🆕 دعم متغير البيئة DB_PATH لتحديد مسار قاعدة البيانات
-        # ✅ إصلاح: استخدم مساراً ثابتاً بجانب ملف البوت (وليس المجلد الحالي)
-        # هذا يمنع تصفير البيانات عند تشغيل البوت من مجلد مختلف
+        # support the DB_PATH environment variable to set the database path
+        # fix: use a fixed path next to the bot file (not the current working directory)
+        # this prevents data loss when the bot is started from a different directory
         if db_path:
             self.db_path = db_path
         elif os.getenv("DB_PATH"):
             self.db_path = os.getenv("DB_PATH")
         else:
-            # ✅ استخدم مساراً ثابتاً بجانب ملف البوت
+            # use a fixed path next to the bot file
             bot_dir = os.path.dirname(os.path.abspath(__file__))
             self.db_path = os.path.join(bot_dir, "freefire_bot.db")
         
-        # 🆕✅ إصلاح Railway/Render: أنشئ المجلد إذا لم يكن موجوداً!
+        # Railway/Render fix: create the directory if it does not exist
         db_dir = os.path.dirname(self.db_path)
         if db_dir and not os.path.exists(db_dir):
             try:
@@ -767,19 +761,19 @@ class Database:
                 logger.info(f"📁 Created database directory: {db_dir}")
             except Exception as e:
                 logger.warning(f"⚠️ Could not create directory {db_dir}: {e}")
-                # Fallback: استخدم المجلد الحالي
+                # fallback: use the current directory
                 self.db_path = os.path.join(os.getcwd(), "freefire_bot.db")
                 logger.info(f"💾 Falling back to: {self.db_path}")
         
-        # ✅ إصلاح: لو الـ DB غير موجودة، ابحث عن DB قديمة في مواقع شائعة
+        # fix: if the DB does not exist, look for an old DB in common locations
         if not os.path.exists(self.db_path):
-            # ابحث في المجلد الحالي
+            # look in the current directory
             cwd_db = os.path.join(os.getcwd(), "freefire_bot.db")
             if os.path.exists(cwd_db):
                 self.db_path = cwd_db
                 logger.info(f"💾 Found existing DB in current directory: {self.db_path}")
             else:
-                # ابحث في مجلدات شائعة
+                # look in common directories
                 for search_path in [
                     os.path.join(os.path.expanduser("~"), "freefire_bot.db"),
                     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "freefire_bot.db"),
@@ -790,15 +784,15 @@ class Database:
                         break
         
         logger.info(f"💾 Database path: {self.db_path}")
-        # 🆕 تحسينات أداء للسيرفرات المتعددة
+        # performance improvements for multi-server setups
         self._local = threading.local()
-        # ✅ cache لـ channels queries (يقلل DB queries بشكل كبير)
+        # cache for channel queries (greatly reduces DB queries)
         self._channels_cache = {}
         self._init_db()
         self._create_tables()
         self._migrate()
         
-        # ✅ إصلاح: احفظ عدد اللاعبين للتحقق من عدم التصفير
+        # fix: remember the player count to detect data loss
         try:
             conn = sqlite3.connect(self.db_path, timeout=30.0)
             count = conn.execute("SELECT COUNT(*) FROM players").fetchone()[0]
@@ -808,7 +802,7 @@ class Database:
             pass
 
     def _init_db(self):
-        """🆕 تهيئة قاعدة البيانات بـ WAL mode للأداء العالي."""
+        """🆕 WAL mode ."""
         conn = sqlite3.connect(self.db_path, timeout=30.0)
         try:
             conn.execute("PRAGMA journal_mode=WAL")
@@ -821,23 +815,22 @@ class Database:
             conn.close()
 
     def conn(self):
-        """🆕 يستخدم thread-local connection بدل فتح اتصال جديد كل مرة.
-        ✅ إصلاح: تحقق من صحة الاتصال قبل إرجاعه، وأعد فتحه لو مغلق.
-        """
+        """🆕 thread-local connection .
+✅ : ."""
         try:
             if hasattr(self._local, 'conn') and self._local.conn is not None:
-                # تحقق من أن الاتصال ما زال مفتوحاً
+                # check that the connection is still open
                 self._local.conn.execute("SELECT 1").fetchone()
                 return self._local.conn
         except sqlite3.Error:
-            # الاتصال مغلق أو تالف — أعد فتحه
+            # connection closed or broken - reopen it
             try:
                 if hasattr(self._local, 'conn') and self._local.conn is not None:
                     self._local.conn.close()
             except Exception:
                 pass
             self._local.conn = None
-        # افتح اتصال جديد
+        # open a new connection
         c = sqlite3.connect(self.db_path, timeout=30.0, isolation_level=None)
         c.row_factory = sqlite3.Row
         c.execute("PRAGMA journal_mode=WAL")
@@ -980,8 +973,8 @@ class Database:
                 ("players", "win_streak", "INTEGER DEFAULT 0"),
                 ("players", "lose_streak", "INTEGER DEFAULT 0"),
                 ("players", "max_win_streak", "INTEGER DEFAULT 0"),
-                ("players", "original_nickname", "TEXT DEFAULT NULL"),
                 ("players", "matches_hosted", "INTEGER DEFAULT 0"),
+                ("players", "original_nickname", "TEXT DEFAULT NULL"),
                 ("lobbies", "private_key", "TEXT DEFAULT NULL"),
                 ("lobbies", "first_joiner_id", "INTEGER DEFAULT NULL"),
                 # 🆕 FIX: store the StartVote button message_id so the
@@ -989,7 +982,7 @@ class Database:
                 ("lobbies", "start_vote_message_id", "INTEGER DEFAULT NULL"),
                 # 🆕 FIX: store the assigned investigation voice for each banned player
                 ("banned_players", "assigned_voice_id", "INTEGER DEFAULT NULL"),
-                # 🆕 قناة عرض البلاك ليست
+                # blacklist display channel
                 ("guild_settings", "blacklist_channel_id", "INTEGER DEFAULT NULL"),
                 ("guild_settings", "blacklist_message_id", "INTEGER DEFAULT NULL"),
             ]:
@@ -1019,15 +1012,23 @@ class Database:
             conn.commit()
         finally:
             pass  # thread-local connection
+        # ✅ P1: sync guild settings to cloud (for persistence across deploys)
+        if _CLOUD_AVAILABLE and is_cloud_enabled():
+            try:
+                settings = self.get_guild_settings(gid) or {}
+                settings["guild_id"] = gid
+                sync_guild_settings_to_cloud(gid, settings)
+            except Exception as e:
+                logger.warning(f"☁️ Failed to sync guild setting {key}: {e}")
 
     def add_play_channel(self, gid, cid):
         conn = self.conn()
         try:
             conn.execute("INSERT INTO play_channels(guild_id,channel_id) VALUES(?,?)", (gid, cid))
             conn.commit()
-            # ✅ FIX (MEDIUM): get_play_channels يخزّن cache تحت `play_ch_{gid}`،
-            # ولم يكن أي add/remove يمسحه ⇒ cache قديم حتى إعادة التشغيل
-            # (يؤثّر على RematchView و notify_admins التي تختار play_channels[0]).
+            # FIX (MEDIUM): get_play_channels caches under `play_ch_{gid}`,
+            # and no add/remove cleared it, so the cache stayed stale until restart
+            # (affects RematchView and notify_admins, which pick play_channels[0]).
             self._channels_cache.pop(f"play_ch_{gid}", None)
             return True
         except sqlite3.IntegrityError:
@@ -1040,14 +1041,14 @@ class Database:
         try:
             cur = conn.execute("DELETE FROM play_channels WHERE guild_id=? AND channel_id=?", (gid, cid))
             conn.commit()
-            # ✅ FIX (MEDIUM): نفس السبب — امسح cache قناة الـ play
+            # FIX (MEDIUM): same reason - clear the play channel cache
             self._channels_cache.pop(f"play_ch_{gid}", None)
             return cur.rowcount > 0
         finally:
             pass  # thread-local connection
 
     def get_play_channels(self, gid):
-        # ✅ cache لتحسين الأداء
+        # cache for better performance
         cache_key = f"play_ch_{gid}"
         cached = self._channels_cache.get(cache_key)
         if cached is not None:
@@ -1065,7 +1066,7 @@ class Database:
         try:
             conn.execute("INSERT INTO bot_commands_channels(guild_id,channel_id) VALUES(?,?)", (gid, cid))
             conn.commit()
-            # ✅ امسح cache بعد التعديل
+            # clear the cache after the update
             self._channels_cache.pop(f"cmd_ch_{gid}", None)
             return True
         except sqlite3.IntegrityError:
@@ -1078,14 +1079,14 @@ class Database:
         try:
             cur = conn.execute("DELETE FROM bot_commands_channels WHERE guild_id=? AND channel_id=?", (gid, cid))
             conn.commit()
-            # ✅ امسح cache بعد التعديل
+            # clear the cache after the update
             self._channels_cache.pop(f"cmd_ch_{gid}", None)
             return cur.rowcount > 0
         finally:
             pass  # thread-local connection
 
     def get_commands_channels(self, gid):
-        # ✅ cache لتحسين الأداء
+        # cache for better performance
         cache_key = f"cmd_ch_{gid}"
         cached = self._channels_cache.get(cache_key)
         if cached is not None:
@@ -1184,7 +1185,7 @@ class Database:
                 conn.commit()
                 return dict(conn.execute("SELECT * FROM players WHERE user_id=? AND guild_id=?", (uid, gid)).fetchone())
             else:
-                # 🆕 كل لاعب جديد يبدأ بـ RANK 1000 ونقاط 0
+                # every new player starts at RANK 1000 with 0 points
                 conn.execute("INSERT INTO players(user_id,guild_id,username,level,points) VALUES(?,?,?,?,0)", (uid, gid, name, STARTING_LEVEL))
                 conn.commit()
                 return dict(conn.execute("SELECT * FROM players WHERE user_id=? AND guild_id=?", (uid, gid)).fetchone())
@@ -1222,9 +1223,8 @@ class Database:
             pass  # thread-local connection
 
     def get_leaderboard(self, gid, limit=10):
-        """🆕 يرجع اللاعبين مرتبين حسب الترتيب الموحّد (متوافق مع recalculate_ranks). limit=None يرجع كل اللاعبين.
-        ✅ إصلاح V5: الترتيب مطابق تماماً لـ recalculate_ranks
-        """
+        """🆕 Returns all players sorted by unified ranking (compatible with recalculate_ranks). limit=None returns all players.
+✅ V5: recalculate_ranks"""
         ORDER = "points DESC, kills DESC, mvps DESC, wins DESC, losses ASC, matches_played ASC, user_id ASC"
         conn = self.conn()
         try:
@@ -1246,7 +1246,8 @@ class Database:
             cur = conn.execute("INSERT INTO lobbies(guild_id,creator_id,channel_id,game_mode,team1_players) VALUES(?,?,?,?,?)", (gid, creator, chan, mode, json.dumps([creator])))
             # ✅ FIX: increment matches_hosted counter for the creator
             conn.execute("UPDATE players SET matches_hosted = matches_hosted + 1 WHERE user_id=? AND guild_id=?", (creator, gid))
-            conn.commit(); return cur.lastrowid
+            conn.commit()
+            return cur.lastrowid
         finally:
             pass  # thread-local connection
 
@@ -1264,7 +1265,7 @@ class Database:
             pass  # thread-local connection
 
     def get_active_lobby_by_guild(self, gid):
-        """🆕 يرجع أحدث ماتش نشط (status=started) في السيرفر."""
+        """🆕 (status=started) ."""
         conn = self.conn()
         try:
             r = conn.execute(
@@ -1539,10 +1540,9 @@ class Database:
             pass  # thread-local connection
 
     def add_points(self, uid, gid, amount, skip_recalculate=False):
-        """🆕 يضيف/يخصم نقاط.
-        الرانك يُحسب من الترتيب في الـ leaderboard (1 = الأعلى نقاط).
-        skip_recalculate=True يمنع استدعاء recalculate_ranks (للتجميع في الماتشات).
-        """
+        """🆕 Adds/subtracts points.
+leaderboard (1 = ).
+skip_recalculate=True recalculate_ranks ( )."""
         conn = self.conn()
         try:
             conn.execute(
@@ -1556,9 +1556,9 @@ class Database:
             self.recalculate_ranks(gid)
 
     def update_match_player(self, uid, gid, points_delta, *, add_win=0, add_loss=0, add_match=0, add_kills=0, win_streak=0, lose_streak=0, max_win_streak=0, add_mvp=0, skip_recalculate=False):
-        """يحدّث النقاط والإحصائيات في استعلام واحد، ويرجع بيانات اللاعب المحدّثة.
-        ✅ إصلاح: يرجع بيانات اللاعب بعد recalculate_ranks (ليس قبله).
-        ✅ إصلاح V5: إضافة add_kills لتحديث عمود kills."""
+        """Updates points and stats in a single query, returns updated player data.
+✅ : recalculate_ranks ( ).
+✅ V5: add_kills kills."""
         conn = self.conn()
         try:
             conn.execute("""
@@ -1578,17 +1578,17 @@ class Database:
             conn.commit()
         finally:
             pass
-        # ✅ إصلاح: استدعِ recalculate_ranks قبل إرجاع البيانات
+        # fix: call recalculate_ranks before returning the data
         if not skip_recalculate:
             self.recalculate_ranks(gid)
-        # ✅ إصلاح: اقرأ البيانات بعد recalculate_ranks (ليس قبله)
+        # fix: read the data after recalculate_ranks (not before)
         conn = self.conn()
         r = conn.execute("SELECT * FROM players WHERE user_id=? AND guild_id=?", (uid, gid)).fetchone()
         result = dict(r) if r else None
         return result
 
     def get_top_points(self, gid):
-        """يرجع أعلى نقاط في السيرفر (لحساب التقدم نحو الرانك #1)."""
+        """ ( #1)."""
         conn = self.conn()
         try:
             r = conn.execute("SELECT points FROM players WHERE guild_id=? ORDER BY points DESC LIMIT 1", (gid,)).fetchone()
@@ -1597,20 +1597,19 @@ class Database:
             pass
 
     def recalculate_ranks(self, gid):
-        """V5: يُعيد حساب رانك كل اللاعبين.
-        - نقاط > 0 → رانك حسب الترتيب (1, 2, 3...)
-        - نقاط = 0 → رانك 1000 (افتراضي — لم يلعب أو متوازن)
-        - نقاط < 0 → رانك 1001, 1002... (عقوبة، كل لاعب له رانك فريد)
-        ✅ إصلاح V5: إضافة user_id ASC كفاصل تعادل أخير لتحديد النتائج
-        ✅ إصلاح V5: تحديث rank_pos أيضاً (كان يُتجاهل سابقاً)
-        """
-        # الترتيب الأساسي الموحّد — يُستخدم في كل مكان (recalculate_ranks, get_leaderboard, get_player_rank_position)
-        # user_id ASC يضمن تحديد النتائج عند تطابق كل المعايير السابقة
+        """V5: Recalculates rank for all players.
+- > 0 → (1, 2, 3...)
+- = 0 → 1000 ( — )
+- < 0 → 1001, 1002... ( )
+✅ V5: user_id ASC
+✅ V5: rank_pos ( )"""
+        # the single canonical ordering, used everywhere (recalculate_ranks, get_leaderboard, get_player_rank_position)
+        # user_id ASC gives a deterministic result when all previous criteria tie
         TIEBREAK_ORDER = "points DESC, kills DESC, mvps DESC, wins DESC, losses ASC, matches_played ASC, user_id ASC"
 
         conn = self.conn()
         try:
-            # 1) لاعبون بنقاط إيجابية → رانك 1, 2, 3...
+            # 1) players with positive points -> ranks 1, 2, 3...
             active = conn.execute(f"""
                 SELECT user_id,
                        ROW_NUMBER() OVER (ORDER BY {TIEBREAK_ORDER}) as rank_pos
@@ -1619,7 +1618,7 @@ class Database:
             """, (gid,)).fetchall()
             updates = [(p["rank_pos"], p["rank_pos"], p["user_id"]) for p in active]
 
-            # 2) لاعبون بنقاط صفر → رانك 1000 ثابت (الجدد + من صُفّر)
+            # 2) players with zero points -> fixed rank 1000 (new or reset players)
             zero_pts = conn.execute("""
                 SELECT user_id FROM players
                 WHERE guild_id=? AND points = 0
@@ -1627,7 +1626,7 @@ class Database:
             for p in zero_pts:
                 updates.append((STARTING_LEVEL, 0, p["user_id"]))
 
-            # 3) لاعبون بنقاط سالبة → رانك 1001, 1002... (عقوبة)
+            # 3) players with negative points -> ranks 1001, 1002... (penalty)
             negative = conn.execute(f"""
                 SELECT user_id,
                        ROW_NUMBER() OVER (ORDER BY {TIEBREAK_ORDER}) as rn
@@ -1644,7 +1643,7 @@ class Database:
         finally:
             pass  # thread-local connection
         
-        # ☁️ مزامنة للسحابة بعد كل recalculate_ranks
+        # cloud sync after every recalculate_ranks
         if _CLOUD_AVAILABLE and is_cloud_enabled():
             try:
                 players = self.get_leaderboard(gid, limit=None)
@@ -1654,13 +1653,12 @@ class Database:
                 logger.warning(f"☁️ Cloud sync failed in recalculate_ranks: {e}")
 
     def get_player_rank_position(self, uid, gid):
-        """V5: يرجع ترتيب اللاعب (متوافق تماماً مع recalculate_ranks).
-        - نقاط > 0 → ترتيبه بين الإيجابيين (1, 2, 3...)
-        - نقاط = 0 → 1000
-        - نقاط < 0 → 1001+ حسب عدد السلبيين قبله
-        ✅ إصلاح V5: معايير كسر التعادل مطابقة تماماً لـ recalculate_ranks:
-            points DESC, kills DESC, mvps DESC, wins DESC, losses ASC, matches_played ASC, user_id ASC
-        """
+        """V5: Returns player rank (fully compatible with recalculate_ranks).
+- > 0 → (1, 2, 3...)
+- = 0 → 1000
+- < 0 → 1001+
+✅ V5: recalculate_ranks:
+points DESC, kills DESC, mvps DESC, wins DESC, losses ASC, matches_played ASC, user_id ASC"""
         conn = self.conn()
         try:
             player = conn.execute(
@@ -1669,18 +1667,18 @@ class Database:
             ).fetchone()
             if not player:
                 return None
-            # نقاط صفر → رانك افتراضي
+            # zero points -> default rank
             if player["points"] == 0:
                 return STARTING_LEVEL
 
-            # ✅ V5: معايير كسر التعادل الموحّدة (متطابقة مع recalculate_ranks)
-            # points DESC → points > ? (أعلى نقاط أولاً)
-            # kills DESC → kills > ? (أكثر kills أولاً)
-            # mvps DESC → mvps > ? (أكثر mvps أولاً)
-            # wins DESC → wins > ? (أكثر فوز أولاً)
-            # losses ASC → losses < ? (أقل خسارة أولاً)
-            # matches_played ASC → matches_played < ? (أقل مباريات أولاً)
-            # user_id ASC → user_id < ? (أقل ID أولاً — للتحديد)
+            # V5: unified tiebreak criteria (identical to recalculate_ranks)
+            # points DESC -> points > ? (higher points first)
+            # kills DESC -> kills > ? (more kills first)
+            # mvps DESC -> mvps > ? (more MVPs first)
+            # wins DESC -> wins > ? (more wins first)
+            # losses ASC -> losses < ? (fewer losses first)
+            # matches_played ASC -> matches_played < ? (fewer matches first)
+            # user_id ASC -> user_id < ? (lower ID first - deterministic)
             p = player  # shortcut
             tiebreak_sql = """(
                 points > ? OR
@@ -1701,7 +1699,7 @@ class Database:
                 p["points"], p["kills"], p["mvps"], p["wins"], p["losses"], p["matches_played"], uid
             )
 
-            # نقاط سالبة → 1001 + ترتيبه بين السلبيين
+            # negative points -> 1001 + position among the negatives
             if p["points"] < 0:
                 higher_neg = conn.execute(
                     f"SELECT COUNT(*) FROM players WHERE guild_id=? AND points < 0 AND {tiebreak_sql}",
@@ -1709,7 +1707,7 @@ class Database:
                 ).fetchone()[0]
                 return STARTING_LEVEL + higher_neg + 1
 
-            # نقاط إيجابية → عدّ من فوقه
+            # positive points -> count the players above
             higher = conn.execute(
                 f"SELECT COUNT(*) FROM players WHERE guild_id=? AND points > 0 AND {tiebreak_sql}",
                 (gid,) + tiebreak_params
@@ -1719,11 +1717,14 @@ class Database:
             pass  # thread-local connection
 
     # ============================================================
-    # 🆕 REPORTS & BANS — نظام البلاغات والحظر
+    # 🆕 REPORTS & BANS — Reports & Bans System
     # ============================================================
     def add_report(self, gid, reporter_id, reported_id, lobby_id=None, reason=None):
-        """يسجل بلاغ. يرجع (True, total_count) لو نجح، (False, total_count) لو مكرر."""
+        """Logs a report. Returns (True, total_count) on success, (False, total_count) if duplicate.
+        ✅ P1: sync reports to cloud after each successful report."""
         conn = self.conn()
+        added = False
+        total = 0
         try:
             try:
                 conn.execute(
@@ -1733,17 +1734,28 @@ class Database:
                 conn.commit()
                 added = True
             except sqlite3.IntegrityError:
-                added = False  # بلّغ من قبل على نفس اللاعب
+                added = False  # already reported by the same player
             total = conn.execute(
                 "SELECT COUNT(*) FROM player_reports WHERE guild_id=? AND reported_id=?",
                 (gid, reported_id)
             ).fetchone()[0]
-            return added, total
         finally:
             pass  # thread-local connection
+        # ✅ P1: sync reports to cloud (best-effort, after DB write)
+        if added and _CLOUD_AVAILABLE and is_cloud_enabled():
+            try:
+                all_reports = conn.execute(
+                    "SELECT * FROM player_reports WHERE guild_id=?",
+                    (gid,)
+                ).fetchall()
+                reports_list = [dict(r) for r in all_reports]
+                sync_reports_to_cloud(gid, reports_list)
+            except Exception as e:
+                logger.warning(f"☁️ Failed to sync reports (after add): {e}")
+        return added, total
 
     def get_reports_count(self, gid, reported_id):
-        """يرجع عدد البلاغات على لاعب."""
+        """Returns report count for a player."""
         conn = self.conn()
         try:
             return conn.execute(
@@ -1754,7 +1766,7 @@ class Database:
             pass  # thread-local connection
 
     def get_reports_for_player(self, gid, reported_id):
-        """يرجع قائمة البلاغات على لاعب."""
+        """Returns report list for a player."""
         conn = self.conn()
         try:
             return [dict(x) for x in conn.execute(
@@ -1765,7 +1777,8 @@ class Database:
             pass  # thread-local connection
 
     def clear_reports(self, gid, reported_id):
-        """يحذف كل البلاغات على لاعب (بعد فك الحظر مثلاً)."""
+        """Deletes all reports on a player (e.g., after unban).
+        ✅ P1: sync reports to cloud after clearing."""
         conn = self.conn()
         try:
             conn.execute(
@@ -1775,12 +1788,24 @@ class Database:
             conn.commit()
         finally:
             pass  # thread-local connection
+        # ✅ P1: sync reports to cloud
+        if _CLOUD_AVAILABLE and is_cloud_enabled():
+            try:
+                all_reports = conn.execute(
+                    "SELECT * FROM player_reports WHERE guild_id=?",
+                    (gid,)
+                ).fetchall()
+                reports_list = [dict(r) for r in all_reports]
+                sync_reports_to_cloud(gid, reports_list)
+            except Exception as e:
+                logger.warning(f"☁️ Failed to sync reports (after clear): {e}")
 
     def ban_player(self, gid, user_id, reason=None, banned_by=None, report_count=0, assigned_voice_id=None):
-        """يحظر لاعب من استخدام البوت + يحدد فويس التفتيش المخصص."""
+        """Bans player from using bot + sets custom investigation voice.
+        ✅ P1: sync bans to cloud after each ban."""
         conn = self.conn()
         try:
-            # 🆕 احفظ الـ assigned_voice_id لو موجود، وإلا احتفظ بالقديم
+            # keep the assigned_voice_id if it exists, otherwise keep the old one
             existing = conn.execute(
                 "SELECT assigned_voice_id FROM banned_players WHERE guild_id=? AND user_id=?",
                 (gid, user_id)
@@ -1794,9 +1819,16 @@ class Database:
             conn.commit()
         finally:
             pass  # thread-local connection
+        # ✅ P1: sync bans to cloud
+        if _CLOUD_AVAILABLE and is_cloud_enabled():
+            try:
+                bans = self.get_banned_players(gid)
+                sync_bans_to_cloud(gid, bans)
+            except Exception as e:
+                logger.warning(f"☁️ Failed to sync bans (after ban): {e}")
 
     def set_banned_voice(self, gid, user_id, voice_id):
-        """🆕 يحدد فويس التفتيش المخصص للاعب المحظور."""
+        """🆕 ."""
         conn = self.conn()
         try:
             conn.execute(
@@ -1808,7 +1840,8 @@ class Database:
             pass  # thread-local connection
 
     def unban_player(self, gid, user_id):
-        """يفك حظر لاعب."""
+        """Unbans player.
+        ✅ P1: sync bans to cloud after unban."""
         conn = self.conn()
         try:
             conn.execute(
@@ -1818,9 +1851,16 @@ class Database:
             conn.commit()
         finally:
             pass  # thread-local connection
+        # ✅ P1: sync bans to cloud
+        if _CLOUD_AVAILABLE and is_cloud_enabled():
+            try:
+                bans = self.get_banned_players(gid)
+                sync_bans_to_cloud(gid, bans)
+            except Exception as e:
+                logger.warning(f"☁️ Failed to sync bans (after unban): {e}")
 
     def is_player_banned(self, gid, user_id):
-        """يرجع True لو اللاعب محظور + بيانات الحظر (بما فيها assigned_voice_id)."""
+        """Returns True if player is banned + ban info (including assigned_voice_id)."""
         conn = self.conn()
         try:
             r = conn.execute(
@@ -1832,7 +1872,7 @@ class Database:
             pass  # thread-local connection
 
     def get_banned_players(self, gid):
-        """يرجع كل اللاعبين المحظورين في السيرفر."""
+        """ ."""
         conn = self.conn()
         try:
             return [dict(x) for x in conn.execute(
@@ -1843,10 +1883,10 @@ class Database:
             pass  # thread-local connection
 
     # ============================================================
-    # 🆕 REPORT CHANNELS — فويسات التفتيش المحددة من الأدمن
+    # REPORT CHANNELS - investigation voice channels selected by an admin
     # ============================================================
     def get_report_channels(self, gid):
-        """يرجع قائمة فويسات التفتيش المحددة من الأدمن."""
+        """ ."""
         conn = self.conn()
         try:
             r = conn.execute(
@@ -1863,7 +1903,7 @@ class Database:
             pass  # thread-local connection
 
     def set_report_channels(self, gid, channel_ids):
-        """يحفظ قائمة فويسات التفتيش."""
+        """ ."""
         conn = self.conn()
         try:
             conn.execute("INSERT OR IGNORE INTO guild_settings(guild_id) VALUES(?)", (gid,))
@@ -1876,7 +1916,7 @@ class Database:
             pass  # thread-local connection
 
     def add_report_channel(self, gid, channel_id):
-        """يضيف فويس تفتيش للقائمة."""
+        """ ."""
         channels = self.get_report_channels(gid)
         if channel_id not in channels:
             channels.append(channel_id)
@@ -1885,7 +1925,7 @@ class Database:
         return False
 
     def remove_report_channel(self, gid, channel_id):
-        """يحذف فويس تفتيش من القائمة."""
+        """ ."""
         channels = self.get_report_channels(gid)
         if channel_id in channels:
             channels.remove(channel_id)
@@ -1894,11 +1934,11 @@ class Database:
         return False
 
     # ============================================================
-    # 🆕 BLACKLIST SYSTEM — نظام البلاك ليست
+    # 🆕 BLACKLIST SYSTEM — Blacklist System
     # ============================================================
     def is_player_blacklisted(self, gid, user_id):
-        """يرجع True لو اللاعب في البلاك ليست (لم تنتهِ مدته).
-        ✅ P1: استخدام time.time() بدل datetime.now() — timezone-independent."""
+        """Returns True if player is blacklisted (duration not expired).
+✅ P1: time.time() datetime.now() — timezone-independent."""
         conn = self.conn()
         try:
             r = conn.execute(
@@ -1906,15 +1946,15 @@ class Database:
                 (gid, user_id)
             ).fetchone()
             if r:
-                # ✅ P1: expires_at محفوظ كـ ISO من datetime.fromtimestamp(expires).isoformat()
-                # نُقارن مع now() بنفس الـ timezone المحلي
+                # expires_at is stored as ISO from datetime.fromtimestamp(expires).isoformat()
+                # compare with now() in the same local timezone
                 try:
                     expires = datetime.fromisoformat(r["expires_at"])
                     if datetime.now() < expires:
                         return True
                 except (ValueError, TypeError):
                     pass
-                # انتهت المدة — احذف السجل
+                # duration expired - delete the record
                 conn.execute(
                     "DELETE FROM blacklist_log WHERE guild_id=? AND user_id=?",
                     (gid, user_id)
@@ -1925,8 +1965,9 @@ class Database:
             pass
 
     def blacklist_player(self, gid, user_id, reason=None):
-        """يضيف لاعباً إلى البلاك ليست لمدة BLACKLIST_DURATION ثانية.
-        ✅ P1: استخدام time.time() لحساب expires — timezone-independent."""
+        """Adds player to blacklist for BLACKLIST_DURATION seconds.
+✅ P1: time.time() expires — timezone-independent.
+✅ P1: sync blacklist to cloud after each addition."""
         expires_unix = time.time() + BLACKLIST_DURATION
         expires_iso = datetime.fromtimestamp(expires_unix).isoformat()
         conn = self.conn()
@@ -1939,9 +1980,17 @@ class Database:
             return expires_unix
         finally:
             pass
+        # ✅ P1: sync blacklist to cloud (best-effort, after DB write)
+        if _CLOUD_AVAILABLE and is_cloud_enabled():
+            try:
+                blacklisted = self.get_blacklisted_players(gid)
+                sync_blacklist_to_cloud(gid, blacklisted)
+            except Exception as e:
+                logger.warning(f"☁️ Failed to sync blacklist (after add): {e}")
 
     def remove_blacklist(self, gid, user_id):
-        """يزيل لاعباً من البلاك ليست."""
+        """Removes player from blacklist.
+        ✅ P1: sync blacklist to cloud after removal."""
         conn = self.conn()
         try:
             conn.execute(
@@ -1951,9 +2000,16 @@ class Database:
             conn.commit()
         finally:
             pass
+        # ✅ P1: sync blacklist to cloud
+        if _CLOUD_AVAILABLE and is_cloud_enabled():
+            try:
+                blacklisted = self.get_blacklisted_players(gid)
+                sync_blacklist_to_cloud(gid, blacklisted)
+            except Exception as e:
+                logger.warning(f"☁️ Failed to sync blacklist (after remove): {e}")
 
     def get_blacklisted_players(self, gid):
-        """يرجع كل اللاعبين في البلاك ليست (الذين لم تنتهِ مدتهم)."""
+        """Returns all blacklisted players (whose duration hasn't expired)."""
         conn = self.conn()
         try:
             now = datetime.now().isoformat()
@@ -1966,7 +2022,7 @@ class Database:
 
 db = Database()
 
-# ☁️ Cloud Restore — استرجاع البيانات من السحابة عند بدء التشغيل
+# Cloud Restore - restore data from the cloud at startup
 if _CLOUD_AVAILABLE and is_cloud_enabled():
     logger.info("☁️ Cloud backup enabled — checking for data to restore...")
     auto_restore_database(db)
@@ -1976,31 +2032,31 @@ else:
 active_lobby_messages = {}
 lobby_timeout_timers = {}
 vote_timeout_timers = {}
-_admin_mvp_results = {}  # 🆕 lobby_id -> {"winner": user_id, "loser": user_id} لأوامر !!w / !!l
-_lobby_embed_hide_timers = {}  # 🆕 مؤقتات إخفاء رسالة اللوبي تلقائياً بعد دقيقتين (عدد غير كافٍ)
+_admin_mvp_results = {}  # lobby_id -> {"winner": user_id, "loser": user_id} for the !!w / !!l commands
+_lobby_embed_hide_timers = {}  # timers that automatically hide the lobby message after 2 minutes (not enough players)
 
-# 🆕 رسائل "Create Lobby" — تختفي تلقائياً
+# "Create Lobby" prompt messages - auto-deleted
 # _create_prompt_msgs : {prompt_message_id: {"guild_id", "channel_id", "user_id"}}
-# _create_prompt_timers : {prompt_message_id: asyncio.Task}  — مؤقت الدقيقة
-# _lobby_prompt_msg : {lobby_id: prompt_message_id}  — ربط الرسالة باللوبي (تنتظر 끝 الروم)
+# _create_prompt_timers : {prompt_message_id: asyncio.Task}  - one-minute timer
+# _lobby_prompt_msg : {lobby_id: prompt_message_id}  - links the prompt to the lobby (waiting for the end of the match)
 _create_prompt_msgs = {}
 _create_prompt_timers = {}
 _lobby_prompt_msg = {}
 
-# تخزين الفويس الأصلي لكل لاعب — {lobby_id: {user_id: original_voice_channel_id}}
-# يُستخدم لإرجاع اللاعبين لنفس الـ waiting room بعد انتهاء/إلغاء الماتش
+# stores each player's original voice channel - {lobby_id: {user_id: original_voice_channel_id}}
+# used to return players to the same waiting room after a match ends or is cancelled
 _original_voice_channels = {}
 
 # 🆕 BLACKLIST: Voice tracking — {guild_id: {user_id: {...}}}
 _blacklist_voice_tracking = {}
-# 🆕 BLACKLIST: مجموعة channel IDs للماتشات النشطة (للبحث السريع)
+# BLACKLIST: set of channel IDs of active matches (fast lookup)
 _active_match_voice_channels = set()
-# 🆕 BLACKLIST: مؤقتات الإزالة التلقائية — {guild_id: {user_id: timer_task}}
+# BLACKLIST: auto-removal timers - {guild_id: {user_id: timer_task}}
 _blacklist_auto_remove_timers = {}
-# 🆕 قفل إنشاء قناة البلاك ليست لكل سيرفر — يمنع تكرار القناة عند التنفيذ المتوازي
+# lock for blacklist channel creation per server - prevents duplicate channels under concurrent execution
 _blacklist_channel_locks = {}
-# 🆕 رسائل تدفق اللعب في قناة اللعب — {lobby_id: set((channel_id, message_id))}
-# تُحذف كلها تلقائياً عند انتهاء الماتش بأي طريقة (بما فيها "Match Ready")
+# play-flow messages in the play channel - {lobby_id: set((channel_id, message_id))}
+# all are deleted automatically when the match ends, however it ends (including "Match Ready")
 _lobby_flow_msgs = {}
 
 # ============================================================
@@ -2026,7 +2082,7 @@ def build_nickname_with_level(original_name, level):
     return f"{prefix}{clean[:NICKNAME_MAX_LENGTH - len(prefix)]}"
 
 def create_lobby_embed(lobby, guild):
-    """✦ Lobby Embed — V0 Redesign."""
+    """✦ Lobby Embed — V2 design matching reference video."""
     mode = lobby.get("game_mode", DEFAULT_MODE)
     mode_info = GAME_MODES.get(mode, GAME_MODES[DEFAULT_MODE])
     team_size = mode_info["team_size"]
@@ -2038,12 +2094,12 @@ def create_lobby_embed(lobby, guild):
     progress_pct = int((total / lobby_size) * 100) if lobby_size else 0
     progress_bar = make_progress_bar(total, lobby_size, length=12)
 
-    # V0: بطاقات اللاعبين (نمط نظيف)
+    # Player cards (clean style)
     def make_team_card(players, team_emoji, team_size_limit):
         if not players:
             slots = [f"⚫ *empty slot*" for _ in range(team_size_limit)]
             return "\n".join(slots)
-        lines = [f"{team_emoji} <@{pid}>" for pid in players[:team_size_limit]]
+        lines = [f"<@{pid}>" for pid in players[:team_size_limit]]
         empty = team_size_limit - len(lines)
         for _ in range(empty):
             lines.append(f"⚫ *empty slot*")
@@ -2052,7 +2108,7 @@ def create_lobby_embed(lobby, guild):
     t1_text = make_team_card(lobby["team1_players"], "🔴", team_size)
     t2_text = make_team_card(lobby["team2_players"], "🟢", team_size)
 
-    # حالة اللوبي (V0 style)
+    # Lobby status
     if total == 0:
         status_text = "⏳ Waiting for players..."
     elif total < lobby_size:
@@ -2060,34 +2116,30 @@ def create_lobby_embed(lobby, guild):
     else:
         status_text = "🎮 Match ready to start!"
 
-    # بناء الـ embed (V1 design)
+    # Build embed — V2 matching reference video
     host_member = guild.get_member(lobby['creator_id'])
     host_name = host_member.display_name if host_member else 'Unknown'
 
     embed = discord.Embed(
-        title=f"🎮 Free Fire • {mode.upper()} Lobby",
+        title=f"🎮 Free Fire {mode.upper()} Match",
         description=(
-            f"**Lobby** `#{lobby['id']}`\n"
-            f"`{progress_bar}`  `{total}/{lobby_size}`  ·  `{progress_pct}%`"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"| Match started by <@{lobby['creator_id']}>\n"
+            f"\n"
+            f"🔴 **Team 1 ({t1c}/{team_size})**\n"
+            f"{t1_text}\n"
+            f"\n"
+            f"🟢 **Team 2 ({t2c}/{team_size})**\n"
+            f"{t2_text}\n"
+            f"\n"
+            f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"📋 **Status:** {status_text}"
         ),
         color=COLORS["play"],
         timestamp=discord.utils.utcnow()
     )
 
-    embed.add_field(
-        name=f"🔴 Team 1 — `{t1c}/{team_size}`",
-        value=t1_text,
-        inline=True
-    )
-    embed.add_field(
-        name=f"🟢 Team 2 — `{t2c}/{team_size}`",
-        value=t2_text,
-        inline=True
-    )
-
-    embed.add_field(name="📋 Status", value=f"{status_text}", inline=False)
-
-    # معلومات الغرفة الخاصة
+    # Room private info
     pk = db.get_lobby_private_key(lobby['id'])
     room_id = lobby.get('room_id')
     if pk and not room_id:
@@ -2098,7 +2150,7 @@ def create_lobby_embed(lobby, guild):
         )
 
     embed.set_author(
-        name=f"Host: {host_name} · Match Lobby",
+        name=f"Host: {host_name}",
         icon_url=host_member.display_avatar.url if host_member else None
     )
     embed.set_footer(text=f"{BOT_FOOTER}  •  Lobby #{lobby['id']}")
@@ -2107,7 +2159,7 @@ def create_lobby_embed(lobby, guild):
     return embed
 
 def create_profile_embed(player, member=None, gid=None):
-    """♛ Profile Embed — V0 Redesign."""
+    """✦ Profile Embed — V2 design matching reference video (2x4 stats grid)."""
     level = player.get("level", STARTING_LEVEL)
     rank_color = get_rank_color(level)
     rank_title = get_rank_title(level)
@@ -2118,12 +2170,9 @@ def create_profile_embed(player, member=None, gid=None):
     mvp_title = get_mvp_title(mvps)
 
     wr = round((player["wins"] / max(player["matches_played"], 1)) * 100, 1)
-    wr_bar = make_winrate_bar(wr, length=10)
     win_streak = player.get("win_streak", 0)
     lose_streak = player.get("lose_streak", 0)
     max_streak = player.get("max_win_streak", 0)
-    kd_diff = player["wins"] - player["losses"]
-    kd_sign = "+" if kd_diff >= 0 else ""
 
     top_pts = db.get_top_points(gid) if gid else 0
     pts_to_next = max(0, top_pts - points) if top_pts > points else 0
@@ -2134,7 +2183,7 @@ def create_profile_embed(player, member=None, gid=None):
     name = member.display_name if member else player["username"]
     avatar_url = member.display_avatar.url if member else None
 
-    # V0: streak line
+    # Streak line
     if win_streak > 0:
         streak_display = f"> 🔥 Win streak: `{win_streak}` (best: `{max_streak}`)"
     elif lose_streak > 0:
@@ -2142,8 +2191,8 @@ def create_profile_embed(player, member=None, gid=None):
     else:
         streak_display = f"> 📊 Best streak: `{max_streak}`"
 
-    # V0: عنوان مع شارة
-    display_title = f"♛ {name}"
+    # Title with badge
+    display_title = f"👑 {name}"
     if mvp_badge:
         display_title += f" {mvp_badge}"
 
@@ -2158,24 +2207,29 @@ def create_profile_embed(player, member=None, gid=None):
         timestamp=discord.utils.utcnow()
     )
 
-    # V1: 3×2 stats grid (with matches_hosted)
-    embed.add_field(name="🏆 Wins",    value=f"`{player['wins']}`", inline=True)
-    embed.add_field(name="☠️ Losses",  value=f"`{player['losses']}`", inline=True)
-    embed.add_field(name="⚖️ W/L",     value=f"`{kd_sign}{kd_diff}`", inline=True)
+    # ✅ V2: 2×4 stats grid (8 metrics) — matching reference video
+    # Row 1: POINTS (large), WINS, LOSSES, MVPS
+    embed.add_field(name="💰 POINTS",  value=f"`{points:,}`",  inline=True)
+    embed.add_field(name="🏆 WINS",    value=f"`{player['wins']}`",  inline=True)
+    embed.add_field(name="☠️ LOSSES",  value=f"`{player['losses']}`", inline=True)
+    embed.add_field(name="🔱 MVPS",   value=f"`{mvps}`",  inline=True)
 
-    embed.add_field(name="🎮 Matches", value=f"`{player['matches_played']}`", inline=True)
-    embed.add_field(name="👑 Hosted",  value=f"`{player.get('matches_hosted', 0)}`", inline=True)
-    embed.add_field(name="🔱 MVPs",    value=f"`{mvps}`", inline=True)
+    # Row 2: MATCHES, HOSTED, WINRATE, RANK
+    hosted = player.get("matches_hosted", 0)  # if not tracked, will be 0
+    embed.add_field(name="🎮 MATCHES", value=f"`{player['matches_played']}`", inline=True)
+    embed.add_field(name="📋 HOSTED",  value=f"`{hosted}`",  inline=True)
+    embed.add_field(name="📊 WINRATE", value=f"`{wr}%`",  inline=True)
+    embed.add_field(name="🏅 RANK",    value=f"`#{level}`", inline=True)
 
-    # V1: Win rate bar
+    # Win rate status
     wr_status = "🔥 God Tier" if wr >= 70 else ("⭐ Pro" if wr >= 50 else ("🌱 Rising" if wr >= 30 else "☠️ Struggling"))
     embed.add_field(
         name=f"📊 Win Rate — `{wr}%` {wr_status}",
-        value=f"{wr_bar} `{player['wins']}/{player['matches_played']}`",
+        value=f"{streak_display}",
         inline=False
     )
 
-    # V1: التقدم نحو #1 / المتصدّر
+    # V1: progress toward #1 / the leader
     if pts_to_next > 0:
         embed.add_field(
             name="📈 Progress Toward `#1`",
@@ -2192,11 +2246,11 @@ def create_profile_embed(player, member=None, gid=None):
             inline=False
         )
 
-    # V1: MVP achievement
+    # MVP achievement
     if mvps > 0:
         badge_display = ""
-        if mvps >= 100:   badge_display = "🔱 🔱 🔱 LEGEND"
-        elif mvps >= 50:  badge_display = "💎 💎 DIAMOND"
+        if mvps >= 100:   badge_display = "🔱 LEGEND"
+        elif mvps >= 50:  badge_display = "💎 DIAMOND"
         elif mvps >= 20:  badge_display = "🏅 GOLD"
         elif mvps >= 5:   badge_display = "🥈 SILVER"
         else:              badge_display = "🥉 BRONZE"
@@ -2209,7 +2263,9 @@ def create_profile_embed(player, member=None, gid=None):
     embed.set_footer(text=f"{BOT_FOOTER}")
     if member and member.guild:
         embed = apply_branding(embed, member.guild)
-    embed.set_author(name="Player Profile")
+    embed.set_author(name="Player Profile", icon_url=avatar_url)
+    if avatar_url:
+        embed.set_thumbnail(url=avatar_url)  # ✅ bigger, more prominent player avatar
 
     return embed
 
@@ -2240,7 +2296,7 @@ async def update_member_nickname(member, level):
         logger.exception(f"update_member_nickname failed: {e}")
 
 async def update_leaderboard_channel(guild):
-    """◆ Leaderboard — V0 Redesign. يعرض النقاط والرانك معاً + يتحدث تلقائياً بعد كل ماتش."""
+    """◆ Leaderboard — V0 Redesign. + ."""
     try:
         settings = db.get_guild_settings(guild.id)
         if not settings or not settings.get("leaderboard_channel_id"):
@@ -2248,7 +2304,7 @@ async def update_leaderboard_channel(guild):
         channel = guild.get_channel(settings["leaderboard_channel_id"])
         if not channel:
             return
-        # 🆕 إخفاء اللاعبين في البلاك ليست من اللوحة (بدل عرضهم)
+        # hide blacklisted players from the leaderboard (instead of showing them)
         blacklisted_ids = {b["user_id"] for b in db.get_blacklisted_players(guild.id)}
         lb = db.get_leaderboard(guild.id, 25)
         lb = [p for p in lb if p["user_id"] not in blacklisted_ids][:10]
@@ -2280,7 +2336,7 @@ async def update_leaderboard_channel(guild):
                 wr = round((p["wins"] / max(p["matches_played"], 1)) * 100, 1)
                 wr_status = "🔥" if wr >= 70 else ("⭐" if wr >= 50 else "🌱")
                 pts_to_next = points_to_next_rank(p["points"], db, guild.id)
-                # V0: فاصل رفيع بين كل لاعب
+                # V0: thin separator between players
                 if i > 0:
                     desc += "──────────────────────\n"
                 next_rank_hint = f" · ⏭️ `{pts_to_next}` to #1" if pts_to_next > 0 else " · 🔱 At the top!"
@@ -2306,18 +2362,17 @@ async def update_leaderboard_channel(guild):
         logger.exception(f"update_leaderboard_channel failed: {e}")
 
 async def update_blacklist_channel(guild):
-    """🔇 يحدّث قناة "🔇・Blacklisted" التي تعرض اللاعبين في البلاك ليست.
-    يُستدعى بعد كل apply/remove blacklist وبعد الـ setup.
-    ⚡ إذا ما كانت القناة موجودة بعد، يُنشئها تحت كاتيجوري الـ TEXT.
-    """
+    """🔇"🔇 Blacklisted" .
+apply/remove blacklist setup.
+⚡ TEXT."""
     try:
         settings = db.get_guild_settings(guild.id)
         if not settings:
             return
-        # 🔒 قفل لكل سيرفر: يمنع إنشاء قناتين متوازيتين (سباق) عند تنفيذ أوامر متزامنة
+        # per-server lock: prevents two concurrent channel creations (race) when commands run simultaneously
         lock = _blacklist_channel_locks.setdefault(guild.id, asyncio.Lock())
         async with lock:
-            # 🆕 إزالة التكرارات (أسماء دقيقة أو متضمنة لكلمة blacklist — يغطي القنوات اليدوية)
+            # remove duplicates (exact or nested names containing the blacklist keyword - covers manually created channels)
             def _looks_like_blacklist_channel(ch):
                 lower = (ch.name or "").lower()
                 return ch.name == BLACKLIST_CHANNEL_NAME or "blacklist" in lower
@@ -2328,7 +2383,7 @@ async def update_blacklist_channel(guild):
             channel = None
             if settings.get("blacklist_channel_id"):
                 ref = guild.get_channel(settings["blacklist_channel_id"])
-                # ⚡ نستخدم القناة المرجعية فقط لو كانت فعلاً قناة بلاك ليست (لا نمسح إشارة خاطئة لقناة أخرى)
+                # use the reference channel only if it is actually a blacklist channel (do not wipe a valid reference to another channel)
                 if ref and _looks_like_blacklist_channel(ref):
                     channel = ref
             if not channel and exact:
@@ -2344,11 +2399,11 @@ async def update_blacklist_channel(guild):
                     except Exception as e:
                         logger.warning(f"🧹 Could not delete duplicate blacklist channel {extra.id}: {e}")
 
-            # ⚡ ثبّت قناة البلاك ليست الفعلية بعد التنظيف (آخر إشارة صحيحة)
+            # pin the actual blacklist channel after cleanup (last valid reference)
             if channel is not None:
                 db.set_guild_setting(guild.id, "blacklist_channel_id", channel.id)
             if not channel:
-                text_cat = discord.utils.get(guild.categories, name="🎮 FREE FIRE — TEXT")
+                text_cat = discord.utils.get(guild.categories, name="🎮 Free Fire Text")
                 try:
                     channel = await guild.create_text_channel(
                         BLACKLIST_CHANNEL_NAME, category=text_cat, topic="Blacklisted Players"
@@ -2362,27 +2417,27 @@ async def update_blacklist_channel(guild):
         blacklisted = db.get_blacklisted_players(guild.id)
         embed = discord.Embed(
             title="🔇 Blacklisted Players",
-            description=f"📊 **الإجمالي:** `{len(blacklisted)}`",
+            description=f"📊 **Total:** `{len(blacklisted)}`",
             color=COLORS["warning"] if blacklisted else COLORS["success"],
             timestamp=discord.utils.utcnow()
         )
         embed.set_author(name="Blacklist")
         if not blacklisted:
-            embed.description = "> ✅  لا يوجد لاعبون في البلاك ليست حالياً"
+            embed.description = "> ✅"
         else:
             for i, b in enumerate(blacklisted[:15], 1):
                 member = guild.get_member(b["user_id"])
                 name = member.display_name if member else f"User#{b['user_id']}"
                 mention = member.mention if member else f"<@{b['user_id']}>"
-                reason = b.get("reason") or "غير محدد"
+                reason = b.get("reason") or ""
                 expires = b.get("expires_at", "N/A")[:19] if b.get("expires_at") else "N/A"
                 embed.add_field(
                     name=f"#{i} — {name}",
-                    value=f"👤 {mention}\n📝 `{reason}`\n⏱️ ينتهي: `{expires}`",
+                    value=f"👤 {mention}\n📝 `{reason}`\n⏱️ Expires: `{expires}`",
                     inline=False
                 )
             if len(blacklisted) > 15:
-                embed.set_footer(text=f"{BOT_FOOTER}  •  و {len(blacklisted) - 15} لاعب آخر")
+                embed.set_footer(text=f"{BOT_FOOTER} • +{len(blacklisted) - 15} more")
         embed = apply_branding(embed, guild)
 
         msg_id = settings.get("blacklist_message_id")
@@ -2399,7 +2454,7 @@ async def update_blacklist_channel(guild):
         logger.exception(f"update_blacklist_channel failed: {e}")
 
 async def delete_message_safely(channel, message_id, reason=""):
-    """🆕 يحذف رسالة ويتعامل مع كل الأخطاء بوضوح (بدل ابتلاعها)."""
+    """🆕 ( )."""
     if channel is None or message_id is None:
         return False
     try:
@@ -2421,13 +2476,12 @@ async def delete_message_safely(channel, message_id, reason=""):
         return False
 
 def find_match_results_channel(guild):
-    """🆕 يبحث عن قناة النتائج المخصصة (match-results / match result / نتائج الماتش) في السيرفر.
-    تُرسل إليها نتيجة الماتش النهائية فقط — أي رسائل أخرى لن تذهب إليها.
-    """
+    """🆕 (match-results / match result / ) .
+— ."""
     try:
         for ch in guild.text_channels:
             name = (ch.name or "").lower().replace("_", " ").replace("-", " ").replace("・", " ")
-            if "match result" in name or "نتائج" in name or "result" in name:
+            if "match result" in name or "" in name or "result" in name:
                 return ch
         return None
     except Exception as e:
@@ -2435,7 +2489,7 @@ def find_match_results_channel(guild):
         return None
 
 def _resolve_blacklist_channel(guild):
-    """🆕 يرجع قناة 🔇・Blacklisted (من الإعدادات أو بالاسم) — أو None إن لم توجد."""
+    """🆕 🔇 Blacklisted ( ) — None ."""
     try:
         settings = db.get_guild_settings(guild.id)
         if settings and settings.get("blacklist_channel_id"):
@@ -2451,9 +2505,8 @@ def _resolve_blacklist_channel(guild):
         return None
 
 async def _post_match_result(guild, embed, channel):
-    """🆕 يرسل نتيجة الماتش إلى قناة النتائج المخصصة (match-results) إن وُجدت،
-    وإلا إلى القناة الأصلية — بحيث تكون قناة النتائج مخصصة للنتائج فقط.
-    """
+    """🆕 (match-results)
+— ."""
     mrs_ch = find_match_results_channel(guild)
     results_ch = mrs_ch or channel
     if results_ch:
@@ -2470,10 +2523,9 @@ async def _post_match_result(guild, embed, channel):
         logger.warning("⚠️ No channel to post match result")
 
 async def auto_hide_create_prompt(guild, msg, user_id):
-    """🆕 ينتظر CREATE_PROMPT_DELETE_AFTER ثم يحذف رسالة "Create Lobby"
-       إذا ما انشأ اللاعب الروم.
-       ✅ إذا انشأ الروم → ما نحذفها، تنتظر لآخر الماتش.
-    """
+    """🆕 Waits CREATE_PROMPT_DELETE_AFTER then deletes "Create Lobby" message
+.
+✅ → ."""
     prompt_id = msg.id
     try:
         await asyncio.sleep(CREATE_PROMPT_DELETE_AFTER)
@@ -2483,7 +2535,7 @@ async def auto_hide_create_prompt(guild, msg, user_id):
 
     _create_prompt_timers.pop(prompt_id, None)
 
-    # ✅ انربطت بلوبي حقيقي → خلّها لآخر الماتش
+    # linked to a real lobby - keep it until the match ends
     if prompt_id in _lobby_prompt_msg.values():
         logger.info(
             f"⏱️ Create prompt {prompt_id}: room created — keeping until the match ends"
@@ -2493,7 +2545,7 @@ async def auto_hide_create_prompt(guild, msg, user_id):
     _create_prompt_msgs.pop(prompt_id, None)
     await delete_message_safely(
         msg.channel, prompt_id,
-        reason=f"لم يتم إنشاء الروم خلال {CREATE_PROMPT_DELETE_AFTER} ثانية"
+        reason=f"{CREATE_PROMPT_DELETE_AFTER}"
     )
     logger.info(
         f"🧹 Auto-removed 'Create Lobby' message {prompt_id} — "
@@ -2501,7 +2553,7 @@ async def auto_hide_create_prompt(guild, msg, user_id):
     )
 
 async def _delete_create_prompt_for_lobby(lobby_id, guild=None):
-    """🆕 يحذف رسالة "Create Lobby" عند انتهاء اللوبي (تم / أُلغي / timeout)."""
+    """🆕"Create Lobby"( / / timeout)."""
     prompt_id = _lobby_prompt_msg.pop(lobby_id, None)
     if not prompt_id:
         return
@@ -2513,20 +2565,19 @@ async def _delete_create_prompt_for_lobby(lobby_id, guild=None):
         logger.warning(f"⚠️ Guild {meta['guild_id']} not found — can't delete prompt {prompt_id}")
         return
     ch = g.get_channel(meta["channel_id"])
-    await delete_message_safely(ch, prompt_id, reason=f"انتهى اللوبي #{lobby_id}")
+    await delete_message_safely(ch, prompt_id, reason=f"#{lobby_id}")
 
 async def _delete_lobby_embed_for_lobby(lobby_id, msg_ids=None, guild=None):
-    """🆕 يحذف رسالة اللوبي (الـ embed مع أزرار الانضمام) عند انتهاء اللوبي.
-    يُستدعى من cleanup_lobby_memory، ومن مؤقت الدقيقتين لو ما اكتمل العدد.
-    msg_ids: معرّفات الرسائل المطلوب حذفها (تُلتقط قبل مسح الـ dict).
-    """
+    """🆕 Deletes lobby message (embed with join buttons) when lobby ends.
+cleanup_lobby_memory .
+msg_ids: ( dict)."""
     if msg_ids is None:
         msg_ids = [k for k, v in active_lobby_messages.items() if v == lobby_id]
     lobby = db.get_lobby(lobby_id)
     if not lobby:
         return
-    # 🆕 لو الرسالة ما رُصدت في الذاكرة (مثلاً لوبي قديم قبل إعادة التشغيل)
-    # → استخدم message_id المحفوظ في DB لضمان الحذف
+    # if the message was not found in memory (e.g. an old lobby from before a restart)
+    # -> use the message_id stored in the DB to guarantee deletion
     if not msg_ids and lobby.get("message_id"):
         msg_ids = [lobby["message_id"]]
     if not msg_ids:
@@ -2537,38 +2588,37 @@ async def _delete_lobby_embed_for_lobby(lobby_id, msg_ids=None, guild=None):
     ch = g.get_channel(lobby["channel_id"])
     for mid in msg_ids:
         active_lobby_messages.pop(mid, None)
-        await delete_message_safely(ch, mid, reason=f"انتهى اللوبي #{lobby_id}")
+        await delete_message_safely(ch, mid, reason=f"#{lobby_id}")
 
 def register_lobby_flow_msg(lobby_id, channel_id, message_id):
-    """🆕 يسجّل رسالة من تدفق اللعب (إنشاء/انضمام/Match Ready...) في قناة اللعب
-    لتُحذف كلها تلقائياً عند انتهاء الماتش بأي طريقة."""
+    """🆕 (//Match Ready...)
+."""
     if not lobby_id or not message_id:
         return
     _lobby_flow_msgs.setdefault(lobby_id, set()).add((channel_id, message_id))
 
 async def _delete_lobby_flow_msgs(lobby_id):
-    """🆕 يحذف كل رسائل تدفق اللعب المسجّلة للوبي عند انتهائه (بأي طريقة)."""
+    """🆕 ( )."""
     flow = _lobby_flow_msgs.pop(lobby_id, None)
     if not flow:
         return
     for ch_id, mid in list(flow):
         ch = bot.get_channel(ch_id)
-        await delete_message_safely(ch, mid, reason=f"انتهى اللوبي #{lobby_id} (flow)")
+        await delete_message_safely(ch, mid, reason=f"#{lobby_id} (flow)")
 
 async def _auto_hide_idle_lobby_embed(lobby_id, guild):
-    """🆕 بعد دقيقتين: لو اللوبي لسا waiting (ما اكتمل العدد) → احذف رسالته
-    وألغِ اللوبي حتى لا يعلق اللاعبون في لوبي لا يمكن الانضمام إليه.
-    َيعمل مرة واحدة فقط (يُحذف من المؤقتات عند التنفيذ أو الإلغاء).
-    """
+    """🆕 After 2 minutes: if lobby is still waiting (not full) → delete its message
+.
+( )."""
     try:
         await asyncio.sleep(TEMP_EMBED_DELETE_AFTER)
         lobby = db.get_lobby(lobby_id)
         if not lobby or lobby["status"] != "waiting":
             _lobby_embed_hide_timers.pop(lobby_id, None)
             return
-        # أزِل مؤقّتنا أولاً حتى لا يُلغي cleanup_lobby_memory هذه المهمة نفسها
+        # remove our timer first so cleanup_lobby_memory does not cancel this same task
         _lobby_embed_hide_timers.pop(lobby_id, None)
-        # ما اكتمل العدد خلال دقيقتين → أغلق اللوبي + احذف الرسالة
+        # if the player count did not complete within 2 minutes -> close the lobby and delete the message
         db.update_lobby_status(lobby_id, "cancelled")
         cleanup_lobby_memory(lobby_id)
         ch = guild.get_channel(lobby["channel_id"])
@@ -2576,8 +2626,8 @@ async def _auto_hide_idle_lobby_embed(lobby_id, guild):
             closed_embed = discord.Embed(
                 title="⏰ Lobby Closed — Not Enough Players",
                 description=(
-                    f"لم يكتمل العدد المطلوب خلال **{TEMP_EMBED_DELETE_AFTER // 60} دقيقة**.\n"
-                    f"💡 استخدم `{PREFIX}play 4v4` لبدء ماتش جديد."
+                    f"Required player count not reached within **{TEMP_EMBED_DELETE_AFTER // 60} minutes**.\n"
+                    f"💡 Use `{PREFIX}play 4v4` to open a new lobby."
                 ),
                 color=COLORS["warning"],
                 timestamp=discord.utils.utcnow()
@@ -2614,24 +2664,24 @@ def cleanup_lobby_memory(lobby_id):
     except Exception:
         pass
 
-    # 🆕 احذف رسالة "Create Lobby" المرتبطة بهذا اللوبي
+    # delete the "Create Lobby" message linked to this lobby
     if lobby_id in _lobby_prompt_msg:
         try:
             asyncio.create_task(_delete_create_prompt_for_lobby(lobby_id))
         except RuntimeError:
-            # ما في event loop شغّال — نظّف على الأقل
+            # no running event loop - clean up at least the memory
             pid = _lobby_prompt_msg.pop(lobby_id, None)
             if pid:
                 _create_prompt_msgs.pop(pid, None)
 
-    # 🆕 احذف رسالة اللوبي (الـ embed) الفعلية عند انتهاء اللوبي
+    # delete the actual lobby message (the embed) when the lobby ends
     if to_remove:
         try:
             asyncio.create_task(_delete_lobby_embed_for_lobby(lobby_id, msg_ids=list(to_remove)))
         except RuntimeError:
             pass
 
-    # 🆕 احذف كل رسائل تدفق اللعب المسجّلة (Match Ready / أي رسائل أخرى في قناة اللعب)
+    # delete all registered play-flow messages (Match Ready / any other messages in the play channel)
     if lobby_id in _lobby_flow_msgs:
         try:
             asyncio.create_task(_delete_lobby_flow_msgs(lobby_id))
@@ -2643,7 +2693,7 @@ def cleanup_lobby_memory(lobby_id):
 # ============================================================
 
 async def create_match_channels(guild, lobby, lobby_id):
-    """ينشئ Category جديدة + فويسات + شات عام لكل ماتش."""
+    """ Category + + ."""
     cat_name = f"🎮 Match #{lobby_id}"
     cat = await guild.create_category(cat_name, overwrites={
         guild.default_role: discord.PermissionOverwrite(read_messages=False, connect=False),
@@ -2677,32 +2727,31 @@ async def create_match_channels(guild, lobby, lobby_id):
         if m:
             t2_overwrites[m] = discord.PermissionOverwrite(connect=True, speak=True, stream=True)
 
-    t1_voice = await guild.create_voice_channel("『🎮』︱ᴛᴇᴀᴍ ɪ", category=cat, overwrites=t1_overwrites)
-    t2_voice = await guild.create_voice_channel("『🎮』︱ᴛᴇᴀᴍ ɪɪ", category=cat, overwrites=t2_overwrites)
-    general_text = await guild.create_text_channel("💬・Teams chat", category=cat, overwrites=general_overwrites)
+    t1_voice = await guild.create_voice_channel("🔴 Team 1", category=cat, overwrites=t1_overwrites)
+    t2_voice = await guild.create_voice_channel("🟢 Team 2", category=cat, overwrites=t2_overwrites)
+    general_text = await guild.create_text_channel("💬 Teams Chat", category=cat, overwrites=general_overwrites)
 
     db.save_match_channels(lobby_id, guild.id, cat.id, t1_voice.id, general_text.id, t2_voice.id, general_text.id)
-    # 🆕 سجل الفويسات في مجموعة البلاك ليست المتابعة
+    # register voices in the tracked blacklist set
     _active_match_voice_channels.add(t1_voice.id)
     _active_match_voice_channels.add(t2_voice.id)
     return {"category": cat, "team1_voice": t1_voice, "team1_text": general_text, "team2_voice": t2_voice, "team2_text": general_text, "general_text": general_text}
 
 async def create_banned_voice_channels(guild):
-    """🆕 ينشئ كاتيجوري + 3 فويسات للمحظورين (للتفتيش).
-    يستخدم db لـ cache الـ channel IDs في guild_settings.
-    """
+    """🆕 Creates category + 3 voices for banned players (investigation).
+db cache channel IDs guild_settings."""
     cat = discord.utils.get(guild.categories, name=REPORT_CATEGORY_NAME)
     if not cat:
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False, connect=False),
             guild.me: discord.PermissionOverwrite(view_channel=True, connect=True, manage_channels=True, move_members=True),
         }
-        # الأدمن يقدر يدخل
+        # admins can join
         for role in guild.roles:
             if role.permissions.administrator or role.permissions.manage_guild:
                 overwrites[role] = discord.PermissionOverwrite(view_channel=True, connect=True, move_members=True)
         cat = await guild.create_category(REPORT_CATEGORY_NAME, overwrites=overwrites)
-    # انشئ الفويسات إن لم تكن موجودة
+    # create the voices if they do not exist
     channel_ids = []
     for i in range(1, REPORT_CHANNELS_COUNT + 1):
         ch_name = f"⚠️  Investigation {i}"
@@ -2720,12 +2769,11 @@ async def create_banned_voice_channels(guild):
     return channel_ids
 
 async def move_to_banned_channels(guild, member, assign_permanent=False):
-    """🆕 ينقل لاعب محظور لأول فويس تفتيش متاح.
-    أولوية: الفويسات المحددة من الأدمن (db.get_report_channels)
-    fallback: إنشاء فويسات تلقائية لو ما فيه فويسات محددة
-    لو assign_permanent=True، يحفظ الفويس المخصص للاعب في الـ DB
-    """
-    # 🆕 لو اللاعب عنده فويس مخصص محفوظ، استخدمه أولاً
+    """🆕 Moves banned player to first available investigation voice.
+: (db.get_report_channels)
+fallback:
+assign_permanent=True DB"""
+    # if the player has a saved custom voice, use it first
     ban_info = db.is_player_banned(guild.id, member.id)
     if ban_info and ban_info.get("assigned_voice_id"):
         assigned_ch = guild.get_channel(ban_info["assigned_voice_id"])
@@ -2734,9 +2782,9 @@ async def move_to_banned_channels(guild, member, assign_permanent=False):
                 await member.move_to(assigned_ch)
                 return assigned_ch
             except (discord.HTTPException, discord.Forbidden):
-                pass  # وقع للبحث عن فويس جديد
+                pass  # fall through to searching for a new voice
 
-    # 🆕 استخدم الفويسات المحددة من الأدمن أولاً
+    # use the voices selected by an admin first
     admin_channel_ids = db.get_report_channels(guild.id)
     chosen_channel = None
     if admin_channel_ids:
@@ -2751,7 +2799,7 @@ async def move_to_banned_channels(guild, member, assign_permanent=False):
                     continue
         if not chosen_channel:
             logger.warning(f"All admin-set report channels failed for guild {guild.id}, falling back to auto-create")
-    # fallback: أنشئ فويسات تلقائية
+    # fallback: create voices automatically
     if not chosen_channel:
         channel_ids = await create_banned_voice_channels(guild)
         for cid in channel_ids:
@@ -2763,70 +2811,69 @@ async def move_to_banned_channels(guild, member, assign_permanent=False):
                     break
                 except (discord.HTTPException, discord.Forbidden):
                     continue
-    # 🆕 احفظ الفويس المخصص للاعب (لو طُلب ذلك)
+    # save the custom voice for the player (if requested)
     if chosen_channel and assign_permanent:
         db.set_banned_voice(guild.id, member.id, chosen_channel.id)
     return chosen_channel
 
 async def check_and_apply_auto_ban(guild, reported_id, total_reports, reported_by=None):
-    """🆕 يفحص لو وصلت البلاغات لـ REPORT_THRESHOLD → حظر تلقائي + نقل لفويس التفتيش + تقييد.
-    يرجع True لو تم الحظر.
-    """
+    """🆕 REPORT_THRESHOLD → + + .
+True ."""
     if total_reports < REPORT_THRESHOLD:
         return False
-    # حظر اللاعب
+    # ban the player
     db.ban_player(
         guild.id, reported_id,
         reason=f"Auto-ban: {total_reports} reports",
         banned_by=reported_by,
         report_count=total_reports
     )
-    # نقل لفويس التفتيش + تعيين فويس دائم
+    # move to the investigation voice + assign a permanent voice
     member = guild.get_member(reported_id)
     assigned_channel = None
     if member:
-        # لو اللاعب في فويس، انقله
+        # if the player is in a voice channel, move them
         if member.voice and member.voice.channel:
             assigned_channel = await move_to_banned_channels(guild, member, assign_permanent=True)
         else:
-            # لو ما هو في فويس، حدد له فويس مقدمًا (سيُنقل لما يدخل فويس)
+            # if not in a voice channel, assign one in advance (they will be moved when they join voice)
             admin_channel_ids = db.get_report_channels(guild.id)
             if admin_channel_ids:
                 ch = guild.get_channel(admin_channel_ids[0])
                 if ch and isinstance(ch, discord.VoiceChannel):
                     assigned_channel = ch
                     db.set_banned_voice(guild.id, reported_id, ch.id)
-    # تاغ الأدمنز
+    # tag the admins
     voice_info = ""
     if assigned_channel:
-        voice_info = f"\n> 🔍  **فويس التفتيش:**  {assigned_channel.mention}\n> 🔒  **مقيّد:**  لا يمكنه مغادرة هذا الفويس"
+        voice_info = f"\n> 🔍 **Investigation voice:** {assigned_channel.mention}\n> 🔒 **Assigned automatically**"
     await notify_admins(
         guild,
         "⚠️  Auto-Ban Triggered",
-        f"> ⚠️  تم حظر اللاعب تلقائياً بعد وصول بلاغاته إلى `{REPORT_THRESHOLD}`\n"
-        f"> 👤  **اللاعب:**  <@{reported_id}>\n"
-        f"> 📊  **عدد البلاغات:**  `{total_reports}`\n"
-        f"> 🔍  **الإجراء:**  تم نقله لفويس التفتيش + تقييده{voice_info}\n"
-        f"> 💡 Use  `!!unbanplayer @user`  لفك الحظر بعد التفتيش",
+        f"> ⚠️  Player auto-banned after reaching `{REPORT_THRESHOLD}` reports\n"
+        f"> 👤 **Player:** <@{reported_id}>\n"
+        f"> 📊 **Total reports:** `{total_reports}`\n"
+        f"> 🔍 **Action:** banned from playing{voice_info}\n"
+        f"> 💡 Use  `!!unbanplayer @user`  to unban after investigation",
         color=COLORS["error"]
     )
     return True
 
 async def delete_match_channels(guild, lobby_id):
-    """ينقل اللاعبين لفويسهم الأصلي قبل حذف الفويسات."""
+    """Moves players to their original voice before deleting channels."""
     mc = db.get_match_channels(lobby_id)
     if not mc:
-        # 🆕 حتى لو ما فيه match channels، امسح الفويس الأصلي من الذاكرة
+        # unless the player is in match channels, clear the original voice from memory
         _original_voice_channels.pop(lobby_id, None)
         return
-    # ابحث عن waiting room صالحة (fallback لو الفويس الأصلي محذوف)
+    # find a valid waiting room (fallback if the original voice was deleted)
     fallback_vc = None
     for cid in db.get_waiting_rooms(guild.id):
         vc = guild.get_channel(cid)
         if vc and isinstance(vc, discord.VoiceChannel):
             fallback_vc = vc
             break
-    # ✅ انقل كل الأعضاء من فويسات الماتش لفويسهم الأصلي
+    # move all members from the match voices to their original voice
     original_channels = _original_voice_channels.get(lobby_id, {})
     for voice_key in ["team1_voice_id", "team2_voice_id"]:
         voice_id = mc.get(voice_key)
@@ -2834,7 +2881,7 @@ async def delete_match_channels(guild, lobby_id):
             ch = guild.get_channel(voice_id)
             if ch and isinstance(ch, discord.VoiceChannel):
                 for member in ch.members:
-                    # ابحث عن الفويس الأصلي للاعب
+                    # look up the player's original voice
                     target_vc = None
                     original_cid = original_channels.get(member.id)
                     if original_cid:
@@ -2842,7 +2889,7 @@ async def delete_match_channels(guild, lobby_id):
                         if original_vc and isinstance(original_vc, discord.VoiceChannel):
                             target_vc = original_vc
                             logger.info(f"  🔄 Returning {member.display_name} → original: {original_vc.name}")
-                    # fallback: استخدم أي waiting room صالحة
+                    # fallback: use any valid waiting room
                     if not target_vc and fallback_vc:
                         target_vc = fallback_vc
                         logger.info(f"  🔄 Returning {member.display_name} → fallback: {fallback_vc.name}")
@@ -2851,14 +2898,14 @@ async def delete_match_channels(guild, lobby_id):
                             await member.move_to(target_vc)
                         except (discord.HTTPException, discord.Forbidden):
                             pass
-    # 🆕 امسح الفويس الأصلي من الذاكرة
+    # clear the original voice from memory
     _original_voice_channels.pop(lobby_id, None)
-    # 🆕 امسح الفويسات من مجموعة البلاك ليست
+    # clear voices from the blacklist set
     for voice_key in ["team1_voice_id", "team2_voice_id"]:
         voice_id = mc.get(voice_key)
         if voice_id:
             _active_match_voice_channels.discard(voice_id)
-    # الآن احذف القنوات
+    # now delete the channels
     for voice_key in ["team1_voice_id", "team2_voice_id"]:
         voice_id = mc.get(voice_key)
         if voice_id:
@@ -2897,9 +2944,9 @@ async def auto_trigger_vote(lobby_id, guild):
         first_joiner_id = lobby.get("first_joiner_id")
         mc = db.get_match_channels(lobby_id)
         if not mc:
-            # ✅ FIX (CRITICAL): ما فيه قنوات ماتش = ما راح ينعرض أي voting UI،
-            # وما في timer بيشتغل. لو تركنا الحالة 'voting' اللاعبون يضلون محبوسين
-            # في اللوبي للأبد (get_player_active_lobby يحسب 'voting' كـ active).
+            # FIX (CRITICAL): if there are no match channels, no voting UI is shown
+            # and no timer runs. If we left the state as 'voting', players would be stuck
+            # in the lobby forever (get_player_active_lobby counts 'voting' as active).
             logger.error(
                 f"❌ auto_trigger_vote: lobby {lobby_id} has no match_channels — "
                 f"reverting status to 'started'"
@@ -2907,45 +2954,45 @@ async def auto_trigger_vote(lobby_id, guild):
             db.update_lobby_status(lobby_id, "started")
             await notify_admins(
                 guild,
-                "❌ فشل إطلاق التصويت",
-                f"> 🐛  اللوبي `#{lobby_id}` ما لقى قنوات الماتش — ما راح ينعرض التصويت.\n"
-                f"> 🔄  رجّعنا الحالة إلى `started`.\n"
-                f"> 💡  جرّب  `!!startvote {lobby_id}`  أو  `!!resolve {lobby_id} team1|team2`"
+                "❌ Failed",
+                f"> 🐛  Lobby `#{lobby_id}` has no match channels — vote will not be displayed.\n"
+                f"> 🔄  Reverted status to `started`.\n"
+                f"> 💡  Try  `!!startvote {lobby_id}`  or  `!!resolve {lobby_id} team1|team2`"
             )
             return
 
         t1m = " ".join([f"<@{p}>" for p in lobby["team1_players"]])
         t2m = " ".join([f"<@{p}>" for p in lobby["team2_players"]])
 
-        # كل لاعبي الماتش يصوّتون
+        # all match players vote
         voters = build_mvp_voters(lobby["team1_players"], lobby["team2_players"], creator_id)
         threshold = max(1, len(voters) // 2)
         v1 = [p for p in voters if p in lobby["team1_players"]]
         v2 = [p for p in voters if p in lobby["team2_players"]]
 
-        # كشف 1v1 — استخدم TeamWinnerVoteView بدل MvpVoteView
+        # Detect 1v1 — use TeamWinnerVoteView instead of MvpVoteView
         game_mode = lobby.get("game_mode", DEFAULT_MODE)
         team_size = GAME_MODES.get(game_mode, {}).get("team_size", 4)
         is_1v1 = (team_size == 1)
 
         if is_1v1:
-            # 🆕 1v1: embed مبسّط للفريق الفائز
+            # 🆕 1v1: simplified embed for winning team
             mvp_embed = discord.Embed(
-                title=f"🗳️ تصويت 1v1 · `#{lobby_id}`",
+                title=f"🗳️ 1v1 Vote · `#{lobby_id}`",
                 description=(
-                    f"🎯 المطلوب: **{threshold}** أصوات\n"
-                    f"⚠️ صوت من كل فريق على نفس الفائز"
+                    f"🎯 Required: **{threshold}** votes\n"
+                    f"⚠️ Vote from each team on same winner"
                 ),
                 color=COLORS["vote"]
             )
             mvp_embed = apply_branding(mvp_embed, guild)
         else:
-            # 🆕 2v2/3v3/4v4: embed مبسّط بكل القواعد
+            # 🆕 2v2/3v3/4v4: simplified embed with all rules
             mvp_embed = discord.Embed(
-                title=f"🗳️ تصويت MVP · `#{lobby_id}`",
+                title=f"🗳️ MVP Vote · `#{lobby_id}`",
                 description=(
-                    f"🎯 المطلوب: **{threshold}** أصوات (نصف المصوّتين)\n"
-                    f"⚠️ صوت من كل فريق على نفس اللاعب"
+                    f"🎯 Required: **{threshold}** votes (at least one from each team)\n"
+                    f"⚠️ Vote from each team on same player"
                 ),
                 color=COLORS["vote"]
             )
@@ -2954,7 +3001,7 @@ async def auto_trigger_vote(lobby_id, guild):
         general_text = guild.get_channel(mc["team1_text_id"])
         vote_msg_id = None
         if not general_text:
-            # ✅ FIX (HIGH): نفس المشكلة — بدون شات ما في رسالة تصويت = اللوبي محبوس
+            # FIX (HIGH): same problem - without a chat to hold the voting message the lobby is stuck
             logger.error(
                 f"❌ auto_trigger_vote: lobby {lobby_id} match text channel "
                 f"({mc['team1_text_id']}) not found — reverting status to 'started'"
@@ -2962,14 +3009,14 @@ async def auto_trigger_vote(lobby_id, guild):
             db.update_lobby_status(lobby_id, "started")
             await notify_admins(
                 guild,
-                "❌ فشل إطلاق التصويت",
-                f"> 🐛  قناة الماتش `{mc['team1_text_id']}` مفقودة في السيرفر "
-                f"`{guild.name}` — ما راح ينعرض التصويت.\n"
-                f"> 🔄  رجّعنا الحالة إلى `started`.\n"
-                f"> 💡  جرّب  `!!startvote {lobby_id}`  أو  `!!resolve {lobby_id} team1|team2`"
+                "❌ Failed",
+                f"> 🐛  Match text channel `{mc['team1_text_id']}` "
+                f"was not found in `{guild.name}` — the vote could not be posted.\n"
+                f"> 🔄  Reverted status to `started`.\n"
+                f"> 💡  Try  `!!startvote {lobby_id}`  or  `!!resolve {lobby_id} team1|team2`"
             )
             return
-        # استخدم TeamWinnerVoteView لـ 1v1، MvpVoteView للأوضاع الأخرى
+        # Use TeamWinnerVoteView for 1v1, MvpVoteView for other modes
         if is_1v1:
             vote_view = TeamWinnerVoteView(
                 lobby_id, guild,
@@ -2987,15 +3034,15 @@ async def auto_trigger_vote(lobby_id, guild):
                 view=vote_view
             )
         except discord.HTTPException as e:
-            # ✅ FIX (HIGH): فشل الإرسال = نفس الحبس — رجّع الحالة وبلّغ الأدمن
+            # FIX (HIGH): send failure = same stuck state - revert the state and notify an admin
             logger.exception(f"❌ auto_trigger_vote: failed to send vote message (lobby {lobby_id}): {e}")
             db.update_lobby_status(lobby_id, "started")
             await notify_admins(
                 guild,
-                "❌ فشل إرسال رسالة التصويت",
-                f"> 🐛  **الخطأ:**  `{str(e)[:200]}`\n"
-                f"> 🔄  رجّعنا حالة اللوبي `#{lobby_id}` إلى `started`.\n"
-                f"> 💡  جرّب  `!!startvote {lobby_id}`  أو  `!!resolve {lobby_id} team1|team2`"
+                "❌ Failed",
+                f"> 🐛  **Error:**  `{str(e)[:200]}`\n"
+                f"> 🔄  Reverted lobby `#{lobby_id}` status to `started`.\n"
+                f"> 💡  Try  `!!startvote {lobby_id}`  or  `!!resolve {lobby_id} team1|team2`"
             )
             return
         db.set_vote_message(lobby_id, vote_msg.id)
@@ -3018,8 +3065,8 @@ async def auto_lobby_timeout(lobby_id, guild):
             timeout_embed = discord.Embed(
                 title="⏰ Lobby Timed Out",
                 description=(
-                    f"اللوبي `#{lobby_id}` تم إلغاؤه بسبب عدم النشاط.\n"
-                    f"💡 استخدم `{PREFIX}play 4v4` لبدء ماتش جديد."
+                    f"Lobby `#{lobby_id}` was closed automatically — not enough players joined in time.\n"
+                    f"💡 Use `{PREFIX}play 4v4` to open a new lobby."
                 ),
                 color=COLORS["warning"],
                 timestamp=discord.utils.utcnow()
@@ -3031,12 +3078,12 @@ async def auto_lobby_timeout(lobby_id, guild):
         pass
     except Exception as e:
         logger.exception(f"auto_lobby_timeout failed: {e}")
-        # 🆕 تاغ الأدمنز عند الفشل
+        # tag admins on failure
         await notify_admins(
             guild,
             "Lobby Timeout Error",
-            f"> ❌  خطأ في timeout اللوبي `#{lobby_id}`\n"
-            f"> 🐛  **الخطأ:**  `{str(e)[:200]}`"
+            f"> ❌ timeout `#{lobby_id}`\n"
+            f"> 🐛  **Error:**  `{str(e)[:200]}`"
         )
 
 # ============================================================
@@ -3044,13 +3091,12 @@ async def auto_lobby_timeout(lobby_id, guild):
 # ============================================================
 
 async def process_match_result(guild, lobby_id, winner_team, channel=None):
-    """🆕 نظام النقاط الجديد:
-    - الفائز MVP: +80 نقطة
-    - الفائزون الآخرون: +30 نقطة
-    - الخاسر MVP: +30 نقطة
-    - الخاسرون الآخرون: -30 نقطة
-    - الرانك يُحسب من النقاط تلقائياً (كل 50 نقطة = رانك واحد)
-    """
+    """🆕 New points system:
+- MVP: +80
+- : +30
+- MVP: +30
+- : -30
+- ( 50 = )"""
     try:
         logger.info(f"🏆 process_match_result — lobby={lobby_id}, winner={winner_team}")
         lobby = db.get_lobby(lobby_id)
@@ -3066,17 +3112,17 @@ async def process_match_result(guild, lobby_id, winner_team, channel=None):
         wt = lobby["team1_players"] if winner_team == "team1" else lobby["team2_players"]
         lt = lobby["team2_players"] if winner_team == "team1" else lobby["team1_players"]
 
-        # 🆕 تحديد MVP لكل فريق (أعلى رانك، ثم أعلى streak عند التعادل)
+        # pick the MVP of each team (higher rank, then higher streak on a tie)
         winner_mvp_id = get_mvp_player(wt, guild, db, guild.id)
         loser_mvp_id = get_mvp_player(lt, guild, db, guild.id)
 
-        # 🆕 نقاط النظام الجديد
+        # points for the new system
         WINNER_MVP_POINTS = 80
         WINNER_POINTS = 30
         LOSER_MVP_POINTS = 30
         LOSER_POINTS = -30
 
-        # معالجة الفريق الفائز
+        # winning team handling
         winner_details = []  # [(pid, points_awarded, is_mvp), ...]
         for pid in wt:
             p = db.get_player(pid, guild.id)
@@ -3098,7 +3144,7 @@ async def process_match_result(guild, lobby_id, winner_team, channel=None):
             new_level = new_p.get("level", STARTING_LEVEL) if new_p else old_level
             winner_details.append((pid, pts, is_mvp, old_level, new_level))
 
-        # معالجة الفريق الخاسر
+        # losing team handling
         loser_details = []
         for pid in lt:
             p = db.get_player(pid, guild.id)
@@ -3119,7 +3165,7 @@ async def process_match_result(guild, lobby_id, winner_team, channel=None):
             loser_details.append((pid, pts, is_mvp, old_level, new_level))
 
         db.recalculate_ranks(guild.id)
-        # ✅ إصلاح: أعد قراءة الرانك الجديد لكل لاعب بعد recalculate_ranks
+        # fix: re-read the new ranks of every player after recalculate_ranks
         for i, (pid, pts, is_mvp, old_level, _) in enumerate(winner_details):
             p = db.get_player(pid, guild.id)
             new_level = p.get("level", STARTING_LEVEL) if p else old_level
@@ -3134,23 +3180,23 @@ async def process_match_result(guild, lobby_id, winner_team, channel=None):
             m = guild.get_member(pid)
             if m:
                 await update_member_nickname(m, new_level)
-        # 🆕 حفظ نتيجة الماتش مع MVPs
+        # save the match result with MVPs
         db.create_match_result(
             lobby_id, winner_team,
             len(wt), len(lt),
             mvp=winner_mvp_id
         )
 
-        # 🆕 بناء رسالة النتيجة الاحترافية
+        # build the professional result message
         wd = "🔴 Team 1" if winner_team == "team1" else "🟢 Team 2"
         wt_mentions = "\n".join([
             f"{'🔱' if is_mvp else '✅'}  <@{pid}> → `{'+' if pts > 0 else ''}{pts}` pts  (RANK #{old}→#{new})"
             for pid, pts, is_mvp, old, new in winner_details
-        ]) or "*لا يوجد لاعبون*"
+        ]) or "* *"
         lt_mentions = "\n".join([
             f"{'✦' if is_mvp else '☠️'}  <@{pid}> → `{'+' if pts > 0 else ''}{pts}` pts  (RANK #{old}→#{new})"
             for pid, pts, is_mvp, old, new in loser_details
-        ]) or "*لا يوجد لاعبون*"
+        ]) or "* *"
 
         embed = discord.Embed(
             title=f"🏅 Match Result — #{lobby_id}",
@@ -3169,15 +3215,15 @@ async def process_match_result(guild, lobby_id, winner_team, channel=None):
         embed.set_author(name="Match Finished", icon_url=None)
         embed.set_footer(text=f"{BOT_FOOTER}  •  Match #{lobby_id}  ·  GG WP!")
         embed = apply_branding(embed, guild)
-        # 🆕 نتيجة الماتش → قناة النتائج المخصصة (match-results) فقط، وإلا القناة الأصلية
+        # match result -> dedicated results channel (match-results) only, otherwise the original channel
         await _post_match_result(guild, embed, channel)
 
-        # ⚡ تسريع: أغلق الفويسات فوراً — انقل اللاعبين + احذف قنوات الماتش قبل
-        #    أي عمل بطيء (leaderboard / roles) حتى يختفي الشات/الفويس بسرعة
+        # speed-up: close voices immediately - move players + delete match channels before
+        #    any slow work (leaderboard / roles) so the chat/voice closes quickly
         await delete_match_channels(guild, lobby_id)
         cleanup_lobby_memory(lobby_id)
 
-        # 🆕 أعد اللاعبين لغرف الانتظار (بعد حذف القنوات مباشرة)
+        # return players to the waiting rooms (right after deleting the channels)
         all_players = lobby["team1_players"] + lobby["team2_players"]
         for pid in all_players:
             m = guild.get_member(pid)
@@ -3189,7 +3235,7 @@ async def process_match_result(guild, lobby_id, winner_team, channel=None):
                         try: await m.move_to(vc)
                         except (discord.HTTPException, discord.Forbidden): pass
 
-        # تحديث الـ Leaderboard + مزامنة أدوار لاعبي الماتش فقط (تسريع)
+        # update the leaderboard + sync roles of the match players only (speed-up)
         await update_leaderboard_channel(guild)
         await sync_all_players_roles(guild, player_ids=all_players)
     except Exception as e:
@@ -3264,11 +3310,11 @@ class JoinKeyModal(discord.ui.Modal, title="🔑 Enter Private Match Key"):
         except Exception as e:
             logger.exception(f"JoinKeyModal failed: {e}")
 
-# 🆕 Modal للبلاغ مع سبب
-class ReportReasonModal(discord.ui.Modal, title="⚠️  سبب البلاغ"):
+# Modal for a report with a reason
+class ReportReasonModal(discord.ui.Modal, title="⚠️ Report Player"):
     reason_input = discord.ui.TextInput(
-        label="اكتب سبب البلاغ (اختياري)",
-        placeholder="مثال: يستخدم هاك، يغش، يسيء، إلخ.",
+        label="Reason (optional)",
+        placeholder="Example: cheating or abusive behavior.",
         required=False,
         max_length=200
     )
@@ -3282,7 +3328,7 @@ class ReportReasonModal(discord.ui.Modal, title="⚠️  سبب البلاغ"):
 
     async def on_submit(self, interaction):
         try:
-            # 🔒 نظّف السبب قبل التخزين (يمنع mass-ping + كسر حد Discord)
+            # sanitize the reason before storing (prevents mass-ping + exceeding the Discord limit)
             reason = sanitize_user_text(self.reason_input.value) if self.reason_input.value else None
             added, total = db.add_report(
                 self.guild_id, self.reporter_id, self.reported_id,
@@ -3291,66 +3337,66 @@ class ReportReasonModal(discord.ui.Modal, title="⚠️  سبب البلاغ"):
             if not added:
                 await interaction.response.send_message(
                     embed=discord.Embed(
-                        title="⚠️ بلغت من قبل",
+                        title="⚠️ Already reported",
                         description=(
-                            f"لقد بلّغت على <@{self.reported_id}> سابقاً.\n"
-                            "لا يمكنك البلاغ مرتين على نفس اللاعب."
+                            f"<@{self.reported_id}> has already been reported by you.\n"
+                            "You cannot report the same player twice."
                         ),
                         color=COLORS["warning"]
                     ), ephemeral=True
                 )
                 return
             guild = interaction.guild
-            # اعرض تأكيد البلاغ
+            # show the report confirmation
             remaining = max(0, REPORT_THRESHOLD - total)
             report_embed = discord.Embed(
-                title="⚠️ تم تسجيل البلاغ",
+                title="⚠️ Report Registered",
                 description=(
-                    (f"⚠️ يتبقى `{remaining}` بلاغ للحظر التلقائي" if remaining > 0 else "⚠️ **وصل للحد!** سيتم الحظر تلقائياً")
+                    (f"⚠️ `{remaining}`" if remaining > 0 else "⚠️ ** !**")
                 ),
                 color=COLORS["warning"] if remaining > 0 else COLORS["error"],
                 timestamp=discord.utils.utcnow()
             )
-            report_embed.add_field(name="👤 المُبلَّغ عنه", value=f"<@{self.reported_id}>", inline=True)
-            report_embed.add_field(name="👮 المُبلِّغ", value=f"<@{self.reporter_id}>", inline=True)
-            report_embed.add_field(name="📊 البلاغات", value=f"`{total}/{REPORT_THRESHOLD}`", inline=True)
+            report_embed.add_field(name="👤 Reported", value=f"<@{self.reported_id}>", inline=True)
+            report_embed.add_field(name="👮 Reporter", value=f"<@{self.reporter_id}>", inline=True)
+            report_embed.add_field(name="📊 Reports", value=f"`{total}/{REPORT_THRESHOLD}`", inline=True)
             if reason:
-                report_embed.add_field(name="📝 السبب", value=f"{reason}", inline=False)
+                report_embed.add_field(name="📝 Reason", value=f"{reason}", inline=False)
             report_embed.set_footer(text=f"{BOT_FOOTER}  •  Report #{total}")
             report_embed = apply_branding(report_embed, guild)
             await interaction.response.send_message(embed=report_embed, ephemeral=True)
-            # 🆕 أرسل البلاغ للأدمنز مع السبب
+            # send the report to the admins with the reason
             await notify_admins(
                 guild,
-                "⚠️  بلاغ جديد",
-                f"> 👤  **اللاعب المُبلَّغ عنه:**  <@{self.reported_id}>\n"
-                f"> 👮  **الـمُبلِّغ:**  <@{self.reporter_id}>\n"
-                + (f"> 📝  **السبب:**  {reason}\n" if reason else "> 📝  **السبب:**  غير محدد\n")
-                + f"> 📊  **إجمالي البلاغات:**  `{total}/{REPORT_THRESHOLD}`",
+                "⚠️ New Player Report",
+                f"> 👤 **Reported:** <@{self.reported_id}>\n"
+                f"> 👮  **Reporter:**  <@{self.reporter_id}>\n"
+                + (f"> 📝 **Reason:** {reason}\n" if reason else "> 📝 **Reason:** none\n")
+                + f"> 📊 **Total reports:** `{total}/{REPORT_THRESHOLD}`",
                 color=COLORS["warning"] if remaining > 0 else COLORS["error"]
             )
-            # 🆕 فحص الحظر التلقائي
+            # automatic ban check
             if guild:
                 banned = await check_and_apply_auto_ban(guild, self.reported_id, total, self.reporter_id)
         except Exception as e:
             logger.exception(f"ReportReasonModal failed: {e}")
 
-# 🆕 View لاختيار اللاعب المُبلَّغ عنه (داخل الماتش)
+# View for choosing the reported player (inside the match)
 class ReportPlayerSelectView(discord.ui.View):
-    """يعرض Select باسماء لاعبي الماتش لاختيار من تريد البلاغ عليه."""
+    """ Select ."""
     def __init__(self, lobby_id, all_players, guild_id, reporter_id, guild=None):
         super().__init__(timeout=120)
         self.lobby_id = lobby_id
         self.guild_id = guild_id
         self.reporter_id = reporter_id
-        self.guild = guild  # 🆕 لجلب أسماء اللاعبين
+        self.guild = guild  # used to look up player names
 
-        # فلتر اللاعبين (احذف المُبلِّغ من القائمة)
+        # filter the players (remove the reporter from the list)
         reportable = [pid for pid in all_players if pid != reporter_id]
         if not reportable:
             return
 
-        # 🆕 helper لجلب اسم اللاعب
+        # helper to fetch a player's name
         def get_player_name(pid):
             if self.guild:
                 member = self.guild.get_member(pid)
@@ -3359,21 +3405,21 @@ class ReportPlayerSelectView(discord.ui.View):
             player = db.get_player(pid, guild_id)
             if player and player.get("username"):
                 return player["username"][:80]
-            return "غير معروف"
+            return ""
 
         options = []
-        for pid in reportable[:25]:  # حد ديسكورد 25 option
+        for pid in reportable[:25]:  # Discord limit of 25 options
             name = get_player_name(pid)
             options.append(discord.SelectOption(
                 label=name,
                 value=str(pid),
-                description=f"بلغ عن هذا اللاعب",
+                description="Report this player",
                 emoji="⚠️"
             ))
         if not options:
             return
         select = discord.ui.Select(
-            placeholder="⚠️  اختر اللاعب المُبلَّغ عنه",
+            placeholder="⚠️ Select the player to report",
             options=options,
             custom_id=f"report_select_{lobby_id}",
             min_values=1,
@@ -3384,36 +3430,36 @@ class ReportPlayerSelectView(discord.ui.View):
 
     async def select_callback(self, interaction):
         if interaction.user.id != self.reporter_id:
-            await interaction.response.send_message("❌ ليست قائمتك!", ephemeral=True)
+            await interaction.response.send_message("❌ This menu is not for you!", ephemeral=True)
             return
         reported_id = int(interaction.data["values"][0])
-        # اعرض Modal لإدخال السبب
+        # show the Modal to enter the reason
         await interaction.response.send_modal(
             ReportReasonModal(self.lobby_id, reported_id, self.guild_id, self.reporter_id)
         )
 
-# 🆕 زر البلاغ يُضاف لكل message في الماتش
+# the report button is added to every message in the match
 class ReportButtonView(discord.ui.View):
-    """View بسيط فيه زر واحد '⚠️ Report' يفتح select للاعبين."""
+    """View '⚠️ Report' select ."""
     def __init__(self, lobby_id, all_players, guild_id, reporter_id=None):
         super().__init__(timeout=None)
         self.lobby_id = lobby_id
         self.all_players = all_players
         self.guild_id = guild_id
 
-    @discord.ui.button(label="⚠️  إبلاغ عن لاعب", style=discord.ButtonStyle.danger, custom_id="report_player_btn")
+    @discord.ui.button(label="⚠️ Report Player", style=discord.ButtonStyle.danger, custom_id="report_player_btn")
     async def report_btn(self, interaction, button):
-        # كل لاعب يقدر يبلغ — نمرّر reporter_id = interaction.user.id
+        # any player can report - pass reporter_id = interaction.user.id
         view = ReportPlayerSelectView(self.lobby_id, self.all_players, self.guild_id, interaction.user.id, guild=interaction.guild)
         if not view.children:
-            await interaction.response.send_message("❌ لا يوجد لاعبون للبلاغ!", ephemeral=True)
+            await interaction.response.send_message("❌ There are no players available to report!", ephemeral=True)
             return
         await interaction.response.send_message(
             embed=discord.Embed(
-                title="⚠️ اختر اللاعب المُبلَّغ عنه",
+                title="⚠️ Report Player",
                 description=(
-                    "اختر اللاعب الذي تريد البلاغ عنه من القائمة.\n"
-                    "⚠️ البلاغ جدّي — لا تبلّغ بدون سبب."
+                    ".\n"
+                    "⚠️ Reports are serious — don't report without reason."
                 ),
                 color=COLORS["warning"]
             ), view=view, ephemeral=True
@@ -3487,7 +3533,7 @@ class LobbyButtonsView(discord.ui.View):
             await interaction.response.send_message(f"❌ Only the host! Host: <@{creator_id}>", ephemeral=True)
             return
 
-        # 🆕 FIX: رد على التفاعل أولاً قبل حذف القنوات (تجنب فشل الاستجابة)
+        # FIX: respond to the interaction first, before deleting channels (avoids interaction failure)
         mode = lobby.get("game_mode", DEFAULT_MODE).upper()
         await interaction.response.send_message(embed=discord.Embed(
             title="❌ Match Cancelled",
@@ -3498,11 +3544,11 @@ class LobbyButtonsView(discord.ui.View):
             color=COLORS["error"]
         ), delete_after=30)
 
-        # الآن حدّث الحالة وامسح القنوات بأمان
+        # now update the state and delete the channels safely
         db.update_lobby_status(self.lobby_id, "cancelled")
         cleanup_lobby_memory(self.lobby_id)
 
-        # 🆕 احذف رسالة اللوبي الأصلية في قناة play بدل ترك نسخة معدّلة منها
+        # delete the original lobby message in the play channel instead of leaving an outdated copy
         if interaction.message is not None:
             try:
                 await delete_message_safely(
@@ -3512,7 +3558,7 @@ class LobbyButtonsView(discord.ui.View):
             except Exception as e:
                 logger.debug(f"delete lobby embed in cancel_game failed: {e}")
 
-        # احذف قنوات الماتش (إن وُجدت — اللوبي قد يكون waiting بدون قنوات)
+        # delete the match channels (if any - the lobby may be waiting with no channels)
         try:
             await delete_match_channels(interaction.guild, self.lobby_id)
         except Exception as e:
@@ -3529,24 +3575,24 @@ class LobbyButtonsView(discord.ui.View):
             await interaction.response.send_message("❌ Lobby not active!", ephemeral=True)
             return
 
-        # 🆕 فحص الحظر
+        # ban check
         ban_info = db.is_player_banned(interaction.guild.id, uid)
         if ban_info:
             ban_embed = discord.Embed(
-                title="🚫 أنت محظور من اللعب",
+                title="🚫 You are banned from playing",
                 description=(
-                    "🔍 يتم توجيهك لفويس التفتيش\n"
-                    "💡 لفك الحظر، تواصل مع الأدمن"
+                    "🔍 \n"
+                    "💡 To unban, contact an admin"
                 ),
                 color=COLORS["error"],
                 timestamp=discord.utils.utcnow()
             )
-            ban_embed.add_field(name="⚠️ السبب", value=f"`{ban_info.get('ban_reason') or 'غير محدد'}`", inline=True)
-            ban_embed.add_field(name="📊 البلاغات", value=f"`{ban_info.get('report_count', 0)}`", inline=True)
+            ban_embed.add_field(name="⚠️ Ban Reason", value=f"`{ban_info.get('ban_reason') or 'No reason'}`", inline=True)
+            ban_embed.add_field(name="📊 Reports", value=f"`{ban_info.get('report_count', 0)}`", inline=True)
             ban_embed.set_footer(text=f"{BOT_FOOTER}  •  Banned")
             ban_embed = apply_branding(ban_embed, interaction.guild)
             await interaction.response.send_message(embed=ban_embed, ephemeral=True)
-            # انقل لفويس التفتيش
+            # move to the investigation voice
             member_check = interaction.guild.get_member(uid)
             if member_check and member_check.voice and member_check.voice.channel:
                 await move_to_banned_channels(interaction.guild, member_check)
@@ -3650,9 +3696,9 @@ class LobbyButtonsView(discord.ui.View):
             room_embed.add_field(name="🔑 Password", value=f"`{lobby.get('room_code') or 'N/A'}`", inline=True)
             await interaction.followup.send(embed=room_embed, ephemeral=True)
 
-        # ✅ MAX: لا تنقل اللاعب لـ waiting room بعد الانضمام للوبي
-        # اللاعب يبقى في فويسه — سيُنقل لفويس فريقه عند بدء الماتش
-        # (تم حذف كود db.get_available_waiting_room + member.move_to)
+        # MAX: do not move the player to a waiting room after joining a lobby
+        # the player stays in their voice - they are moved to their team voice when the match starts
+        # (removed the db.get_available_waiting_room + member.move_to code)
 
         player = db.get_or_create_player(uid, interaction.guild.id, interaction.user.display_name)
         member = interaction.guild.get_member(uid)
@@ -3670,8 +3716,10 @@ class LobbyButtonsView(discord.ui.View):
             db.update_lobby_status(self.lobby_id, "started")
             lobby = db.get_lobby(self.lobby_id)
 
+            # ✅ Disable only Join buttons (lobby is full), keep Leave + Cancel active
             for item in self.children:
-                item.disabled = True
+                if hasattr(item, 'label') and item.label and ('Join' in item.label):
+                    item.disabled = True
             try: await interaction.message.edit(view=self)
             except: pass
 
@@ -3680,13 +3728,13 @@ class LobbyButtonsView(discord.ui.View):
             except Exception as e:
                 logger.exception(f"create_match_channels failed: {e}")
                 channels = None
-                # 🆕 تاغ الأدمنز عند فشل إنشاء القنوات
+                # tag admins when channel creation fails
                 await notify_admins(
                     interaction.guild,
                     "Match Channels Creation Failed",
-                    f"> ❌  فشل في إنشاء قنوات الماتش `#{self.lobby_id}`\n"
-                    f"> 🐛  **الخطأ:**  `{str(e)[:200]}`\n"
-                    f"> 💡  تحقق من صلاحيات البوت  (Manage Channels)"
+                    f"> ❌ `#{self.lobby_id}`\n"
+                    f"> 🐛  **Error:**  `{str(e)[:200]}`\n"
+                    f"> 💡  Check bot permissions (Manage Channels)"
                 )
 
             if not channels:
@@ -3715,13 +3763,13 @@ class LobbyButtonsView(discord.ui.View):
                     color=COLORS["success"],
                     timestamp=discord.utils.utcnow()
                 ))
-                # 🆕 سجّل رسالة "Match Ready" — تُحذف تلقائياً عند انتهاء الماتش بأي طريقة
+                # register the "Match Ready" message - deleted automatically when the match ends, however it ends
                 register_lobby_flow_msg(self.lobby_id, interaction.channel.id, ready_msg.id)
             except discord.HTTPException as e:
                 logger.debug(f"send Match Ready embed failed: {e}")
 
             if channels:
-                # خزّن الفويس الأصلي لكل لاعب قبل نقله لفويس الفريق
+                # store each player's original voice before moving them to the team voice
                 _original_voice_channels[self.lobby_id] = {}
                 for pid in lobby["team1_players"] + lobby["team2_players"]:
                     m = interaction.guild.get_member(pid)
@@ -3780,17 +3828,17 @@ class LobbyButtonsView(discord.ui.View):
                     sv_msg = await channels["team1_text"].send(embed=start_embed, view=start_vote_view)
                     db.set_start_vote_message(self.lobby_id, sv_msg.id)
                 except: pass
-                # 🆕 أرسل زر البلاغ في رسالة منفصلة
+                # send the report button in a separate message
                 try:
                     all_players = lobby["team1_players"] + lobby["team2_players"]
                     report_view = ReportButtonView(self.lobby_id, all_players, interaction.guild.id)
                     report_embed = discord.Embed(
-                        title="⚠️ نظام البلاغ",
+                        title="⚠️ Report System",
                         description=(
-                            "لو لاحظت لاعب يغش أو يسيء، اضغط زر **⚠️ إبلاغ**\n"
+                            "If you notice a player cheating or misbehaving, press **⚠️ Report**\n"
                             "\n"
-                            f"📊 عند وصول البلاغات إلى `{REPORT_THRESHOLD}` → حظر تلقائي\n"
-                            "🔍 اللاعب المحظور يُنقل لفويس التفتيش حتى يفك الأدمن الحظر"
+                            f"📊 After `{REPORT_THRESHOLD}` reports → auto-ban\n"
+                            "🔍 Banned player is moved to investigation voice until admin unbans"
                         ),
                         color=COLORS["warning"],
                         timestamp=discord.utils.utcnow()
@@ -3831,15 +3879,15 @@ class StartVoteView(discord.ui.View):
         if lobby["status"] != "started":
             await interaction.response.send_message("❌ Match not active!", ephemeral=True)
             return
-        # ✅ إصلاح: Start Vote للأدمنز والأونر والهوست فقط
+        # fix: Start Vote for admins, the owner and the host only
         member = interaction.guild.get_member(interaction.user.id)
         is_admin = member and (member.guild_permissions.administrator or member.guild_permissions.manage_guild)
         is_owner = interaction.user.id == BOT_OWNER_ID
         is_host = interaction.user.id == self.creator_id
         if not (is_admin or is_owner or is_host):
             await interaction.response.send_message(
-                f"❌ فقط الأدمنز والأونر والهوست يبدؤون التصويت!\n"
-                f"الهوست: <@{self.creator_id}>",
+                f"❌ Only the host or an admin can do this!\n"
+                f"Host: <@{self.creator_id}>",
                 ephemeral=True
             )
             return
@@ -3847,7 +3895,7 @@ class StartVoteView(discord.ui.View):
         if not guild:
             await interaction.response.send_message("❌ Guild not found!", ephemeral=True)
             return
-        # 🆕 فحص الـ cooldown 10 دقائق من بدء الماتش
+        # check the 10-minute cooldown from the match start
         started_at = lobby.get("started_at")
         if started_at:
             try:
@@ -3863,10 +3911,10 @@ class StartVoteView(discord.ui.View):
                     remaining_min = remaining // 60
                     remaining_sec = remaining % 60
                     await interaction.response.send_message(embed=discord.Embed(
-                        title="⏳ لم يحن وقت التصويت بعد",
+                        title="⏳ Please Wait",
                         description=(
-                            "⏱️ يجب انتظار **10 دقائق** من بدء الماتش\n"
-                            f"⏳ المتبقي: `{remaining_min} دقيقة و {remaining_sec} ثانية`"
+                            "⏱️ A match can be cancelled only **10 minutes** after it starts.\n"
+                            f"⏳ Remaining: `{remaining_min} min {remaining_sec} sec`"
                         ),
                         color=COLORS["warning"]
                     ), ephemeral=True)
@@ -3883,7 +3931,7 @@ class StartVoteView(discord.ui.View):
 
     @discord.ui.button(label="❌ Cancel Match", style=discord.ButtonStyle.danger, custom_id="cancel_match_btn")
     async def cancel_match_btn(self, interaction, button):
-        """🆕 Cancel Match بنظام الأغلبية."""
+        """🆕 Cancel Match ."""
         lobby = await self._resolve_context(interaction)
         if not lobby or not self.lobby_id:
             await interaction.response.send_message("❌ Cannot determine lobby!", ephemeral=True)
@@ -3906,7 +3954,7 @@ class StartVoteView(discord.ui.View):
             await self._execute_cancel(interaction, lobby, guild, uid, "Admin")
             return
         if uid in self._cancel_votes:
-            await interaction.response.send_message(f"⚠️ صوّت بالفعل! ({len(self._cancel_votes)}/{required_votes})", ephemeral=True)
+            await interaction.response.send_message(f"⚠️ You already voted to cancel! ({len(self._cancel_votes)}/{required_votes})", ephemeral=True)
             return
         self._cancel_votes.add(uid)
         current_votes = len(self._cancel_votes)
@@ -3915,26 +3963,26 @@ class StartVoteView(discord.ui.View):
             return
         remaining = required_votes - current_votes
         vote_embed = discord.Embed(
-            title="🗳️ تصويت إلغاء الماتش",
-            description=f"👤 <@{uid}> صوّت لإلغاء الماتش",
+            title="🗳️ Cancel Vote",
+            description=f"👤 <@{uid}> voted to cancel the match",
             color=COLORS["warning"],
             timestamp=discord.utils.utcnow()
         )
-        vote_embed.add_field(name="📊 التقدم", value=f"`{current_votes}/{required_votes}`", inline=True)
-        vote_embed.add_field(name="⏳ يتبقى", value=f"`{remaining}`", inline=True)
+        vote_embed.add_field(name="📊 Votes", value=f"`{current_votes}/{required_votes}`", inline=True)
+        vote_embed.add_field(name="⏳ Remaining", value=f"`{remaining}`", inline=True)
         vote_embed.set_footer(text=f"{BOT_FOOTER}  •  Cancel Vote")
         await interaction.response.send_message(embed=vote_embed)
 
     async def _execute_cancel(self, interaction, lobby, guild, uid, reason):
-        """🆕 ينفذ إلغاء الماتش فعلياً."""
+        """🆕 ."""
         mode = lobby.get("game_mode", DEFAULT_MODE).upper()
         cancelled_embed = discord.Embed(
             title="❌ Match Cancelled",
             description=(
-                "🔄 جارٍ إعادة اللاعبين...\n"
-                "🗑️ جارٍ حذف القنوات...\n"
+                "🔄 ...\n"
+                "🗑️ Deleting channels...\n"
                 "\n"
-                f"💡 Use `{PREFIX}play` لبدء ماتش جديد."
+                f"💡 Use `{PREFIX}play` to start a new match."
             ),
             color=COLORS["error"],
             timestamp=discord.utils.utcnow()
@@ -3947,16 +3995,16 @@ class StartVoteView(discord.ui.View):
         await interaction.response.send_message(embed=cancelled_embed)
         db.update_lobby_status(self.lobby_id, "cancelled")
         cleanup_lobby_memory(self.lobby_id)
-        # انقل اللاعبين لفويسهم الأصلي قبل حذف القنوات
+        # move the players to their original voice before deleting the channels
         all_players = lobby["team1_players"] + lobby["team2_players"]
-        # ابحث عن fallback waiting room
+        # look for a fallback waiting room
         fallback_vc = None
         for cid in db.get_waiting_rooms(guild.id):
             vc = guild.get_channel(cid)
             if vc and isinstance(vc, discord.VoiceChannel):
                 fallback_vc = vc
                 break
-        # 🆕 ابحث عن الفويس الأصلي لكل لاعب
+        # look up each player's original voice
         original_channels = _original_voice_channels.get(self.lobby_id, {})
         for pid in all_players:
             m = guild.get_member(pid)
@@ -3976,7 +4024,7 @@ class StartVoteView(discord.ui.View):
                         await m.move_to(target_vc)
                     except (discord.HTTPException, discord.Forbidden):
                         pass
-        # 🆕 امسح الفويس الأصلي من الذاكرة
+        # clear the original voice from memory
         _original_voice_channels.pop(self.lobby_id, None)
         for item in self.children:
             item.disabled = True
@@ -3990,14 +4038,13 @@ class StartVoteView(discord.ui.View):
         logger.info(f"❌ Match #{self.lobby_id} cancelled by {uid} ({reason})")
 
 # ============================================================
-# 🆕 نظام تصويت MVP الجماعي — أول شخصين من كل فريق
+# collective MVP voting system - top 2 of each team
 # ============================================================
 def build_mvp_voters(team1_players, team2_players, creator_id=None):
-    """كل لاعبي الماتش هم مصوّتون (8/6/4/2 حسب الـ mode).
-    ✅ تم تبسيط الدالة: لا حاجة لاختيار أول شخصين من كل فريق — كل اللاعبين يصوّتون.
-    ✅ قاعدة cross-team تضمن العدالة (لازم صوت من كل فريق على نفس اللاعب).
-    ✅ creator_id يُحتفظ به للـ compatibility فقط (لا تأثير على المنطق).
-    """
+    """All match players are voters (8/6/4/2 depending on mode).
+✅ : — .
+✅ cross-team ( ).
+✅ creator_id compatibility ( )."""
     voters = []
     for p in (team1_players or []) + (team2_players or []):
         if p not in voters:
@@ -4005,7 +4052,7 @@ def build_mvp_voters(team1_players, team2_players, creator_id=None):
     return voters
 
 def _collect_admin_members(guild):
-    """🆕 يرجع كل الأعضاء ذوي صلاحيات الأدمن (A+ / Manage Guild / ADMIN_ROLE_NAME / الأونر)."""
+    """🆕 Returns all members with admin permissions (A+ / Manage Guild / ADMIN_ROLE_NAME / Owner)."""
     admins = {}
     for role in guild.roles:
         if role == guild.default_role or role.is_bot_managed() or role.is_integration():
@@ -4024,19 +4071,18 @@ def _collect_admin_members(guild):
     return list(admins.values())
 
 async def escalate_mvp_dispute(guild, lobby_id, reason_detail, *, team1_players=None, team2_players=None, channel=None):
-    """🆕 لا يوجد تفاهم بين المصوّرين → يُحال للأدمن (حسب طلبك).
+    """🆕 No consensus among voters → escalated to admin (as requested).
 
-    السلوك:
-      1) لو فيه أدمن **حاضر الآن** بالفويسات الخاصة باللاعبين
-         → البوت ينقله عند اللاعبين ويبلّغه بالأوامر المناسبة في نفس المكان.
-      2) لو ما فيه أدمن حاضر
-         → تاغ الأدمن + تسليمه الأوامر المناسبة بالضبط لحل المشكلة.
-    """
+:
+1) ** **
+→ .
+2)
+→ + ."""
     try:
         admins = _collect_admin_members(guild)
         mc = db.get_match_channels(lobby_id)
 
-        # ── فويسات التفتيش الخاصة (Waiting Prv) ──
+        # private investigation voices (Waiting Prv)
         prv_ids = set()
         for cid in db.get_waiting_rooms(guild.id):
             vc = guild.get_channel(cid)
@@ -4048,7 +4094,7 @@ async def escalate_mvp_dispute(guild, lobby_id, reason_detail, *, team1_players=
         t1_text_id = mc.get("team1_text_id") if mc else None
         t2_text_id = mc.get("team2_text_id") if mc else None
 
-        # ── أين اللاعبين الآن؟ ──
+        # where are the players now?
         players_voice = None
         for cid in (t1v_id, t2v_id):
             vc = guild.get_channel(cid) if cid else None
@@ -4061,7 +4107,7 @@ async def escalate_mvp_dispute(guild, lobby_id, reason_detail, *, team1_players=
             if ch and isinstance(ch, discord.VoiceChannel):
                 players_voice = ch
 
-        # ── الأدمنز الحاضرون بالفويسات الخاصة ──
+        # admins present in private voices
         present = []
         for m in admins:
             if m.voice and m.voice.channel:
@@ -4069,7 +4115,7 @@ async def escalate_mvp_dispute(guild, lobby_id, reason_detail, *, team1_players=
                 if cid in prv_ids or (t1v_id and cid == t1v_id) or (t2v_id and cid == t2v_id):
                     present.append(m)
 
-        # ── تبديل فرز ──
+        # toggle sort
         w_tally, l_tally = {}, {}
         if present:
             moves, errs = [], []
@@ -4090,23 +4136,23 @@ async def escalate_mvp_dispute(guild, lobby_id, reason_detail, *, team1_players=
             mentions = " ".join(m.mention for m, _ in moves)
             where = moves[0][1] if moves else None
             embed = discord.Embed(
-                title=f"🚨 تعذّر الاتفاق على MVP — الماتش #{lobby_id}",
+                title=f"🚨 MVP Consensus Failed — Match #{lobby_id}",
                 description=(
                     f"{mentions}\n"
-                    "⚠️ **ما في تفاهم بين المصوّتين** — نطلب تدخل أحد الأدمنز.\n"
-                    f"📌 **السبب:** {reason_detail}"
+                    "⚠️ **No consensus among voters** — requesting admin intervention.\n"
+                    f"📌 **Reason:** {reason_detail}"
                 ),
                 color=COLORS["error"],
                 timestamp=discord.utils.utcnow()
             )
-            embed.add_field(name="🔴 Team 1 — كل اللاعبين", value=f"{' '.join(f'<@{p}>' for p in (team1_players or [])) or '*N/A*'}", inline=True)
-            embed.add_field(name="🟢 Team 2 — كل اللاعبين", value=f"{' '.join(f'<@{p}>' for p in (team2_players or [])) or '*N/A*'}", inline=True)
-            embed.add_field(name="🗳️ الأصوات", value=f"🏆 Winner: {', '.join(f'**{c}**×<@{p}>' for p, c in sorted(w_tally.items(), key=lambda x: -x[1])) or '*لا توجد أصوات*'}\n✦ Loser: {', '.join(f'**{c}**×<@{p}>' for p, c in sorted(l_tally.items(), key=lambda x: -x[1])) or '*لا توجد أصوات*'}", inline=False)
-            embed.add_field(name="🔧 الأمر المطلوب منك", value=f"`{PREFIX}w {lobby_id} @user` — عيّن MVP WINNER\n`{PREFIX}l {lobby_id} @user` — عيّن MVP LOSER\n📌 لازم من فريقين مختلفين — بـ `!!w` + `!!l` تُطبَّق النقاط تلقائياً", inline=False)
+            embed.add_field(name="🔴 Team 1 — All Players", value=f"{' '.join(f'<@{p}>' for p in (team1_players or [])) or '*N/A*'}", inline=True)
+            embed.add_field(name="🟢 Team 2 — All Players", value=f"{' '.join(f'<@{p}>' for p in (team2_players or [])) or '*N/A*'}", inline=True)
+            embed.add_field(name="🗳️", value=f"🏆 Winner: {', '.join(f'**{c}**×<@{p}>' for p, c in sorted(w_tally.items(), key=lambda x: -x[1])) or '*No votes*'}\n✦ Loser: {', '.join(f'**{c}**×<@{p}>' for p, c in sorted(l_tally.items(), key=lambda x: -x[1])) or '*No votes*'}", inline=False)
+            embed.add_field(name="🔧 Required Action", value=f"`{PREFIX}w {lobby_id} @user` — MVP WINNER\n`{PREFIX}l {lobby_id} @user` — MVP LOSER\n📌 — `!!w` + `!!l`", inline=False)
             embed.set_footer(text=f"{BOT_FOOTER}  •  Action required")
             embed = apply_branding(embed, guild)
 
-            # أرسل في قناة الفريق المرتبط بالفويس اللي وصله الأدمن
+            # send to the team channel linked to the voice the admin joined
             sent = False
             if where:
                 text_id = t2_text_id if where.id == t2v_id else t1_text_id
@@ -4118,52 +4164,51 @@ async def escalate_mvp_dispute(guild, lobby_id, reason_detail, *, team1_players=
                 await channel.send(content=mentions, embed=embed)
                 sent = True
             if not sent:
-                await notify_admins(guild, f"🚨 تعذّر الاتفاق على MVP — `#{lobby_id}`",
-                                    f"> 🛑  **فشل الإرسال للقنوات** — راجع صلاحيات البوت\n"
+                await notify_admins(guild, f"🚨 MVP — `#{lobby_id}`",
+                                    f"> 🛑 **No channel available to post the dispute** — manual review needed\n"
                                     f"> 📌  {reason_detail}")
             if errs:
-                logger.warning(f"⚠️ MVP dispute #{lobby_id}: بعض الأدمنز ما انقلوا — {'; '.join(errs)}")
+                logger.warning(f"⚠️ MVP dispute #{lobby_id}: — {'; '.join(errs)}")
             return moves
 
-        # ── 2) ما فيه أدمن حاضر → تاغ + أوامر ──
+        # 2) if an admin is present -> tag + commands
         await notify_admins(
             guild,
-            f"🚨 تعذّر الاتفاق على MVP — الماتش `#{lobby_id}`",
-            f"> ⚠️  **ما في تفاهم بين المصوّنين** وما فيه أدمن حاضر بالفويسات.\n"
-            f"> 📌  **السبب:**  {reason_detail}\n"
-            f"> 👥  **المصوّنين:**  "
+            f"🚨 MVP Consensus Failed — Match `#{lobby_id}`",
+            f"> ⚠️ **Admin decision required** — the voters did not agree.\n"
+            f"> 📌  **Reason:**  {reason_detail}\n"
+            f"> 👥  **Voters:**  "
             f"Team 1 🔴 {' '.join(f'<@{p}>' for p in (team1_players or []))}  |  "
             f"Team 2 🟢 {' '.join(f'<@{p}>' for p in (team2_players or []))}\n"
-            f"> 🗳  **التصويت:**  🏆 " + (", ".join(f"{c}×<@{p}>" for p, c in sorted(w_tally.items(), key=lambda x: -x[1])) or "لا أصوات")
-            + "  |  ✦ " + (", ".join(f"{c}×<@{p}>" for p, c in sorted(l_tally.items(), key=lambda x: -x[1])) or "لا أصوات")
+            f"> 🗳  **Vote:**  🏆 " + (", ".join(f"{c}×<@{p}>" for p, c in sorted(w_tally.items(), key=lambda x: -x[1])) or "No votes")
+            + "  |  ✦ " + (", ".join(f"{c}×<@{p}>" for p, c in sorted(l_tally.items(), key=lambda x: -x[1])) or "No votes")
             + f"\n{separator()}\n"
-            f"> 🔧  **الأوامر المطلوبة:**\n"
-            f"> ─  `{PREFIX}w {lobby_id} @user`  —  عينِ MVP WINNER\n"
-            f"> ─  `{PREFIX}l {lobby_id} @user`  —  عينِ MVP LOSER\n"
-            f"> 💡  لازم يكونو من **فريقين مختلفين** — بت `!!w` + `!!l` بتُطبَّق النقاط تلقائياً"
+            f"> 🔧  **Required Commands:**\n"
+            f"> ─ `{PREFIX}w {lobby_id} @user` — MVP WINNER\n"
+            f"> ─ `{PREFIX}l {lobby_id} @user` — MVP LOSER\n"
+            f"> 💡  Must be from **different teams** — using `!!w` + `!!l` applies points automatically"
         )
         return []
     except Exception as e:
         logger.exception(f"❌ escalate_mvp_dispute failed for lobby {lobby_id}: {e}")
         try:
-            await notify_admins(guild, f"❌ فشل تحكيم MVP `#{lobby_id}`",
+            await notify_admins(guild, f"❌ Failed MVP `#{lobby_id}`",
                                 f"> 🐛  `{str(e)[:200]}`")
         except Exception:
             pass
         return []
 
-# يحل محل VoteView + MvpSelectionView — لا تصويت للفريق، فقط اختيار MVP
+# replaces VoteView + MvpSelectionView - no team voting, only MVP selection
 class MvpVoteView(discord.ui.View):
-    """MVP selection without team voting — نظام جماعي.
-    ✅ كل لاعبي الماتش يصوّتون (8/6/4 حسب الـ mode)
-    ✅ لا timeout — التصويت مفتوح حتى الاكتمال
-    ✅ threshold = نصف عدد المصوّتين (dynamic)
-    ✅ cross-team: لازم صوت واحد من كل فريق على نفس اللاعب (WINNER و LOSER)
-    ✅ تطبيق فوري (fire-and-forget UI + استدعاء فوري process_match_result_with_mvps)
-    ✅ زر تاغ الأدمن مبسّط: ينقل أدمن حاضر فورًا أو رسالة قصيرة (لا mention للرولات)
-    """
+    """MVP selection without team voting — collective system.
+✅ (8/6/4 mode)
+✅ timeout —
+✅ threshold = (dynamic)
+✅ cross-team: (WINNER LOSER)
+✅ (fire-and-forget UI + process_match_result_with_mvps)
+✅ : ( mention )"""
     def __init__(self, lobby_id, guild, creator_id, first_joiner_id, team1_players, team2_players):
-        super().__init__(timeout=None)   # لا timeout — التصويت مفتوح حتى الاكتمال
+        super().__init__(timeout=None)   # no timeout - the vote stays open until completed
         self.lobby_id = lobby_id
         self.guild = guild
         self.guild_id = guild.id
@@ -4175,10 +4220,10 @@ class MvpVoteView(discord.ui.View):
         self.loser_mvp_id = None
         self._applied = False
         self._escalated = False
-        # 🆕 سجلّ المصوّنين: {user_id: {"winner": pid, "loser": pid}}
+        # voter log: {user_id: {"winner": pid, "loser": pid}}
         self.voters = build_mvp_voters(team1_players, team2_players, creator_id)
         self.votes = {}
-        # threshold ديناميكي = نصف عدد المصوّتين (لا يقل عن 1)
+        # dynamic threshold = half the number of voters (at least 1)
         self.consensus_needed = max(1, len(self.voters) // 2)
         logger.info(f"🗳️ MvpVoteView init: lobby={lobby_id}, voters={len(self.voters)}, threshold={self.consensus_needed}")
 
@@ -4191,7 +4236,7 @@ class MvpVoteView(discord.ui.View):
             player = db.get_player(pid, guild.id)
             if player and player.get("username"):
                 return player["username"][:80]
-            return "غير معروف"
+            return ""
 
         options = []
         for pid in all_players:
@@ -4206,7 +4251,7 @@ class MvpVoteView(discord.ui.View):
 
         if options:
             winner_select = discord.ui.Select(
-                placeholder="🏆  اختر MVP WINNER — (للمصوّنين فقط)",
+                placeholder="🏆 MVP WINNER — choose a player",
                 options=options,
                 custom_id=f"mvp_winner_select_{lobby_id}",
                 min_values=1, max_values=1
@@ -4215,7 +4260,7 @@ class MvpVoteView(discord.ui.View):
             self.add_item(winner_select)
 
             loser_select = discord.ui.Select(
-                placeholder="✦  اختر MVP LOSER — (للمصوّنين فقط)",
+                placeholder="✦ MVP LOSER — choose a player",
                 options=options,
                 custom_id=f"mvp_loser_select_{lobby_id}",
                 min_values=1, max_values=1
@@ -4223,18 +4268,18 @@ class MvpVoteView(discord.ui.View):
             loser_select.callback = self.loser_mvp_callback
             self.add_item(loser_select)
 
-        # 🆕 زر تاغ الأدمن في حالة وجود مشكلة
+        # admin tag button when there is a problem
         tag_admin_btn = discord.ui.Button(
-            label="⚠️ مشكلة في التصويت — تاغ الأدمن",
+            label="⚠️ Tag Admin",
             style=discord.ButtonStyle.danger,
             custom_id=f"tag_admin_btn_{lobby_id}"
         )
         tag_admin_btn.callback = self.tag_admin_callback
         self.add_item(tag_admin_btn)
 
-        # 🆕 زر محايد لإظهار الحالة الحالية (بدون تصويت)
+        # neutral button to show the current state (no voting)
         status_btn = discord.ui.Button(
-            label="📊 حالة التصويت",
+            label="📊 Vote Status",
             style=discord.ButtonStyle.secondary,
             custom_id=f"mvp_status_btn_{lobby_id}"
         )
@@ -4242,13 +4287,13 @@ class MvpVoteView(discord.ui.View):
         self.add_item(status_btn)
 
 # ══════════════════════════════════════════════════════
-    # 🆕 أدوات المصوّنين + الحالة + الاتفاق
+    # voter tools + state + agreement
     # ══════════════════════════════════════════════════════
     def _is_voter(self, user_id):
         return user_id in self.voters
 
     async def _guard_voter(self, interaction):
-        """يتحقق إن المستخدم من المصوّنين المسموح لهم."""
+        """ ."""
         if not self.voters:
             return True
         if interaction.user.id in self.voters:
@@ -4256,11 +4301,11 @@ class MvpVoteView(discord.ui.View):
         t1_names = " ".join(f"<@{p}>" for p in self.voters if p in self.team1_players)
         t2_names = " ".join(f"<@{p}>" for p in self.voters if p in self.team2_players)
         embed = discord.Embed(
-            title="⛔ ما أنت من المصوّتين",
+            title="⛔ You are not a voter",
             description=(
-                "❌ صوتك ما يُحسب في هذا النظام.\n"
-                "المصوّتون هم **أول شخصين من كل فريق**.\n"
-                "📌 لو كنت منهم، اختر MVP من القوائم بالأعلى."
+                "❌ Your vote doesn't count in this system.\n"
+                "Voters are **first 2 from each team**.\n"
+                "📌 If you're one of them, select MVP from the menus above."
             ),
             color=COLORS["error"]
         )
@@ -4270,7 +4315,7 @@ class MvpVoteView(discord.ui.View):
         return False
 
     def _tally(self, key):
-        """{player_id: عدد الأصوات} لقرار معيّن."""
+        """{player_id: } ."""
         counts = {}
         for _uid, data in self.votes.items():
             pid = data.get(key)
@@ -4279,19 +4324,18 @@ class MvpVoteView(discord.ui.View):
         return counts
 
     def _consensus(self, key):
-        """يرجع اللاعب الذي وصل لـ self.consensus_needed صوت
-        **ومن كل فريق على الأقل صوت واحد** ضمن تلك الأصوات (cross-team validation)، أو None.
-        
-        key = "winner" أو "loser"
-        ✅ قاعدة العدالة: لازم صوت واحد على الأقل من كل فريق على نفس اللاعب
-        ✅ هذا يمنع تحيّز فريق واحد (4 من team1 يصوّتون على لاعبهم)
-        ✅ يمنع التصويت الذاتي في 1v1 (لاعب يصوّت لنفسه = لا cross-team)
-        """
+        """Returns player who reached self.consensus_needed votes
+** ** (cross-team validation) None.
+
+key = "winner" "loser"
+✅ :
+✅ (4 team1 )
+✅ 1v1 ( = cross-team)"""
         tally = self._tally(key)
         for pid, c in tally.items():
             if c < self.consensus_needed:
                 continue
-            # 🆕 تحقق cross-team
+            # cross-team check
             team1_votes = 0
             team2_votes = 0
             for uid, data in self.votes.items():
@@ -4300,14 +4344,14 @@ class MvpVoteView(discord.ui.View):
                         team1_votes += 1
                     elif uid in self.team2_players:
                         team2_votes += 1
-            # لازم صوت واحد على الأقل من كل فريق
+            # at least one vote from each team is required
             if team1_votes >= 1 and team2_votes >= 1:
                 return pid
-            # لو كل الأصوات من فريق واحد → جرّب اللاعب التالي
+            # if all votes are from one team -> try the next player
         return None
 
     def _all_voted(self):
-        """هل صوّت كل المصوّنين على الاثنين (WINNER + LOSER)؟"""
+        """ (WINNER + LOSER)"""
         if not self.voters:
             return False
         for uid in self.voters:
@@ -4322,24 +4366,24 @@ class MvpVoteView(discord.ui.View):
     def _tally_line(self, key, label):
         tally = self._tally(key)
         if not tally:
-            return f"> ─  {label}:  *لا توجد أصوات*"
+            return f"> ─  {label}:  *No votes*"
         parts = [f"<@{p}> ×{c}" for p, c in sorted(tally.items(), key=lambda x: -x[1])]
         return f"> ─  {label}:  " + "   |   ".join(parts)
 
     def _tally_text(self, key):
         tally = self._tally(key)
         if not tally:
-            return "لا أصوات"
+            return "No votes"
         return " / ".join(f"{c}×<@{p}>" for p, c in sorted(tally.items(), key=lambda x: -x[1]))
 
     async def _refresh(self, interaction=None):
-        """يحدّث رسالة التصويت لعرض الحالة / يعطّل الأزرار بعد التطبيق."""
+        """ / ."""
         for item in self.children:
             if isinstance(item, (discord.ui.Select, discord.ui.Button)):
                 item.disabled = True if self._applied else False
         if interaction is None:
             return
-        # ✅ إصلاح: discord.Interaction ما عندها .edit() — نعدّل رسالة التصويت نفسها
+        # fix: discord.Interaction has no .edit() - edit the voting message itself
         try:
             if interaction.message is not None:
                 await interaction.message.edit(view=self)
@@ -4349,13 +4393,13 @@ class MvpVoteView(discord.ui.View):
             logger.warning(f"⚠️ _refresh edit failed (lobby {self.lobby_id}): {e}")
 
     async def status_callback(self, interaction):
-        """🆕 زر محايد: يعرض الحالة الحالية بدون أي تصويت."""
+        """🆕 Neutral button: shows current status without any vote."""
         embed = discord.Embed(
-            title=f"📊 تصويت MVP · `#{self.lobby_id}`",
+            title=f"📊 MVP Vote · `#{self.lobby_id}`",
             description=(
-                f"✅ `{self._voted_count()}` / `{len(self.voters)}` صوّتوا\n"
-                f"🎯 المطلوب: `{self.consensus_needed}` أصوات\n"
-                f"⚠️ صوت من كل فريق"
+                f"✅ `{self._voted_count()}` / `{len(self.voters)}` voted\n"
+                f"🎯 Required: `{self.consensus_needed}` matching votes\n"
+                f"⚠️ Vote from each team"
             ),
             color=COLORS["vote"]
         )
@@ -4365,19 +4409,19 @@ class MvpVoteView(discord.ui.View):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     async def tag_admin_callback(self, interaction):
-        """🆕 زر مبسّط: ينقل أدمن حاضر لقناة اللاعبين فورًا، أو رسالة قصيرة بدون mention."""
+        """🆕 Simple button: moves available admin to players channel instantly, or short message without mention."""
         if self._applied or self._escalated:
             return
         guild = self.guild or bot.get_guild(self.guild_id)
         if not guild:
             return
-        # 1. ابحث عن أدمن حاضر (online / idle / dnd)
+        # 1. look for a present admin (online / idle / dnd)
         admin_members = _collect_admin_members(guild)
         available_admins = [
             m for m in admin_members
             if not m.bot and m.status in (discord.Status.online, discord.Status.idle, discord.Status.dnd)
         ]
-        # 2. ابحث عن فويس اللاعبين
+        # 2. look up the players' voice
         mc = db.get_match_channels(self.lobby_id)
         players_voice = None
         if mc:
@@ -4386,21 +4430,21 @@ class MvpVoteView(discord.ui.View):
                 if vc and isinstance(vc, discord.VoiceChannel) and vc.members:
                     players_voice = vc
                     break
-        # 3. تنفيذ + رد ephemeral
+        # 3. execute + ephemeral reply
         if available_admins:
             admin = available_admins[0]
-            # المسار A: أدمن حاضر + في فويس → انقله مباشرة
+            # path A: admin present + in voice -> move them directly
             if players_voice and admin.voice and admin.voice.channel:
                 try:
                     if admin.voice.channel.id != players_voice.id:
                         await admin.move_to(players_voice)
                     await interaction.response.send_message(
-                        f"✅ تم نقل الأدمن **{admin.display_name}**.",
+                        f"✅ Admin **{admin.display_name}** moved.",
                         ephemeral=True
                     )
                     try:
                         await interaction.channel.send(
-                            f"🚨 `#{self.lobby_id}` — الأدمن حاضر · `!!w @user` + `!!l @user`"
+                            f"🚨 `#{self.lobby_id}` — Admin available · `!!w @user` + `!!l @user`"
                         )
                     except Exception:
                         pass
@@ -4408,13 +4452,13 @@ class MvpVoteView(discord.ui.View):
                     return
                 except (discord.Forbidden, discord.HTTPException) as e:
                     await interaction.response.send_message(
-                        f"⚠️ فشل نقل الأدمن: {e}",
+                        f"⚠️ Could not move you: {e}",
                         ephemeral=True
                     )
                     return
-            # المسار B: أدمن حاضر لكن ليس في فويس
+            # path B: admin present but not in voice
             await interaction.response.send_message(
-                f"✅ الأدمن **{admin.display_name}** حاضر.",
+                f"✅ Admin **{admin.display_name}** is available.",
                 ephemeral=True
             )
             try:
@@ -4424,14 +4468,14 @@ class MvpVoteView(discord.ui.View):
             except Exception:
                 pass
             return
-        # المسار C: لا أدمن حاضر
+        # path C: no admin present
         await interaction.response.send_message(
-            "⚠️ لا يوجد أدمن حاضر الآن.",
+            "⚠️ No admin available right now.",
             ephemeral=True
         )
         try:
             await interaction.channel.send(
-                f"⏳ `#{self.lobby_id}` — بانتظار أدمن."
+                f"⏳ `#{self.lobby_id}` — Waiting for admin."
             )
         except Exception:
             pass
@@ -4441,16 +4485,16 @@ class MvpVoteView(discord.ui.View):
         return "team1" if pid in self.team1_players else "team2"
 
     # ══════════════════════════════════════════════════════
-    # 🆕 تسجيل الأصوات
+    # register the votes
     # ══════════════════════════════════════════════════════
     async def winner_mvp_callback(self, interaction):
         if not await self._guard_voter(interaction):
             return
         chosen = int(interaction.data["values"][0])
         self.votes.setdefault(interaction.user.id, {})["winner"] = chosen
-        self.winner_mvp_id = chosen   # آخر صوت — للتوافق مع أوامر !!w / !!l
+        self.winner_mvp_id = chosen   # last vote - kept for compatibility with the !!w / !!l commands
         await interaction.response.send_message(
-            f"🏆  تم تسجيل تصويتك لـ MVP WINNER:  <@{chosen}>", ephemeral=True
+            f"🏆  Your vote for MVP WINNER recorded:  <@{chosen}>", ephemeral=True
         )
         await self._try_apply(interaction)
 
@@ -4461,12 +4505,12 @@ class MvpVoteView(discord.ui.View):
         self.votes.setdefault(interaction.user.id, {})["loser"] = chosen
         self.loser_mvp_id = chosen
         await interaction.response.send_message(
-            f"✦  تم تسجيل تصويتك لـ MVP LOSER:  <@{chosen}>", ephemeral=True
+            f"✦  Your vote for MVP LOSER recorded:  <@{chosen}>", ephemeral=True
         )
         await self._try_apply(interaction)
 
     # ══════════════════════════════════════════════════════
-    # 🆕 فحص الاتفاق بعد كل صوت
+    # check for agreement after each vote
     # ══════════════════════════════════════════════════════
     async def _try_apply(self, interaction):
         if self._applied:
@@ -4475,32 +4519,32 @@ class MvpVoteView(discord.ui.View):
         w = self._consensus("winner")
         l = self._consensus("loser")
 
-        # ✅ اتفاق كامل
+        # full agreement
         if w and l:
             if await self._get_team(w) == await self._get_team(l):
                 await self._escalate(
                     interaction.channel,
-                    f"اتفق المصوّنون، لكن MVP WINNER <@{w}> و MVP LOSER <@{l}> **من نفس الفريق** — مستحيل يُطبَّق"
+                    f"Voters reached consensus, but MVP WINNER <@{w}> and MVP LOSER <@{l}> are **on the same team** — impossible to apply"
                 )
                 return
             await self._apply(w, l, interaction)
             return
 
-        # 🛑 كل المصوّنين صوّتوا وما في اتفاق → لا تفاهم → للأدمن
+        # all voters voted and there is no agreement -> no consensus -> escalate to an admin
         if self._all_voted():
             reason = (
-                f"صوّتوا كلهم بدون consensus cross-team — "
+                f"No cross-team consensus — "
                 f"🏆 {self._tally_text('winner')}   •   ✦ {self._tally_text('loser')}\n"
-                f"⚠️ لازم صوت واحد على الأقل من كل فريق على نفس اللاعب (WINNER و LOSER)"
+                f"⚠️ At least one vote from each team on same player (WINNER and LOSER)"
             )
             await self._escalate(interaction.channel, reason)
             return
 
-        # 🟡 لسه في ناس ما صوّتوا — حدّث الحالة فقط
+        # some people have not voted yet - update the state only
         await self._refresh(interaction)
 
     async def _escalate(self, channel, reason_detail):
-        """🆕 لا تفاهم → الأدمن (ينقله لو حاضر بالفويسات، وإلا يتاغه)."""
+        """🆕 → ( )."""
         if self._applied or self._escalated:
             return
         self._escalated = True
@@ -4517,18 +4561,18 @@ class MvpVoteView(discord.ui.View):
         )
 
     # ══════════════════════════════════════════════════════
-    # تطبيق النتيجة — fire-and-forget UI + استدعاء فوري process_match_result_with_mvps
-    # ✅ المسار الحرج (احتساب النقاط) يُستدعى فورًا بدون انتظار UI edit أو رسالة التأكيد
-    # ✅ UI edit + رسالة التأكيد يُطلَقان في الخلفية عبر asyncio.ensure_future
+    # Apply result — fire-and-forget UI + immediate process_match_result_with_mvps call
+    # the critical path (points calculation) runs instantly without waiting for the UI edit or confirmation message
+    # the UI edit + confirmation message are fired in the background via asyncio.ensure_future
     # ══════════════════════════════════════════════════════
     async def _apply(self, winner_mvp, loser_mvp, interaction):
         self._applied = True
         self.winner_mvp_id = winner_mvp
         self.loser_mvp_id = loser_mvp
-        # 1. disable UI فورًا (sync, لا انتظار)
+        # 1. disable the UI instantly (sync, no waiting)
         for item in self.children:
             item.disabled = True
-        # 2. fire-and-forget UI tasks (لا ننتظرها)
+        # 2. fire-and-forget UI tasks (we do not wait for them)
         async def _ui_tasks():
             try:
                 if interaction is not None and interaction.message is not None:
@@ -4537,11 +4581,11 @@ class MvpVoteView(discord.ui.View):
                 if target_ch is not None:
                     await target_ch.send(
                         embed=discord.Embed(
-                            title="✅ تم الاتفاق",
+                            title="✅ Consensus Reached",
                             description=(
                                 f"🏆 **WINNER:** <@{winner_mvp}> `+80`\n"
                                 f"✦ **LOSER:** <@{loser_mvp}> `+30`\n"
-                                "⚡ جارٍ احتساب النقاط..."
+                                "⚡ Calculating points..."
                             ),
                             color=COLORS["success"]
                         )
@@ -4549,7 +4593,7 @@ class MvpVoteView(discord.ui.View):
             except Exception as e:
                 logger.warning(f"⚠️ _apply UI tasks failed (lobby {self.lobby_id}): {e}")
         asyncio.ensure_future(_ui_tasks())
-        # 3. ✅ المسار الحرج فورًا: احتساب النقاط
+        # 3. critical path instantly: points calculation
         logger.info(
             f"🏆 MvpVoteView confirmed — lobby={self.lobby_id}, "
             f"winner_mvp={winner_mvp}, loser_mvp={loser_mvp}, "
@@ -4571,29 +4615,29 @@ class MvpVoteView(discord.ui.View):
             try:
                 await notify_admins(
                     guild,
-                    f"❌ فشل تطبيق نقاط الماتش #{self.lobby_id}",
-                    f"> 🐛  **الخطأ:**  `{str(e)[:200]}`\n"
+                    f"❌ Failed #{self.lobby_id}",
+                    f"> 🐛  **Error:**  `{str(e)[:200]}`\n"
                     f"> 🏆 Winner MVP:  <@{winner_mvp}>\n"
                     f"> ✦ Loser MVP:  <@{loser_mvp}>\n"
-                    f"> 💡 Use  `!!w {self.lobby_id} @user`  و  `!!l {self.lobby_id} @user`  يدوياً"
+                    f"> 💡 Use  `!!w {self.lobby_id} @user`  and  `!!l {self.lobby_id} @user`  manually"
                 )
             except Exception:
                 pass
 
     # ══════════════════════════════════════════════════════
-    # لا يوجد timeout — التصويت مفتوح حتى الاكتمال أو تدخل الأدمن يدويًا
+    # No timeout — voting stays open until completion or manual admin intervention
     # ══════════════════════════════════════════════════════
-    # ✅ تم حذف on_timeout بالكامل — super().__init__(timeout=None) يمنع استدعاءها
-    # ✅ لو اللاعبون لا يصوّتون، عليهم ضغط زر "تاغ الأدمن" لإنهاء الماتش
+    # removed on_timeout entirely - super().__init__(timeout=None) prevents it from being called
+    # if players do not vote, they must press the "Tag admin" button to end the match
 
 # ════════════════════════════════════════════════════════════════════════════════
-# TeamWinnerVoteView — مخصص لـ 1v1 (تصويت على الفريق الفائز بدل MVP)
-# ✅ كل لاعبي الماتش يصوّتون (في 1v1 = 2 مصوّتين)
-# ✅ threshold = نصف عدد المصوّتين (لا يقل عن 1)
-# ✅ cross-team: لازم صوت واحد من كل فريق على نفس الفريق الفائز
-# ✅ لا timeout — التصويت مفتوح حتى الاكتمال
-# ✅ تطبيق فوري (fire-and-forget UI + استدعاء فوري process_match_result_with_mvps)
-# ✅ زر تاغ الأدمن مبسّط (نفس MvpVoteView)
+# TeamWinnerVoteView - dedicated to 1v1 (vote on the winning team instead of an MVP)
+# all match players vote (in 1v1 = 2 voters)
+# threshold = half the number of voters (at least 1)
+# cross-team: at least one vote from each team for the same winning team
+# no timeout - the vote stays open until completed
+# immediate application (fire-and-forget UI + immediate call to process_match_result_with_mvps)
+# simplified admin tag button (same as MvpVoteView)
 # ════════════════════════════════════════════════════════════════════════════════
 class TeamWinnerVoteView(discord.ui.View):
     def __init__(self, lobby_id, guild, team1_players, team2_players):
@@ -4611,7 +4655,7 @@ class TeamWinnerVoteView(discord.ui.View):
         self.consensus_needed = max(1, len(self.voters) // 2)
         logger.info(f"🗳️ TeamWinnerVoteView init (1v1): lobby={lobby_id}, voters={len(self.voters)}, threshold={self.consensus_needed}")
         
-        # select واحد فقط: الفريق الفائز
+        # a single select: the winning team
         options = [
             discord.SelectOption(
                 label=f"🔴 Team 1 — {self._player_name(self.team1_players[0]) if self.team1_players else 'N/A'}",
@@ -4625,7 +4669,7 @@ class TeamWinnerVoteView(discord.ui.View):
             ),
         ]
         winner_select = discord.ui.Select(
-            placeholder="🏆 اختر الفريق الفائز",
+            placeholder="🏆 Select the winning team",
             options=options,
             custom_id=f"team_winner_select_{lobby_id}",
             min_values=1, max_values=1
@@ -4633,18 +4677,18 @@ class TeamWinnerVoteView(discord.ui.View):
         winner_select.callback = self.team_winner_callback
         self.add_item(winner_select)
         
-        # زر تاغ الأدمن مبسّط
+        # simplified admin tag button
         tag_admin_btn = discord.ui.Button(
-            label="⚠️ مشكلة — تاغ الأدمن",
+            label="⚠️ Issue — Tag Admin",
             style=discord.ButtonStyle.danger,
             custom_id=f"1v1_tag_admin_{lobby_id}"
         )
         tag_admin_btn.callback = self.tag_admin_callback
         self.add_item(tag_admin_btn)
         
-        # زر حالة التصويت
+        # vote status button
         status_btn = discord.ui.Button(
-            label="📊 حالة التصويت",
+            label="📊 Vote Status",
             style=discord.ButtonStyle.secondary,
             custom_id=f"1v1_status_{lobby_id}"
         )
@@ -4658,15 +4702,15 @@ class TeamWinnerVoteView(discord.ui.View):
         if member:
             return member.display_name[:80]
         p = db.get_player(pid, self.guild_id) if db else None
-        return (p.get("username") or "غير معروف")[:80] if p else "غير معروف"
+        return (p.get("username") or "")[:80] if p else ""
     
     async def _guard_voter(self, interaction):
         if not self.voters or interaction.user.id in self.voters:
             return True
         await interaction.response.send_message(
             embed=discord.Embed(
-                title="⛔ ما أنت من المصوّتين",
-                description="في 1v1، اللاعبان هما المصوّتان فقط.",
+                title="⛔ You are not a voter",
+                description="In 1v1, both players are the voters.",
                 color=COLORS["error"]
             ), ephemeral=True
         )
@@ -4680,13 +4724,13 @@ class TeamWinnerVoteView(discord.ui.View):
         chosen = interaction.data["values"][0]   # "team1" or "team2"
         self.votes[interaction.user.id] = chosen
         await interaction.response.send_message(
-            f"✅ تم تسجيل تصويتك: **{'🔴 Team 1' if chosen == 'team1' else '🟢 Team 2'}**",
+            f"✅ Vote recorded: **{'🔴 Team 1' if chosen == 'team1' else '🟢 Team 2'}**",
             ephemeral=True
         )
         await self._try_apply(interaction)
     
     def _tally(self):
-        """يرجع counts + cross-team info."""
+        """ counts + cross-team info."""
         counts = {"team1": 0, "team2": 0}
         cross = {
             "team1": {"team1": 0, "team2": 0},
@@ -4701,12 +4745,12 @@ class TeamWinnerVoteView(discord.ui.View):
         return counts, cross
     
     def _consensus(self):
-        """يرجع الفريق الفائز لو وصل لـ threshold + cross-team، أو None."""
+        """Returns winning team if reached threshold + cross-team, else None."""
         counts, cross = self._tally()
         for choice, c in counts.items():
             if c < self.consensus_needed:
                 continue
-            # cross-team: لازم صوت واحد من كل فريق على نفس الفريق
+            # cross-team: at least one vote from each team for the same winning team
             if cross[choice]["team1"] >= 1 and cross[choice]["team2"] >= 1:
                 return choice
         return None
@@ -4724,10 +4768,10 @@ class TeamWinnerVoteView(discord.ui.View):
         if self._all_voted():
             await self._escalate(
                 interaction.channel,
-                f"تعادل في 1v1 — كل لاعب صوّت لنفسه (لا cross-team agreement)"
+                f"1v1 — no agreement (cross-team agreement required)"
             )
             return
-        # لسه في انتظار — تحديث الواجهة فقط
+        # still waiting - update the interface only
         try:
             if interaction.message is not None:
                 await interaction.message.edit(view=self)
@@ -4749,10 +4793,10 @@ class TeamWinnerVoteView(discord.ui.View):
                     winner_label = "🔴 Team 1" if winner_team == "team1" else "🟢 Team 2"
                     await target_ch.send(
                         embed=discord.Embed(
-                            title="✅ تم الاتفاق",
+                            title="✅ Consensus Reached",
                             description=(
-                                f"🏆 **الفائز:** {winner_label}\n"
-                                "⚡ جارٍ احتساب النقاط..."
+                                f"🏆 **Winner:** {winner_label}\n"
+                                "⚡ Calculating points..."
                             ),
                             color=COLORS["success"]
                         )
@@ -4760,7 +4804,7 @@ class TeamWinnerVoteView(discord.ui.View):
             except Exception as e:
                 logger.warning(f"⚠️ 1v1 _apply UI tasks failed (lobby {self.lobby_id}): {e}")
         asyncio.ensure_future(_ui_tasks())
-        # المسار الحرج فورًا
+        # critical path instantly
         logger.info(
             f"🏆 TeamWinnerVoteView confirmed — lobby={self.lobby_id}, "
             f"winner_team={winner_team}, voters={len(self.voters)}, votes={len(self.votes)}"
@@ -4769,7 +4813,7 @@ class TeamWinnerVoteView(discord.ui.View):
         if not guild:
             logger.error(f"❌ Guild not found for 1v1 lobby {self.lobby_id}")
             return
-        # 1v1: winner_mvp = لاعب الفريق الفائز، loser_mvp = لاعب الفريق الخاسر
+        # 1v1: winner_mvp = player of the winning team, loser_mvp = player of the losing team
         winner_mvp_id = self.team1_players[0] if winner_team == "team1" else self.team2_players[0]
         loser_mvp_id = self.team2_players[0] if winner_team == "team1" else self.team1_players[0]
         try:
@@ -4783,10 +4827,10 @@ class TeamWinnerVoteView(discord.ui.View):
             try:
                 await notify_admins(
                     guild,
-                    f"❌ فشل تطبيق نقاط 1v1 #{self.lobby_id}",
-                    f"> 🐛  **الخطأ:**  `{str(e)[:200]}`\n"
+                    f"❌ Failed 1v1 #{self.lobby_id}",
+                    f"> 🐛  **Error:**  `{str(e)[:200]}`\n"
                     f"> 🏆 Winner: `{winner_team}`\n"
-                    f"> 💡 Use  `!!resolve {self.lobby_id} {winner_team}`  يدوياً"
+                    f"> 💡 Use `!!resolve {self.lobby_id} {winner_team}`"
                 )
             except Exception:
                 pass
@@ -4808,7 +4852,7 @@ class TeamWinnerVoteView(discord.ui.View):
         )
     
     async def tag_admin_callback(self, interaction):
-        """🆕 زر مبسّط لـ 1v1 — نفس منطق MvpVoteView.tag_admin_callback."""
+        """🆕 Simple button for 1v1 — same logic as MvpVoteView.tag_admin_callback."""
         if self._applied or self._escalated:
             return
         guild = self.guild or bot.get_guild(self.guild_id)
@@ -4834,7 +4878,7 @@ class TeamWinnerVoteView(discord.ui.View):
                     if admin.voice.channel.id != players_voice.id:
                         await admin.move_to(players_voice)
                     await interaction.response.send_message(
-                        f"✅ تم نقل الأدمن **{admin.display_name}**.",
+                        f"✅ Admin **{admin.display_name}** moved.",
                         ephemeral=True
                     )
                     try:
@@ -4847,12 +4891,12 @@ class TeamWinnerVoteView(discord.ui.View):
                     return
                 except (discord.Forbidden, discord.HTTPException) as e:
                     await interaction.response.send_message(
-                        f"⚠️ فشل نقل الأدمن: {e}",
+                        f"⚠️ Could not move you: {e}",
                         ephemeral=True
                     )
                     return
             await interaction.response.send_message(
-                f"✅ الأدمن **{admin.display_name}** حاضر.",
+                f"✅ Admin **{admin.display_name}** is available.",
                 ephemeral=True
             )
             try:
@@ -4863,12 +4907,12 @@ class TeamWinnerVoteView(discord.ui.View):
                 pass
             return
         await interaction.response.send_message(
-            "⚠️ لا يوجد أدمن حاضر الآن.",
+            "⚠️ No admin available right now.",
             ephemeral=True
         )
         try:
             await interaction.channel.send(
-                f"⏳ `#{self.lobby_id}` — بانتظار أدمن."
+                f"⏳ `#{self.lobby_id}` — Waiting for admin."
             )
         except Exception:
             pass
@@ -4877,16 +4921,16 @@ class TeamWinnerVoteView(discord.ui.View):
     async def status_callback(self, interaction):
         counts, cross = self._tally()
         embed = discord.Embed(
-            title=f"📊 تصويت 1v1 · `#{self.lobby_id}`",
+            title=f"📊 1v1 Vote · `#{self.lobby_id}`",
             description=(
-                f"✅ `{len(self.votes)}` / `{len(self.voters)}` صوّتوا\n"
-                f"🎯 المطلوب: `{self.consensus_needed}` أصوات\n"
-                f"⚠️ صوت من كل فريق"
+                f"✅ `{len(self.votes)}` / `{len(self.voters)}` voted\n"
+                f"🎯 Required: `{self.consensus_needed}` matching votes\n"
+                f"⚠️ Vote from each team"
             ),
             color=COLORS["vote"]
         )
         embed.add_field(
-            name="🏆 الأصوات",
+            name="🏆 Votes",
             value=(
                 f"🔴 `{counts['team1']}` · 🟢 `{counts['team2']}`"
             ),
@@ -4896,8 +4940,8 @@ class TeamWinnerVoteView(discord.ui.View):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 async def process_match_result_with_mvps(guild, lobby_id, winner_team, winner_mvp_id, loser_mvp_id, channel=None):
-    """🆕 يطبق نظام النقاط الجديد مع MVPs محددة يدوياً.
-    ✅ إصلاح: ينهي الماتش دائماً (حتى لو فشل تطبيق النقاط)."""
+    """🆕 Applies new points system with manually-specified MVPs.
+✅ : Always ends match (even if applying points fails)."""
     try:
         logger.info(f"🏆 process_match_result_with_mvps — lobby={lobby_id}, winner={winner_team}, w_mvp={winner_mvp_id}, l_mvp={loser_mvp_id}")
         lobby = db.get_lobby(lobby_id)
@@ -4909,7 +4953,7 @@ async def process_match_result_with_mvps(guild, lobby_id, winner_team, winner_mv
             return
 
         logger.info(f"✅ Processing match result for lobby {lobby_id}...")
-        # ✅ إصلاح: حدّث الحالة لـ completed فوراً — حتى لو فشل شيء بعدها، الماتش ينتهي
+        # fix: set the state to completed immediately - so the match ends even if something after it fails
         db.update_lobby_status(lobby_id, "completed")
 
         game_mode = lobby.get("game_mode", DEFAULT_MODE)
@@ -4917,13 +4961,13 @@ async def process_match_result_with_mvps(guild, lobby_id, winner_team, winner_mv
         lt = lobby["team2_players"] if winner_team == "team1" else lobby["team1_players"]
         logger.info(f"  Winners: {wt}, Losers: {lt}, Winner MVP: {winner_mvp_id}, Loser MVP: {loser_mvp_id}")
 
-        # 🆕 نقاط النظام الجديد
+        # points for the new system
         WINNER_MVP_POINTS = 80
         WINNER_POINTS = 30
         LOSER_MVP_POINTS = 30
         LOSER_POINTS = -30
 
-        # معالجة الفريق الفائز
+        # winning team handling
         winner_details = []
         for pid in wt:
             is_mvp = (pid == winner_mvp_id)
@@ -4945,7 +4989,7 @@ async def process_match_result_with_mvps(guild, lobby_id, winner_team, winner_mv
             new_level = new_p.get("level", STARTING_LEVEL) if new_p else old_level
             winner_details.append((pid, pts, is_mvp, old_level, new_level))
 
-        # معالجة الفريق الخاسر
+        # losing team handling
         loser_details = []
         for pid in lt:
             is_mvp = (pid == loser_mvp_id)
@@ -4968,7 +5012,7 @@ async def process_match_result_with_mvps(guild, lobby_id, winner_team, winner_mv
         db.recalculate_ranks(guild.id)
         logger.info(f"  Points applied — Winners: {len(winner_details)}, Losers: {len(loser_details)}")
         
-        # ✅ إصلاح: أعد قراءة الرانك الجديد لكل لاعب بعد recalculate_ranks
+        # fix: re-read the new ranks of every player after recalculate_ranks
         for i, (pid, pts, is_mvp, old_level, _) in enumerate(winner_details):
             p = db.get_player(pid, guild.id)
             new_level = p.get("level", STARTING_LEVEL) if p else old_level
@@ -4984,19 +5028,19 @@ async def process_match_result_with_mvps(guild, lobby_id, winner_team, winner_mv
             if m:
                 await update_member_nickname(m, new_level)
         
-        # حفظ نتيجة الماتش
+        # save the match result
         db.create_match_result(lobby_id, winner_team, len(wt), len(lt), mvp=winner_mvp_id)
 
-        # بناء رسالة النتيجة
+        # build the result message
         wd = "🔴 Team 1" if winner_team == "team1" else "🟢 Team 2"
         wt_mentions = "\n".join([
             f"{'🔱' if is_mvp else '✅'}  <@{pid}> → `{'+' if pts > 0 else ''}{pts}` pts  (RANK #{old}→#{new})"
             for pid, pts, is_mvp, old, new in winner_details
-        ]) or "*لا يوجد لاعبون*"
+        ]) or "* *"
         lt_mentions = "\n".join([
             f"{'✦' if is_mvp else '☠️'}  <@{pid}> → `{'+' if pts > 0 else ''}{pts}` pts  (RANK #{old}→#{new})"
             for pid, pts, is_mvp, old, new in loser_details
-        ]) or "*لا يوجد لاعبون*"
+        ]) or "* *"
 
         embed = discord.Embed(
             title=f"🏅 Match Result — #{lobby_id}",
@@ -5015,23 +5059,23 @@ async def process_match_result_with_mvps(guild, lobby_id, winner_team, winner_mv
         embed.set_author(name="Match Finished", icon_url=None)
         embed.set_footer(text=f"{BOT_FOOTER}  •  Match #{lobby_id}  ·  GG WP!")
         embed = apply_branding(embed, guild)
-        # 🆕 نتيجة الماتش → قناة النتائج المخصصة (match-results) فقط، وإلا القناة الأصلية
+        # match result -> dedicated results channel (match-results) only, otherwise the original channel
         await _post_match_result(guild, embed, channel)
 
-        # ⚡ تسريع: أغلق الفويسات فوراً — انقل اللاعبين + احذف قنوات الماتش قبل
-        #    leaderboard / roles حتى تختفي القنوات بأسرع ما يمكن (خاصة !!w / !!l)
+        # speed-up: close voices immediately - move players + delete match channels before
+        #    leaderboard / roles so channels close as fast as possible (especially !!w / !!l)
         await delete_match_channels(guild, lobby_id)
         cleanup_lobby_memory(lobby_id)
         _original_voice_channels.pop(lobby_id, None)
         logger.info(f"✅ Match #{lobby_id} completed — channels deleted, memory cleaned")
 
-        # تحديث الـ Leaderboard + مزامنة أدوار لاعبي الماتش فقط (تسريع)
+        # update the leaderboard + sync roles of the match players only (speed-up)
         all_players = lobby["team1_players"] + lobby["team2_players"]
         await update_leaderboard_channel(guild)
         await sync_all_players_roles(guild, player_ids=all_players)
     except Exception as e:
         logger.exception(f"❌ process_match_result_with_mvps FAILED for lobby {lobby_id}: {e}")
-        # ✅ إصلاح: حتى لو فشل كل شيء، تأكد من إنهاء الماتش وحذف القنوات
+        # fix: even if everything fails, make sure the match ends and the channels are deleted
         try:
             db.update_lobby_status(lobby_id, "completed")
             _original_voice_channels.pop(lobby_id, None)
@@ -5040,22 +5084,22 @@ async def process_match_result_with_mvps(guild, lobby_id, winner_team, winner_mv
             logger.info(f"🔧 Match #{lobby_id} force-completed after error")
         except Exception as e2:
             logger.exception(f"❌ Failed to force-complete match {lobby_id}: {e2}")
-        # 🆕 تاغ الأدمنز عند الفشل
+        # tag admins on failure
         try:
             await notify_admins(
                 guild,
                 "Match Result Processing Failed",
-                f"> ❌  فشل في معالجة نتيجة الماتش `#{lobby_id}`\n"
-                f"> 🐛  **الخطأ:**  `{str(e)[:200]}`\n"
-                f"> ✅  تم إنهاء الماتش وحذف القنوات\n"
-                f"> 💡  تحقق من النقاط يدوياً بـ `!!setpoints`"
+                f"> ❌ `#{lobby_id}`\n"
+                f"> 🐛  **Error:**  `{str(e)[:200]}`\n"
+                f"> ✅  Match ended and channels deleted\n"
+                f"> 💡  Check points manually with `!!setpoints`"
             )
         except:
             pass
 
 class CreateLobbyView(discord.ui.View):
     def __init__(self, ctx, mode, timeout='__DEFAULT__'):
-        # ✅ إصلاح: timeout=None يسمح بتسجيل الـ View كـ persistent عند startup
+        # fix: timeout=None allows the View to be registered as persistent at startup
         if timeout == '__DEFAULT__':
             timeout = 300
         super().__init__(timeout=timeout)
@@ -5064,16 +5108,16 @@ class CreateLobbyView(discord.ui.View):
 
     @discord.ui.button(label="📋 Create Lobby", style=discord.ButtonStyle.success, custom_id="create_lobby_btn")
     async def create_lobby_btn(self, interaction, button):
-        # ✅ FIX (MEDIUM): الـ View مسجّلة persistent عند on_ready بـ ctx=None.
-        # أي رسالة "Create Lobby" قديمة (من قبل إعادة تشغيل البوت) تضغط زرها →
-        # self.ctx كان None ⇒ AttributeError غير معالَج.
+        # FIX (MEDIUM): the View is registered as persistent in on_ready with ctx=None.
+        # Any old "Create Lobby" message (from before a bot restart) whose button is pressed ->
+        # self.ctx was None => unhandled AttributeError.
         if self.ctx is None:
             await interaction.response.send_message(
                 embed=discord.Embed(
-                    title="⏳ انتهت صلاحية الرسالة",
+                    title="⏳ Message expired",
                     description=(
-                        "🔄 البوت أُعيد تشغيله — الرسالة دي ما عادتش صالحة anymore.\n"
-                        f"💡 أعد الأمر `{PREFIX}play {self.mode.upper()}` لإنشاء روم جديد."
+                        "🔄 This lobby message is no longer active.\n"
+                        f"💡 Use `{PREFIX}play {self.mode.upper()}` to create a new lobby."
                     ),
                     color=COLORS["warning"]
                 ),
@@ -5108,7 +5152,7 @@ class LobbyCreateModal(discord.ui.Modal, title="🎮 Create Lobby — Enter Room
             user = self.ctx.author
             lid = db.create_lobby(guild.id, user.id, self.ctx.channel.id, mode=self.mode)
 
-            # 🆕 اربط رسالة "Create Lobby" بهذا اللوبي — تنحذف مع انتهاء الماتش
+            # link the "Create Lobby" message to this lobby - deleted when the match ends
             pending = None
             for pid, meta in list(_create_prompt_msgs.items()):
                 if (meta.get("user_id") == user.id
@@ -5139,7 +5183,7 @@ class LobbyCreateModal(discord.ui.Modal, title="🎮 Create Lobby — Enter Room
             register_lobby_flow_msg(lid, self.ctx.channel.id, msg.id)
             db.get_or_create_player(user.id, guild.id, user.display_name)
             lobby_timeout_timers[lid] = asyncio.create_task(auto_lobby_timeout(lid, guild))
-            # 🆕 بعد دقيقتين لو اللوبي لسا waiting (عدد غير كافٍ) → أغلق + احذف الرسالة
+            # after 2 minutes, if the lobby is still waiting (not enough players) -> close it and delete the message
             _lobby_embed_hide_timers[lid] = asyncio.create_task(_auto_hide_idle_lobby_embed(lid, guild))
             await interaction.response.send_message(
                 embed=discord.Embed(
@@ -5158,7 +5202,7 @@ class LobbyCreateModal(discord.ui.Modal, title="🎮 Create Lobby — Enter Room
 
 class RematchView(discord.ui.View):
     def __init__(self, lobby_id, game_mode, guild_id, original_players, timeout=120):
-        # ✅ إصلاح: timeout=None يسمح بتسجيل الـ View كـ persistent عند startup
+        # fix: timeout=None allows the View to be registered as persistent at startup
         super().__init__(timeout=timeout)
         self.lobby_id = lobby_id
         self.game_mode = game_mode or DEFAULT_MODE
@@ -5193,7 +5237,7 @@ class RematchView(discord.ui.View):
             active_lobby_messages[msg.id] = lid
             register_lobby_flow_msg(lid, target_channel.id, msg.id)
             lobby_timeout_timers[lid] = asyncio.create_task(auto_lobby_timeout(lid, guild))
-            # 🆕 بعد دقيقتين لو اللوبي لسا waiting (عدد غير كافٍ) → أغلق + احذف الرسالة
+            # after 2 minutes, if the lobby is still waiting (not enough players) -> close it and delete the message
             _lobby_embed_hide_timers[lid] = asyncio.create_task(_auto_hide_idle_lobby_embed(lid, guild))
             for item in self.children:
                 item.disabled = True
@@ -5212,16 +5256,16 @@ intents.dm_messages = True
 
 bot = commands.Bot(command_prefix=PREFIX, intents=intents, help_command=None)
 
-# 🆕 حاوية للـ background task الدوري (أُضيفت في الفحص الأمني 2026-10)
-# السبب: كان `asyncio.create_task(periodic_rank_sync())` يُنشئ task جديدة عند كل
-# on_ready (= كل reconnect) ⇒ عدة حلقات متوازية تجهد Discord API.
+# container for the periodic background task (added in the architecture review 2026-10)
+# Reason: `asyncio.create_task(periodic_rank_sync())` created a new task on every
+# on_ready (= every reconnect) => several parallel loops straining the Discord API.
 _periodic_rank_task = None
 
-# 🆕 FIX (HIGH): الإعداد الثقيل داخل on_ready (auto_setup + رسالة AUTO-DETECT) كان
-# يُنفَّذ عند كل استدعاء لـ on_ready (= كل إعادة اتصال بالـ Gateway) ⇒ autosetup
-# يتكرر كل عدة دقائق. هذا الحارس يضمن تنفيذه **مرة واحدة فقط لكل عملية تشغيل**.
+# FIX (HIGH): the heavy setup inside on_ready (auto_setup + AUTO-DETECT message) ran
+# on every on_ready call (= every Gateway reconnect) => autosetup
+# repeated every few minutes. This guard makes it run **once per process**.
 _startup_done = False
-_on_ready_count = 0   # للتشخيص فقط: كم مرة نُفِّذ on_ready (يكشف إعادات الاتصال)
+_on_ready_count = 0   # diagnostics only: how many times on_ready ran (reveals reconnects)
 
 def is_admin_check(ctx):
     return ctx.author.guild_permissions.administrator
@@ -5232,15 +5276,15 @@ def is_bot_owner_check(ctx):
 def is_bot_owner_or_admin_check(ctx):
     return ctx.author.id == BOT_OWNER_ID or ctx.author.guild_permissions.administrator
 
-# 🆕 فحص الـ roles العالية للأعضاء — يستخدم لأمر play1v1
-# يسمح للعضو بالاستخدام إذا تحقق أحد الشروط التالية:
-#   1) عنده صلاحية Administrator في السيرفر
-#   2) عنده صلاحية Manage Guild (إدارة السيرفر)
-#   3) أعلى role تبع العضو في النصف العلوي من هرم الـ roles في السيرفر
+# check the privileged roles of members - used by the play1v1 command
+# allows the member to use it if any of the following conditions holds:
+#   1) has the Administrator permission in the server
+#   2) has the Manage Guild permission
+#   3) holds a role in the upper half of the server's role hierarchy
 def is_high_role_member(member):
-    """✅ MAX: play1v1 للأدمنز فقط (Administrator / Manage Guild / Bot Owner).
-    لا يفحص top_role بعد الآن."""
-    # 1) مالك البوت = full access
+    """✅ MAX: play1v1 for admins only (Administrator / Manage Guild / Bot Owner).
+    no longer checks top_role."""
+    # 1) bot owner = full access
     if member.id == BOT_OWNER_ID:
         return True
     # 2) Admin permission = full access
@@ -5249,16 +5293,16 @@ def is_high_role_member(member):
     # 3) Manage Guild permission
     if member.guild_permissions.manage_guild:
         return True
-    return False  # غير ذلك — لا يُسمح له
+    return False  # otherwise - not allowed
 
 def is_high_role_check(ctx):
     """Wrapper for use as @commands.check() decorator."""
     return is_high_role_member(ctx.author)
 
-# 🆕 BLACKLIST: فحص عام لكل الأوامر — يمنع البلاك ليست من استخدام البوت
+# BLACKLIST: global check for all commands - prevents blacklisted players from using the bot
 @bot.check
 async def blacklist_global_check(ctx):
-    """🆕 يمنع اللاعبين في البلاك ليست من استخدام أي أمر."""
+    """🆕 ."""
     if not ctx.guild:
         return True
     if ctx.author.id == BOT_OWNER_ID:
@@ -5267,7 +5311,7 @@ async def blacklist_global_check(ctx):
         return True
     if db.is_player_blacklisted(ctx.guild.id, ctx.author.id):
         return False
-    # لو انتهت المدة، تأكد من سحب الـ role
+    # if the duration expired, make sure the role is removed
     role = discord.utils.get(ctx.guild.roles, name=BLACKLIST_ROLE_NAME)
     if role and role in ctx.author.roles:
         try:
@@ -5287,11 +5331,11 @@ async def on_command_error(ctx, error):
     elif isinstance(error, commands.CheckFailure):
         if ctx.guild and db.is_player_blacklisted(ctx.guild.id, ctx.author.id):
             await ctx.send(embed=discord.Embed(
-                title="🔇 أنت في البلاك ليست",
+                title="🔇 You are blacklisted",
                 description=(
-                    "لا يمكنك استخدام البوت حالياً.\n"
-                    "أنت في قائمة البلاك ليست لمدة 10 دقائق.\n"
-                    "⏱️ انتظر حتى انتهاء المدة."
+                    ".\n"
+                    "You are blacklisted for 10 minutes.\n"
+                    "⏱️ Wait until the duration ends."
                 ),
                 color=COLORS["error"]
             ), delete_after=15)
@@ -5336,10 +5380,10 @@ async def on_ready():
         logger.warning(f"Failed to register CreateLobbyView as persistent: {e}")
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name=f"Free Fire | {PREFIX}play"))
 
-    # 🆕 FIX (HIGH): on_ready يُستدعى من جديد عند كل إعادة اتصال (reconnect) بالـ Gateway.
-    # قبل التعديل كان auto_setup + رسالة AUTO-DETECT + مهام الخلفية تُعاد كل مرة
-    # (السبب الظاهر لـ «autosetup كل عدة دقائق»). الآن الإعداد الثقيل مرة واحدة/عملية،
-    # وعند إعادة الاتصال نكتفي بتحديث الحضور (تم أعلاه) ونتوقف هنا.
+    # FIX (HIGH): on_ready is called again on every Gateway reconnect.
+    # Before the fix, auto_setup + the AUTO-DETECT message + background tasks were repeated every time
+    # (the visible cause of "autosetup every few minutes"). Now the heavy setup runs once per process,
+    # and on reconnect we only refresh presence (see below) and stop here.
     if _startup_done:
         logger.info(
             f"♻️ on_ready re-fired (reconnect) — skipping auto-setup. "
@@ -5348,7 +5392,7 @@ async def on_ready():
         return
     _startup_done = True
 
-    # 🆕 Auto-setup: فحص كل السيرفرات بالتوازي
+    # Auto-setup: check all servers in parallel
     logger.info("🔄 Auto-setup: checking all guilds...")
     async def setup_one(guild):
         try:
@@ -5360,19 +5404,19 @@ async def on_ready():
     results = await asyncio.gather(*[setup_one(g) for g in bot.guilds], return_exceptions=True)
     total_detected_all = sum(r[1] for r in results if isinstance(r, tuple))
     logger.info("✅ Auto-setup complete!")
-    # 🆕 V3: رسالة نجاح AUTO-DETECT — فقط في commands channel
+    # V3: AUTO-DETECT success message - in the commands channel only
     async def send_success(guild):
         try:
             success_ch = None
             cmd_channels = db.get_commands_channels(guild.id)
-            # ✅ ابحث فقط في commands channels
+            # search only in commands channels
             if cmd_channels:
                 for cid in cmd_channels:
                     ch = guild.get_channel(cid)
                     if ch and ch.permissions_for(guild.me).send_messages:
                         success_ch = ch
                         break
-            # ✅ fallback: play channels فقط لو ما فيه commands channels
+            # fallback: play channels only if there are no commands channels
             if not success_ch:
                 play_channels = db.get_play_channels(guild.id)
                 for cid in play_channels:
@@ -5390,7 +5434,7 @@ async def on_ready():
                     description=(
                         f"📝 `{cmd_channels_count}` · 🎮 `{play_channels_count}` · "
                         f"🔊 `{len(waiting_rooms)}` · 🔍 `{len(report_channels)}`\n"
-                        f"💡 `{PREFIX}help` لعرض الأوامر"
+                        f"💡 `{PREFIX}help`"
                     ),
                     color=COLORS["success"]
                 )
@@ -5406,10 +5450,10 @@ async def on_ready():
     await asyncio.gather(*[send_success(g) for g in bot.guilds], return_exceptions=True)
     logger.info(f"✅ Auto-detect success messages sent to all servers (total detected: {total_detected_all} channels)")
     
-    # sync دوري للرانك والألقاب كل دقيقة
+    # periodic rank and title sync every minute
     async def periodic_rank_sync():
-        """يعيد حساب الرانك ويزامن الألقاب كل 60 ثانية،
-        وكل دقيقتين يشغّل fixrank + syncnicknames (تصحيح كل النكات)."""
+        """60
+fixrank + syncnicknames ( )."""
         tick = 0
         while True:
             try:
@@ -5417,11 +5461,11 @@ async def on_ready():
                 tick += 1
                 for guild in bot.guilds:
                     try:
-                        # أعِد حساب الرانك
+                        # recalculate ranks
                         db.recalculate_ranks(guild.id)
-                        # يزامن الألقاب
+                        # remove the titles
                         await sync_all_players_roles(guild)
-                        # 🆕 كل دقيقتين: fixrank + syncnicknames لكل الأعضاء
+                        # every 2 minutes: fixrank + sync nicknames for all members
                         if tick % 2 == 0:
                             await sync_all_nicknames(guild)
                     except Exception as e:
@@ -5431,10 +5475,10 @@ async def on_ready():
             except Exception as e:
                 logger.warning(f"Periodic rank sync error: {e}")
 
-    # ✅ FIX (HIGH): `on_ready` ينفَذ من جديد عند كل reconnect، وقبل التعديل كان
-    # كل نداء ينشئ task جديد بلا أي فحص ⇒ N loops متوازية بعد N انقطاع،
-    # وكلها تنفّذ recalculate_ranks + sync_all_players_roles (API calls مكررة
-    # ⇒ rate limits + بطء). الآن نضمن task واحدة فقط.
+    # FIX (HIGH): `on_ready` runs again on every reconnect, and before the fix
+    # every call created a new task with no check => N parallel loops after N disconnects,
+    # each running recalculate_ranks + sync_all_players_roles (duplicate API calls
+    # => rate limits + slowness). Now we guarantee a single task only.
     global _periodic_rank_task
     if _periodic_rank_task is not None and not _periodic_rank_task.done():
         logger.warning(
@@ -5449,8 +5493,8 @@ async def on_ready():
     _periodic_rank_task = asyncio.create_task(periodic_rank_sync())
     logger.info("🔄 Periodic rank sync started (every 60 seconds)")
 
-    # 🆕 استعادة/تنظيف بعد إعادة التشغيل: احذف رسائل اللوبيات المنتهية القديمة
-    #    التي تركت في قنوات اللعب، وأعد تفعيل الإغلاق التلقائي للوبيات المعلّقة (waiting).
+    # restore/cleanup after a restart: delete stale lobby messages that ended
+    #    and were left in the play channels, and re-enable the auto-close for stuck (waiting) lobbies.
     async def recover_after_restart():
         try:
             for guild in bot.guilds:
@@ -5472,7 +5516,7 @@ async def on_ready():
                             await _delete_lobby_embed_for_lobby(lid, guild=guild)
                         except Exception as e:
                             logger.debug(f"clean stale lobby embed #{lid} failed: {e}")
-                # لوبيات waiting علّقت بعد إعادة التشغيل → أعد تفعيل مؤقت الدقيقتين
+                # lobbies stuck in waiting after a restart -> re-enable the 2-minute timer
                 for l in db.get_active_lobbies(guild.id):
                     try:
                         if l["status"] == "waiting" and l["id"] not in _lobby_embed_hide_timers:
@@ -5488,7 +5532,7 @@ async def on_ready():
 
 @bot.event
 async def on_disconnect():
-    # 🆕 تشخيص: أي انقطاع في Gateway يُسجَّل بوضوح (يكشف سبب تكرار on_ready)
+    # diagnostics: any Gateway disconnect is logged clearly (reveals the cause of repeated on_ready)
     logger.warning("🔌 Gateway disconnected — awaiting automatic reconnect...")
 
 @bot.event
@@ -5496,19 +5540,19 @@ async def on_resumed():
     logger.info("♻️ Gateway session resumed (no full re-identify).")
 
 async def auto_setup_guild(guild):
-    """اكتشاف تلقائي ذكي — يفحص كل قنوات السيرفر ويسجلها في DB.
-    ✅ لا يحتاج أي تدخل يدوي — يكتشف كل الإعدادات السابقة.
-    ✅ يستخدم fuzzy matching للتعرف على القنوات بأي اسم.
-    ✅ يسجل القنوات الموجودة في DB بدل إنشاء جديد.
-    ✅ يكتشف فويسات التفتيش (Under check / Investigation / Prv) تلقائياً.
-    ✅ يكتشف شات الأوامر تلقائياً.
+    """Smart auto-detect — scans all server channels and registers them in DB.
+    ✅ No manual setup needed — detects all prior configuration.
+    ✅ Uses fuzzy matching to recognize channels by any name.
+    ✅ Registers existing channels in DB instead of creating duplicates.
+    ✅ Detects under-check voices (Under check / Investigation / Prv) automatically.
+    ✅ Detects commands channel automatically.
     """
     logger.info(f"🔍 [AUTO-SETUP] Scanning {guild.name}...")
 
     # ============================================================
-    # 1) فحص كل القنوات النصية وتسجيلها تلقائياً
+    # 1) Scan all text channels and register them automatically
     # ============================================================
-    # أنماط البحث لكل نوع قناة — مطابقة مرنة
+    # Search patterns per channel type — flexible matching
     # ✅ FIX: removed "match", "lobby", "top", "player" — these caused false positives
     # "match" matched "match-results" channel → would register it as play channel
     # "lobby" matched any channel containing "lobby"
@@ -5533,8 +5577,8 @@ async def auto_setup_guild(guild):
                     detected_text_channels[channel_type].append(ch)
                     break
 
-    # سجل كل القنوات النصية المكتشفة في DB
-    # ✅ FIX: لا نسجل "results" كـ play channel — فقط "play" و"leaderboard" و"profiles"
+    # Register all detected text channels in DB
+    # ✅ FIX: do not register "results" as a play channel — only "play", "leaderboard" and "profiles"
     for channel_type, channels in detected_text_channels.items():
         for ch in channels:
             db.add_commands_channel(guild.id, ch.id)
@@ -5545,12 +5589,12 @@ async def auto_setup_guild(guild):
             logger.info(f"  📝 Detected text channel: #{ch.name} ({channel_type})")
 
     # ============================================================
-    # 2) فحص كل القنوات الصوتية وتسجيلها تلقائياً
+    # 2) Scan all voice channels and register them automatically
     # ============================================================
     VOICE_PATTERNS = {
         "waiting": ["waiting", "wait", "انتظار"],
         "prv": ["prv", "private", "خاص"],
-        "under_check": ["under check", "under-check", "investigation", "تفتيش", "investigation"],
+        "under_check": ["under check", "under-check", "investigation", "تفتيش"],
         "staff": ["staff", "admn", "أدمن"],
     }
 
@@ -5565,19 +5609,19 @@ async def auto_setup_guild(guild):
                     detected_voice_channels[voice_type].append(ch)
                     break
 
-    # سجل كل القنوات الصوتية المكتشفة
+    # Register all detected voice channels
     for voice_type, channels in detected_voice_channels.items():
         for ch in channels:
             if voice_type in ["waiting", "prv", "staff"]:
                 db.add_waiting_room(guild.id, ch.id)
                 logger.info(f"  🔊 Detected voice: {ch.name} ({voice_type} → waiting_room)")
             elif voice_type == "under_check":
-                # 🆕 سجل فويسات التفتيش كـ report channels
+                # 🆕 Register under-check voices as report channels
                 db.add_report_channel(guild.id, ch.id)
                 logger.info(f"  🔍 Detected under-check voice: {ch.name} (→ report_channel)")
 
     # ============================================================
-    # 3) فحص الكاتيجوريات
+    # 3) Scan categories
     # ============================================================
     text_cat = discord.utils.get(guild.categories, name="🎮 FREE FIRE — TEXT")
     if not text_cat:
@@ -5606,9 +5650,9 @@ async def auto_setup_guild(guild):
         logger.info(f"  📁 Created VOICE category")
 
     # ============================================================
-    # 4) إنشاء الناقص فقط (لو ما اكتشف قنوات معينة)
+    # 4) Create only what's missing (if certain channels weren't detected)
     # ============================================================
-    # لو ما اكتشف أي قناة play، أنشئها
+    # If no play channel was detected, create one
     if not detected_text_channels["play"]:
         for ch_name in ["🎮・apostada-play", "🎮・highlight-play", "🎮・zelika-play"]:
             if not discord.utils.get(guild.text_channels, name=ch_name):
@@ -5636,7 +5680,7 @@ async def auto_setup_guild(guild):
             db.add_commands_channel(guild.id, ch.id)
             db.add_play_channel(guild.id, ch.id)
 
-    # 🆕 قناة البلاك ليست — تعرض اللاعبين في البلاك ليست (تُنشأ + تُحدَّث تلقائياً)
+    # blacklist channel - displays blacklisted players (created + updated automatically)
     try:
         bl_ch = discord.utils.get(guild.text_channels, name=BLACKLIST_CHANNEL_NAME)
         if not bl_ch:
@@ -5647,7 +5691,7 @@ async def auto_setup_guild(guild):
     except Exception as e:
         logger.warning(f"  [{guild.name}] Blacklist channel: {e}")
 
-    # 🆕 قناة القواعد — نفس منطق setup_cmd (idempotent)
+    # rules channel - same logic as setup_cmd (idempotent)
     try:
         rules_ch, rules_created = await ensure_rules_channel(guild, text_cat)
         if rules_created and rules_ch:
@@ -5655,7 +5699,7 @@ async def auto_setup_guild(guild):
     except Exception as e:
         logger.error(f"  [{guild.name}] Rules channel: {e}")
 
-    # لو ما اكتشف أي فويس waiting، أنشئها
+    # if no waiting voice was detected, create one
     if not detected_voice_channels["waiting"]:
         for ch_name in ["⏳・Waiting 1", "⏳・Waiting 2", "⏳・Waiting 3", "⏳・Waiting 4", "⏳・Waiting 5"]:
             if not discord.utils.get(guild.voice_channels, name=ch_name):
@@ -5664,7 +5708,7 @@ async def auto_setup_guild(guild):
                 db.add_waiting_room(guild.id, ch.id)
                 logger.info(f"  🔊 Created {ch_name}")
 
-    # لو ما اكتشف أي فويس prv، أنشئها
+    # if no prv voice was detected, create one
     if not detected_voice_channels["prv"] and not detected_voice_channels["staff"]:
         for ch_name in ["🔒・Waiting Prv 1", "🔒・Waiting Prv 2", "🔒・Waiting Prv 3", "🔒・Waiting Staff"]:
             if not discord.utils.get(guild.voice_channels, name=ch_name):
@@ -5699,17 +5743,17 @@ async def auto_setup_guild(guild):
     except:
         pass
 
-    # 🆕 محدّث قناة البلاك ليست تلقائياً بعد الـ setup
+    # update the blacklist channel automatically after setup
     try:
         await update_blacklist_channel(guild)
     except Exception as e:
         logger.warning(f"  [{guild.name}] Blacklist channel update: {e}")
 
-    # ملخص ما تم اكتشافه
+    # summary of what was detected
     total_detected = sum(len(v) for v in detected_text_channels.values()) + sum(len(v) for v in detected_voice_channels.values())
     logger.info(f"  ✅ [{guild.name}] Auto-setup complete — detected {total_detected} existing channels")
 
-    # 🆕 امسح cache بعد الانتهاء (لأننا سجلنا قنوات جديدة)
+    # clear the cache when finished (we registered new channels)
     for key in list(db._channels_cache.keys()):
         if str(guild.id) in key:
             db._channels_cache.pop(key, None)
@@ -5726,7 +5770,7 @@ async def on_member_join(member):
         return
     await asyncio.sleep(2)
     player = db.get_or_create_player(member.id, member.guild.id, member.display_name)
-    # ✅ تحديث النك نيم مباشرة بدون استدعاء update_member_nickname (يتجنب get_or_create_player مرة ثانية)
+    # update the nickname directly without calling update_member_nickname (avoids a second get_or_create_player)
     try:
         if not member.guild.me.guild_permissions.manage_nicknames:
             return
@@ -5741,16 +5785,15 @@ async def on_member_join(member):
         logger.warning(f"on_member_join: nickname update failed for {member.id}: {e}")
 
 def _find_match_text_channel_for_member(guild, member):
-    """يجد قناة الماتش النصية التي ينتمي لها اللاعب (للتحذيرات).
-    ✅ يبحث في active match channels ويتحقق من عضوية اللاعب في lobby.
-    """
+    """Finds match text channel the player belongs to (for warnings).
+✅ active match channels lobby."""
     try:
         if not guild or not member or not db:
             return None
-        # اجلب كل قنوات الماتش النشطة في السيرفر
+        # fetch all active match channels in the server
         active = db.get_all_active_match_channels(guild.id)
         for mc in active:
-            # تحقق لو اللاعب في أحد الفريقين في الـ lobby المرتبط
+            # check whether the player is in either team of the linked lobby
             lobby = db.get_lobby(mc.get("lobby_id"))
             if not lobby:
                 continue
@@ -5761,7 +5804,7 @@ def _find_match_text_channel_for_member(guild, member):
                     continue
             except Exception:
                 continue
-            # جرب قناة النص المرتبطة
+            # try the linked text channel
             for cid_key in ("team1_text_id", "team2_text_id"):
                 cid = mc.get(cid_key)
                 if cid:
@@ -5772,18 +5815,17 @@ def _find_match_text_channel_for_member(guild, member):
     except Exception:
         return None
 
-# دوال مساعدة لتخفيف الـ blacklist
+# helper functions for the blacklist
 async def _reset_blacklist_after_stay(guild, member, uid, stay_seconds=None):
-    """لو بقي اللاعب stay_seconds في الماتش دون مغادرة → يُصفّر الـ tracking.
-    ✅ يُلغى تلقائيًا لو خرج قبل اكتمال المدة (task.cancel في on_voice_state_update).
-    """
+    """If player stays stay_seconds in match without leaving → reset tracking.
+✅ (task.cancel on_voice_state_update)."""
     if stay_seconds is None:
         stay_seconds = BLACKLIST_RESET_AFTER_STAY
     try:
         await asyncio.sleep(stay_seconds)
         track = _blacklist_voice_tracking.get(guild.id, {})
         if uid in track and track[uid].get("in_match_voice"):
-            # ما زال في الماتش بعد stay_seconds → صفّر الـ tracking
+            # the player was in the match for stay_seconds -> reset the tracking
             old_total = track[uid].get("total_leave_time", 0)
             old_count = track[uid].get("leave_count", 0)
             track[uid]["total_leave_time"] = 0
@@ -5797,34 +5839,33 @@ async def _reset_blacklist_after_stay(guild, member, uid, stay_seconds=None):
                     f"cleared (was {old_total:.0f}s / {old_count} leaves)"
                 )
     except asyncio.CancelledError:
-        # طبيعي: اللاعب خرج قبل اكتمال المدة
+        # normal: the player left before the duration completed
         pass
     except Exception as e:
         logger.warning(f"⚠️ _reset_blacklist_after_stay failed: {e}")
 
 async def _maybe_warn_blacklist(guild, member, track_entry, total_time, leave_count):
-    """تحذيرات متدرّجة قبل تطبيق الـ blacklist.
-    
-    Level 1 (50% من الحد): تنبيه أول
-    Level 2 (80% من الحد): تنبيه أخير
-    ✅ يُرسل مرة واحدة فقط لكل level (track_entry["warned_1"/"warned_2"]).
-    ✅ يُرسل ephemeral-style في قناة الماتش (لو وُجدت).
-    """
+    """Graduated warnings before applying blacklist.
+
+Level 1 (50% ):
+Level 2 (80% ):
+✅ level (track_entry["warned_1"/"warned_2"]).
+✅ ephemeral-style ( )."""
     try:
-        # تحذير أول: عند تجاوز 50% من الحدود
+        # first warning: when 50% of the limit is exceeded
         if not track_entry.get("warned_1"):
             warn = False
             reason = ""
             if total_time >= BLACKLIST_WARN_LEVEL_1_TIME and total_time < BLACKLIST_WARN_LEVEL_2_TIME:
                 warn = True
-                reason = f"📊 تنبيه: غادرت {total_time:.0f}s من أصل {BLACKLIST_TIME_LIMIT}s — استمرار الخروج قد يُسبّب بلاك ليست 5 دقائق."
+                reason = f"📊 Notice: Left for {total_time:.0f}s of {BLACKLIST_TIME_LIMIT}s — continued leaving may cause 5min blacklist."
             elif leave_count >= BLACKLIST_WARN_LEVEL_1_LEAVES and leave_count < BLACKLIST_WARN_LEVEL_2_LEAVES:
                 warn = True
-                reason = f"📊 تنبيه: غادرت {leave_count} مرات من أصل {BLACKLIST_MAX_LEAVES} — استمرار المغادرة قد يُسبّب بلاك ليست."
+                reason = f"📊 Notice: Left {leave_count} times of {BLACKLIST_MAX_LEAVES} — continued leaving may cause blacklist."
             if warn:
                 track_entry["warned_1"] = True
                 logger.info(f"📢 BLACKLIST WARN 1: {member.display_name} (total={total_time:.0f}s, leaves={leave_count})")
-                # ابحث عن قناة الماتش لإرسال التحذير (لاعب في active match)
+                # find the match channel to send the warning to (player in an active match)
                 target_ch = _find_match_text_channel_for_member(guild, member)
                 if target_ch:
                     try:
@@ -5837,16 +5878,16 @@ async def _maybe_warn_blacklist(guild, member, track_entry, total_time, leave_co
         logger.warning(f"⚠️ _maybe_warn_blacklist (level 1) failed: {e}")
 
     try:
-        # تحذير أخير: عند تجاوز 80% من الحدود
+        # final warning: when 80% of the limit is exceeded
         if not track_entry.get("warned_2"):
             warn = False
             reason = ""
             if total_time >= BLACKLIST_WARN_LEVEL_2_TIME and total_time < BLACKLIST_TIME_LIMIT:
                 warn = True
-                reason = f"🚨 تحذير أخير: غادرت {total_time:.0f}s من أصل {BLACKLIST_TIME_LIMIT}s — مغادرة أخرى طويلة ستُسبّب بلاك ليست 5 دقائق!"
+                reason = f"🚨 Final warning: Left for {total_time:.0f}s of {BLACKLIST_TIME_LIMIT}s — one more long leave will trigger 5min blacklist!"
             elif leave_count >= BLACKLIST_WARN_LEVEL_2_LEAVES and leave_count < BLACKLIST_MAX_LEAVES:
                 warn = True
-                reason = f"🚨 تحذير أخير: غادرت {leave_count} مرات من أصل {BLACKLIST_MAX_LEAVES} — مغادرة أخرى ستُسبّب بلاك ليست!"
+                reason = f"🚨 Final warning: Left {leave_count} times of {BLACKLIST_MAX_LEAVES} — one more leave will trigger blacklist!"
             if warn:
                 track_entry["warned_2"] = True
                 logger.info(f"📢 BLACKLIST WARN 2: {member.display_name} (total={total_time:.0f}s, leaves={leave_count})")
@@ -5861,10 +5902,10 @@ async def _maybe_warn_blacklist(guild, member, track_entry, total_time, leave_co
     except Exception as e:
         logger.warning(f"⚠️ _maybe_warn_blacklist (level 2) failed: {e}")
 
-# 🆕 منع المحظورين من مغادرة فويس التفتيش
+# prevent banned players from leaving the investigation voice
 @bot.event
 async def on_voice_state_update(member, before, after):
-    """🆕 يمنع اللاعبين المحظورين + المسجونين + متابعة البلاك ليست."""
+    """🆕 + + ."""
     if member.bot:
         return
 
@@ -5872,12 +5913,12 @@ async def on_voice_state_update(member, before, after):
     gid = guild.id
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # 1) فحص المحظورين — منع مغادرة فويس التفتيش
+    # 1) check banned players - prevent leaving the investigation voice
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     ban_info = db.is_player_banned(gid, member.id)
     if ban_info:
         assigned_voice_id = ban_info.get("assigned_voice_id")
-        # الحالة 1: اللاعب دخل فويس جديد
+        # case 1: the player joined a new voice
         if after.channel is not None:
             if not assigned_voice_id or after.channel.id != assigned_voice_id:
                 assigned_ch = guild.get_channel(assigned_voice_id) if assigned_voice_id else None
@@ -5892,7 +5933,7 @@ async def on_voice_state_update(member, before, after):
                 if new_ch:
                     logger.info(f"🔒 Banned player {member.id} moved to new investigation voice")
                     return
-        # الحالة 2: اللاعب غادر فويس
+        # case 2: the player left a voice
         elif before.channel is not None and after.channel is None:
             assigned_ch = guild.get_channel(assigned_voice_id) if assigned_voice_id else None
             if assigned_ch and isinstance(assigned_ch, discord.VoiceChannel):
@@ -5908,7 +5949,7 @@ async def on_voice_state_update(member, before, after):
             return
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # 2) فحص المسجونين (JAIL system)
+    # 2) check jailed players (JAIL system)
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     jail_role = discord.utils.get(guild.roles, name=JAIL_ROLE_NAME)
     if jail_role and jail_role in member.roles:
@@ -5928,33 +5969,33 @@ async def on_voice_state_update(member, before, after):
         return
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # 3) 🆕  BLACKLIST TRACKING — متابعة الخروج من التيم (مُخفَّف)
+    # 3) BLACKLIST TRACKING - tracking team departures (softened)
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # ✅ P1 إصلاح احتساب المغادرة:
-    #    - استخدام time.time() بدل datetime.now().timestamp() (timezone-independent)
-    #    - تجاهل المغادرات القصيرة (< 10s) من leave_count (لا تُحتسب كـ"مغادرة")
-    #    - إلغاء reset_task عند apply_blacklist (منع task معلّق)
-    #    - استثناء BOT_OWNER_ID و Administrator من الـ tracking
-    #    - Reset تدريجي بعد 60 ثانية بقاء في الماتش
-    #    - تحذيرات متدرّجة عند 50% و 80% من الحد قبل التطبيق
+    # P1 fix for leave counting:
+    #    - use time.time() instead of datetime.now().timestamp() (timezone-independent)
+    #    - ignore short leaves (< 10s) in leave_count (not counted as a "leave")
+    #    - cancel reset_task when apply_blacklist runs (prevents a dangling task)
+    #    - exclude BOT_OWNER_ID and Administrator from tracking
+    #    - gradual reset after 60 seconds of staying in the match
+    #    - graduated warnings at 50% and 80% of the limit before applying
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # استثناء الأدمن و Owner من الـ tracking
+    # exclude admins and the owner from tracking
     if member.id == BOT_OWNER_ID:
-        return   # لا tracking على الـ Owner
+        return   # no tracking on the Owner
     try:
         if member.guild_permissions.administrator:
-            return   # لا tracking على الأدمن
+            return   # no tracking on admin
     except Exception:
         pass
 
-    # نتتبع فقط اللاعبين الذين يغادرون/يدخلون فويسات الماتش
+    # only track players who leave/enter the match voices
     before_is_match = before.channel and before.channel.id in _active_match_voice_channels
     after_is_match = after.channel and after.channel.id in _active_match_voice_channels
 
     if not before_is_match and not after_is_match:
-        return  # ليس في فويس ماتش — لا داعي للتتبع
+        return  # not in a match voice - no need to track
 
-    # هيئ tracking dict للسيرفر واللاعب
+    # initialize the tracking dict for the server and the player
     if gid not in _blacklist_voice_tracking:
         _blacklist_voice_tracking[gid] = {}
     track = _blacklist_voice_tracking[gid]
@@ -5965,35 +6006,35 @@ async def on_voice_state_update(member, before, after):
             "total_leave_time": 0.0,
             "in_match_voice": before_is_match,
             "leave_start": None,
-            "warned_1": False,   # تحذير أول
-            "warned_2": False,   # تحذير أخير
-            "reset_task": None,  # asyncio task للـ reset تدريجي
+            "warned_1": False,   # first warning
+            "warned_2": False,   # final warning
+            "reset_task": None,  # asyncio task for the gradual reset
         }
 
     # ✅ P1: time.time() timezone-independent (UTC seconds)
     now = time.time()
-    # 🆕 P1: حدّ المغادرة القصيرة — المغادرات أقل من هذا الحد لا تُحتسب كـ leave_count
-    SHORT_LEAVE_THRESHOLD = 10  # ثانية
+    # P1: short-leave threshold - leaves shorter than this are not counted in leave_count
+    SHORT_LEAVE_THRESHOLD = 10  # seconds
 
-    # حالة: خرج من فويس الماتش (كان في الماتش وخرج)
+    # case: left the match voice (was in the match and left)
     if before_is_match and not after_is_match:
         track[uid]["in_match_voice"] = False
         track[uid]["leave_start"] = now
-        # ✅ P1: لا نزيد leave_count هنا — بل نؤجّل ذلك حتى الرجوع
-        # لو كانت المغادرة قصيرة (< 10s) لا نعدها "مغادرة حقيقية"
-        # ألغِ أي reset task قديم (اللاعب خرج قبل الـ 60s)
+        # P1: do not increment leave_count here - defer it until the player returns
+        # if the leave was short (< 10s) it is not counted as a "real leave"
+        # cancel any old reset task (the player left before the 60s)
         if track[uid].get("reset_task") and not track[uid]["reset_task"].done():
             track[uid]["reset_task"].cancel()
             track[uid]["reset_task"] = None
         logger.info(f"🔇 BLACKLIST TRACK: {member.display_name} left match voice (pending leave_count: {track[uid]['leave_count']})")
 
-    # حالة: رجع لفويس الماتش (كان خارج الماتش ورجع)
+    # case: returned to the match voice (was outside the match and returned)
     elif after_is_match and not before_is_match:
         if track[uid]["leave_start"] is not None:
             elapsed = now - track[uid]["leave_start"]
             track[uid]["total_leave_time"] += elapsed
             track[uid]["leave_start"] = None
-            # ✅ P1: فقط المغادرات الطويلة (>= SHORT_LEAVE_THRESHOLD) تُحتسب كـ leave_count
+            # P1: only long leaves (>= SHORT_LEAVE_THRESHOLD) count toward leave_count
             if elapsed >= SHORT_LEAVE_THRESHOLD:
                 track[uid]["leave_count"] += 1
                 logger.info(f"🔇 BLACKLIST TRACK: {member.display_name} leave counted ({elapsed:.1f}s >= {SHORT_LEAVE_THRESHOLD}s)")
@@ -6004,40 +6045,40 @@ async def on_voice_state_update(member, before, after):
         leave_count = track[uid]["leave_count"]
         logger.info(f"🔇 BLACKLIST TRACK: {member.display_name} rejoined match voice (total leave: {total_time:.1f}s, leaves: {leave_count})")
 
-        # تحذيرات متدرّجة قبل فحص الحدود
+        # graduated warnings before checking the limits
         await _maybe_warn_blacklist(guild, member, track[uid], total_time, leave_count)
 
-        # فحص الحدود
+        # check the limits
         if total_time >= BLACKLIST_TIME_LIMIT:
             logger.info(f"🔇 BLACKLIST: {member.display_name} exceeded time limit ({total_time:.1f}s >= {BLACKLIST_TIME_LIMIT}s)")
             reason = f"Automatic: left match voice for {total_time:.0f}s (limit: {BLACKLIST_TIME_LIMIT}s)"
             await apply_blacklist(guild, member, reason=reason)
-            # ✅ P1: ألغِ reset_task قبل مسح tracking (منع task معلّق)
+            # P1: cancel reset_task before clearing tracking (prevents a dangling task)
             if track[uid].get("reset_task") and not track[uid]["reset_task"].done():
                 track[uid]["reset_task"].cancel()
-            # امسح التتبع
+            # clear the tracking
             track.pop(uid, None)
             return
         if leave_count >= BLACKLIST_MAX_LEAVES:
             logger.info(f"🔇 BLACKLIST: {member.display_name} exceeded max leaves ({leave_count} >= {BLACKLIST_MAX_LEAVES})")
             reason = f"Automatic: left and rejoined {leave_count} times (limit: {BLACKLIST_MAX_LEAVES})"
             await apply_blacklist(guild, member, reason=reason)
-            # ✅ P1: ألغِ reset_task قبل مسح tracking (منع task معلّق)
+            # P1: cancel reset_task before clearing tracking (prevents a dangling task)
             if track[uid].get("reset_task") and not track[uid]["reset_task"].done():
                 track[uid]["reset_task"].cancel()
-            # امسح التتبع
+            # clear the tracking
             track.pop(uid, None)
             return
 
-        # ابدأ reset تدريجي بعد 60 ثانية بقاء في الماتش
-        # لو بقي اللاعب 60 ثانية دون مغادرة → يُصفّر الـ tracking
+        # start the gradual reset after 60 seconds of staying in the match
+        # if the player stays 60 seconds without leaving -> the tracking is reset
         if track[uid].get("reset_task") and not track[uid]["reset_task"].done():
             track[uid]["reset_task"].cancel()
         track[uid]["reset_task"] = asyncio.ensure_future(
             _reset_blacklist_after_stay(guild, member, uid)
         )
 
-    # حالة: انتقال بين فويسات (من فويس ماتش لفويس ماتش آخر) — يعتبر في الماتش
+    # case: moved between voices (from one match voice to another) - still counts as in the match
     elif before_is_match and after_is_match:
         track[uid]["in_match_voice"] = True
         if track[uid]["leave_start"] is not None:
@@ -6050,24 +6091,24 @@ async def on_message(message):
     if message.author.bot:
         return
     if isinstance(message.channel, discord.DMChannel):
-        # ✅ FIX (MEDIUM): `ctx.guild is None` في DM ⇒ أي أمر غير محمي يطبع
-        # AttributeError في اللوقز بدون أي رسالة للمستخدم. نمنع الأوامر غير المدعومة.
+        # FIX (MEDIUM): `ctx.guild is None` in DMs => any unprotected command would raise
+        # AttributeError in the check with no message to the user. We block unsupported commands.
         content = message.content.strip()
         parts = content.split()
         invoked = parts[0].lower() if parts else ""
-        # ✅ `!!serverleave` فقط: هو الأمر الوحيد المصمَّم لـ DM عمداً.
-        #    `!!help` يستدعي apply_branding(ctx.guild) ⇒ None ⇒ AttributeError،
-        #    فبقي خارج القائمة (سلوكه السابق: خطأ في اللوقز بدون رد — disparه الآن).
+        # `!!serverleave` only: the only command intentionally designed for DMs.
+        #    `!!help` calls apply_branding(ctx.guild) => None => AttributeError,
+        #    so it stays outside the list (its previous behavior: error in the check with no reply - now blocked).
         dm_safe = {f"{PREFIX}serverleave"}
         if invoked in dm_safe:
             await bot.process_commands(message)
             return
         await message.channel.send(embed=discord.Embed(
-            title="📡 الأوامر داخل السيرفر فقط",
+            title="📡 Commands only inside server",
             description=(
-                "هذه الرسالة خاصة (DM) — أوامر البوت كلها تحتاج قناة داخل السيرفر.\n"
-                f"💡 افتح قناة الأوامر واكتب `{PREFIX}help` لعرض كل الأوامر.\n"
-                f"📌 أوامر تعمل هنا: `{PREFIX}serverleave`"
+                "This command works only inside a server (not in DMs).\n"
+                f"💡 Use `{PREFIX}help` inside a server to see the command list.\n"
+                f"📌 Commands available here: `{PREFIX}serverleave`"
             ),
             color=COLORS["info"]
         ), delete_after=20)
@@ -6075,7 +6116,7 @@ async def on_message(message):
     if not message.guild:
         return
 
-    # 🆕 فحص المسجونين (JAIL) — منع الكتابة في غير شاتات السجن
+    # check jailed players (JAIL) - prevent writing in channels other than the jail chats
     jail_role = discord.utils.get(message.guild.roles, name=JAIL_ROLE_NAME)
     if jail_role and message.author.id != message.guild.owner_id:
         member = message.guild.get_member(message.author.id)
@@ -6121,25 +6162,25 @@ async def create_mode_lobby(ctx, mode):
     guild = ctx.guild
     user = ctx.author
     member = guild.get_member(user.id)
-    # 🆕 فحص الحظر أولاً
+    # ban check first
     ban_info = db.is_player_banned(guild.id, user.id)
     if ban_info:
         ban_embed = discord.Embed(
-            title="🚫 أنت محظور من اللعب",
+            title="🚫 You are banned from playing",
             description=(
-                "🔍 يتم توجيهك لفويس التفتيش\n"
-                "💡 لفك الحظر، تواصل مع الأدمن"
+                "🔍 \n"
+                "💡 To unban, contact an admin"
             ),
             color=COLORS["error"],
             timestamp=discord.utils.utcnow()
         )
-        ban_embed.add_field(name="⚠️ السبب", value=f"`{ban_info.get('ban_reason') or 'غير محدد'}`", inline=True)
-        ban_embed.add_field(name="📊 البلاغات", value=f"`{ban_info.get('report_count', 0)}`", inline=True)
-        ban_embed.add_field(name="📅 تاريخ الحظر", value=f"`{ban_info.get('banned_at', 'N/A')[:19]}`", inline=True)
+        ban_embed.add_field(name="⚠️ Ban Reason", value=f"`{ban_info.get('ban_reason') or 'No reason'}`", inline=True)
+        ban_embed.add_field(name="📊 Reports", value=f"`{ban_info.get('report_count', 0)}`", inline=True)
+        ban_embed.add_field(name="📅 Banned At", value=f"`{ban_info.get('banned_at', 'N/A')[:19]}`", inline=True)
         ban_embed.set_footer(text=f"{BOT_FOOTER}  •  Banned")
         ban_embed = apply_branding(ban_embed, ctx.guild)
         await ctx.send(embed=ban_embed, delete_after=20)
-        # انقل لفويس التفتيش لو في فويس
+        # move to the investigation voice if in voice
         if member and member.voice and member.voice.channel:
             await move_to_banned_channels(guild, member)
         return
@@ -6191,7 +6232,7 @@ async def create_mode_lobby(ctx, mode):
         return
     create_view = CreateLobbyView(ctx, mode)
 
-    # 🆕 لو عنده رسالة "Create Lobby" قديمة → احذفها (ما تتكدّس الرسائل)
+    # if the player has an old "Create Lobby" message -> delete it (so messages do not pile up)
     stale = [pid for pid, meta in _create_prompt_msgs.items() if meta.get("user_id") == user.id]
     for pid in stale:
         meta = _create_prompt_msgs.pop(pid, None)
@@ -6203,17 +6244,17 @@ async def create_mode_lobby(ctx, mode):
                 logger.debug(f"cancel timer failed for prompt {pid}: {e}")
         if meta:
             asyncio.create_task(delete_message_safely(
-                ctx.channel, pid, reason="استُبدلت بأمر play جديد"
+                ctx.channel, pid, reason="play"
             ))
         logger.info(f"🧹 Removed stale 'Create Lobby' message {pid} for user {user.id}")
 
     create_embed = discord.Embed(
         title=f"🎮 Create {mode.upper()} Lobby",
-        description="اضغط الزر تحت لإدخال بيانات الغرفة وإنشاء اللوبي.",
+        description="Press the button below to enter room details and create the lobby.",
         color=COLORS["play"]
     )
-    create_embed.add_field(name="💡 تحتاج", value="• Room ID (أرقام)\n• Password (اختياري)\n• Private Key (اختياري)", inline=False)
-    create_embed.add_field(name="⏱️ ملاحظة", value=f"تختفي هذه الرسالة تلقائياً بعد `{CREATE_PROMPT_DELETE_AFTER}` ثانية إذا ما ضغطت الزر.\n✅ وإذا أنشأت الغرفة — تنحذف مع انتهاء الروم.", inline=False)
+    create_embed.add_field(name="💡 Required details", value="• Room ID\n• Password\n• Private Key", inline=False)
+    create_embed.add_field(name="⏱️ Note", value=f"This message is deleted after `{CREATE_PROMPT_DELETE_AFTER}` seconds.\n✅ It is also removed automatically when the match ends.", inline=False)
     prompt = await ctx.send(embed=create_embed, view=create_view)
 
     _create_prompt_msgs[prompt.id] = {
@@ -6229,102 +6270,102 @@ async def create_mode_lobby(ctx, mode):
 
 @bot.command(name="play")
 async def play_cmd(ctx, mode: str = None):
-    # 🆕 !!play ذكي — يقبل المود كـ argument
-    # مثال: !!play 1v1, !!play 4v4, !!play 2v2
-    # لو ما فيه argument → اعرض رسالة خطأ مع البدائل
-    # لو فيه argument صحيح → شغّل الماتش بهذا المود
-    # لو فيه argument خاطئ → اعرض رسالة خطأ
+    # smart !!play - accepts the mode as an argument
+    # Example: !!play 1v1, !!play 4v4, !!play 2v2
+    # if no argument -> show an error message with the alternatives
+    # if the argument is valid -> start the match with this mode
+    # if the argument is invalid -> show an error message
 
     if mode is None:
-        # ✅ إصلاح: بناء embed كمتغير بشكل صحيح
+        # fix: build the embed as a variable correctly
         no_mode_embed = discord.Embed(
-            title="❌ أمر غير صحيح",
+            title="❌ Invalid Command",
             description=(
-                f"الأمر `{PREFIX}play` غير صالح — يجب تحديد نوع الماتش بوضوح.\n"
-                f"💡 مثال: `{PREFIX}play4v4`"
+                f"`{PREFIX}play` — you must specify a game mode.\n"
+                f"💡 Example: `{PREFIX}play4v4`"
             ),
             color=COLORS["error"],
             timestamp=discord.utils.utcnow()
         )
-        no_mode_embed.add_field(name="🎮 الأوامر الصحيحة", value=f"`{PREFIX}play1v1` — ماتش 1 ضد 1 🔒 (للـ roles العالية)\n`{PREFIX}play2v2` — ماتش 2 ضد 2\n`{PREFIX}play3v3` — ماتش 3 ضد 3\n`{PREFIX}play4v4` — ماتش 4 ضد 4 (الافتراضي)", inline=False)
+        no_mode_embed.add_field(name="🎮 Available Modes", value=f"`{PREFIX}play1v1` — 1 vs 1 🔒 (high roles only)\n`{PREFIX}play2v2` — 2 vs 2\n`{PREFIX}play3v3` — 3 vs 3\n`{PREFIX}play4v4` — 4 vs 4 (standard)", inline=False)
         no_mode_embed.set_footer(text=f"{BOT_FOOTER}  •  Specify the game mode")
         no_mode_embed = apply_branding(no_mode_embed, ctx.guild)
         await ctx.send(embed=no_mode_embed, delete_after=15)
         return
 
-    # تحويل المود لـ lowercase وإزالة المسافات
+    # convert the mode to lowercase and strip spaces
     mode = mode.strip().lower()
 
-    # قائمة المودات الصحيحة
+    # list of valid modes
     valid_modes = list(GAME_MODES.keys())  # ['1v1', '2v2', '3v3', '4v4']
 
     if mode not in valid_modes:
-        # ✅ إصلاح: بناء embed كمتغير بشكل صحيح
+        # fix: build the embed as a variable correctly
         invalid_mode_embed = discord.Embed(
-            title="❌ مود غير صحيح",
+            title="❌ Invalid Mode",
             description=(
-                f"المود `{mode}` غير صالح — استخدم أحد المودات التالية:\n"
-                f"💡 مثال: `{PREFIX}play 4v4`"
+                f"`{mode}` is not a valid mode. Choose one of:\n"
+                f"💡 Example: `{PREFIX}play 4v4`"
             ),
             color=COLORS["error"],
             timestamp=discord.utils.utcnow()
         )
-        invalid_mode_embed.add_field(name="🎮 المودات الصحيحة", value=f"`{PREFIX}play 1v1` أو `{PREFIX}play1v1` 🔒\n`{PREFIX}play 2v2` أو `{PREFIX}play2v2`\n`{PREFIX}play 3v3` أو `{PREFIX}play3v3`\n`{PREFIX}play 4v4` أو `{PREFIX}play4v4`", inline=False)
+        invalid_mode_embed.add_field(name="🎮 Available Modes", value=f"`{PREFIX}play 1v1` `{PREFIX}play1v1` 🔒\n`{PREFIX}play 2v2` `{PREFIX}play2v2`\n`{PREFIX}play 3v3` `{PREFIX}play3v3`\n`{PREFIX}play 4v4` `{PREFIX}play4v4`", inline=False)
         invalid_mode_embed.set_footer(text=f"{BOT_FOOTER}  •  Invalid mode")
         invalid_mode_embed = apply_branding(invalid_mode_embed, ctx.guild)
         await ctx.send(embed=invalid_mode_embed, delete_after=15)
         return
 
-    # المود صحيح — شغّل الماتش
-    # 🆕 فحص خاص بـ play1v1 (للأدوار العالية فقط)
+    # valid mode - start the match
+    # special check for play1v1 (privileged roles only)
     if mode == "1v1" and not is_high_role_member(ctx.author):
         member = ctx.author
         guild_roles = [r for r in ctx.guild.roles if r.hoist and r != ctx.guild.default_role]
         max_position = max((r.position for r in guild_roles), default=0)
         threshold = max(1, max_position // 2) if max_position else 0
         member_top = member.top_role.position if member.top_role else 0
-        # ✅ إصلاح: بناء embed كمتغير بشكل صحيح
+        # fix: build the embed as a variable correctly
         restricted_embed = discord.Embed(
-            title="🔒 أمر محمي",
+            title="🔒 Protected Command",
             description=(
-                f"**الأمر:** `{PREFIX}play 1v1`\n"
-                "مخصص فقط للأعضاء ذوي **الـ roles العالية** في السيرفر.\n"
-                f"💡 Use `{PREFIX}play 4v4` للعب العادي (متاح للجميع)."
+                f"**Command:** `{PREFIX}play 1v1`\n"
+                "Only for members with **high roles** in the server.\n"
+                f"💡 Use `{PREFIX}play 4v4` (available to everyone)."
             ),
             color=COLORS["error"],
             timestamp=discord.utils.utcnow()
         )
-        restricted_embed.add_field(name="🎯 شروط الاستخدام (يكفي أحدها)", value=f"• صلاحية `Administrator` في السيرفر\n• صلاحية `Manage Guild` (إدارة السيرفر)\n• role في النصف العلوي من الهرم — مطلوب position `≥ {threshold}` وأنت حالياً `{member_top}`", inline=False)
+        restricted_embed.add_field(name="🎯 Requirements (any one of these)", value=f"• `Administrator` permission\n• `Manage Guild` permission (manage server)\n• A role at position `≥ {threshold}` (your top role position: `{member_top}`)", inline=False)
         restricted_embed.set_footer(text=f"{BOT_FOOTER}  •  Restricted Command")
         restricted_embed = apply_branding(restricted_embed, ctx.guild)
         await ctx.send(embed=restricted_embed, delete_after=20)
         return
 
-    # شغّل الماتش بهذا المود (نفس منطق play1v1_cmd / play2v2_cmd / etc.)
+    # start the match with this mode (same logic as play1v1_cmd / play2v2_cmd / etc.)
     await create_mode_lobby(ctx, mode)
 
 @bot.command(name="play1v1")
 async def play1v1_cmd(ctx):
-    # 🆕 play1v1 للأعضاء ذوي الـ roles العالية فقط (admin / manage_guild / أعلى role في النصف العلوي)
+    # play1v1 for members with privileged roles only (admin / manage_guild / higher role in the upper half)
     if not is_high_role_member(ctx.author):
-        # اعرض رسالة احترافية تشرح المطلوب
+        # show a professional message explaining the requirement
         member = ctx.author
         guild_roles = [r for r in ctx.guild.roles if r.hoist and r != ctx.guild.default_role]
         max_position = max((r.position for r in guild_roles), default=0)
         threshold = max(1, max_position // 2) if max_position else 0
         member_top = member.top_role.position if member.top_role else 0
-        # ✅ إصلاح: بناء embed كمتغير بشكل صحيح
+        # fix: build the embed as a variable correctly
         restricted_embed = discord.Embed(
-            title="🔒 أمر محمي",
+            title="🔒 Protected Command",
             description=(
-                f"**الأمر:** `{PREFIX}play1v1`\n"
-                "مخصص فقط للأعضاء ذوي **الـ roles العالية** في السيرفر.\n"
-                f"💡 Use `{PREFIX}play` للعب 4v4 العادي (متاح للجميع)."
+                f"**Command:** `{PREFIX}play1v1`\n"
+                "Only for members with **high roles** in the server.\n"
+                f"💡 Use `{PREFIX}play 4v4` (available to everyone)."
             ),
             color=COLORS["error"],
             timestamp=discord.utils.utcnow()
         )
-        restricted_embed.add_field(name="🎯 شروط الاستخدام (يكفي أحدها)", value=f"• صلاحية `Administrator` في السيرفر\n• صلاحية `Manage Guild` (إدارة السيرفر)\n• role في النصف العلوي من الهرم — مطلوب position `≥ {threshold}` وأنت حالياً `{member_top}`", inline=False)
+        restricted_embed.add_field(name="🎯 Requirements (any one of these)", value=f"• `Administrator` permission\n• `Manage Guild` permission (manage server)\n• A role at position `≥ {threshold}` (your top role position: `{member_top}`)", inline=False)
         restricted_embed.set_footer(text=f"{BOT_FOOTER}  •  Restricted Command")
         restricted_embed = apply_branding(restricted_embed, ctx.guild)
         await ctx.send(embed=restricted_embed, delete_after=20)
@@ -6352,14 +6393,14 @@ async def profile_cmd(ctx, member: discord.Member = None):
 
 @bot.command(name="points", aliases=["mypoints", "pts"])
 async def points_cmd(ctx, member: discord.Member = None):
-    """💰 !!points — عرض نقاطك الحالية + كم تحتاج للرانك التالي"""
+    """!!points — show your points and rank"""
     target = member or ctx.author
     player = db.get_or_create_player(target.id, ctx.guild.id, target.display_name)
     level = player.get("level", STARTING_LEVEL)
     points = player.get("points", 0)
     top_pts = db.get_top_points(ctx.guild.id)
     pts_to_next = max(0, top_pts - points) if top_pts > points else 0
-    progress_pct = max(0, min(100, int((points / max(top_pts, 1)) * 100))) if top_pts else 0  # ✅ إصلاح V5: تحديد النسبة بين 0-100
+    progress_pct = max(0, min(100, int((points / max(top_pts, 1)) * 100))) if top_pts else 0  # V5 fix: clamp the percentage between 0-100
     progress_bar = make_progress_bar(points, max(top_pts, 1), length=15)
     rank_color = get_rank_color(level)
     rank_title = get_rank_title(level)
@@ -6368,7 +6409,7 @@ async def points_cmd(ctx, member: discord.Member = None):
     wr_bar = make_winrate_bar(wr, length=10)
 
     embed = discord.Embed(
-        title="💰 نقاط اللاعب",
+        title="💰 Player Points",
         description=(
             f"👤 {target.mention}\n"
             f"🏅 {rank_emoji} **{rank_title}**  `#{level}`\n"
@@ -6377,21 +6418,21 @@ async def points_cmd(ctx, member: discord.Member = None):
         color=rank_color,
         timestamp=discord.utils.utcnow()
     )
-    # التقدم نحو المركز الأول
+    # progress toward first place
     if pts_to_next > 0:
         embed.add_field(
-            name="📈 التقدم نحو المركز الأول",
-            value=f"`{progress_bar}`  `{progress_pct}%`\n💎 نقاطك `{points:,}`  ·  🏆 القمة `{top_pts:,}`  ·  ⏭️ يتبقى `{pts_to_next:,}` نقطة للوصول للقمة",
+            name="📈 Progress to #1",
+            value=f"`{progress_bar}` `{progress_pct}%`\n💎 `{points:,}` · 🏆 `{top_pts:,}` · ⏭️ `{pts_to_next:,}`",
             inline=False
         )
     else:
         embed.add_field(
-            name="🔱 أنت الأول!",
-            value=f"🎉 أنت في القمة بـ `{points:,}` نقطة!\n🚀 حافظ على مركزك بالفوز بالمزيد من المباريات!",
+            name="🔱 You are #1!",
+            value=f"🎉 `{points:,}` pts — you lead the leaderboard!\n🚀 Keep it up!",
             inline=False
         )
 
-    # إحصائيات سريعة
+    # quick stats
     embed.add_field(name="🏆 Wins", value=f"`{player['wins']}`", inline=True)
     embed.add_field(name="☠️ Losses", value=f"`{player['losses']}`", inline=True)
     embed.add_field(name="🔱 MVPs", value=f"`{player['mvps']}`", inline=True)
@@ -6408,7 +6449,7 @@ async def points_cmd(ctx, member: discord.Member = None):
 
 @bot.command(name="card")
 async def card_cmd(ctx, member: discord.Member = None):
-    """🃏 !!card — بطاقة اللاعب (تعمل في كل قنوات play)"""
+    """!!card — show the player profile card"""
     target = member or ctx.author
     player = db.get_or_create_player(target.id, ctx.guild.id, target.display_name)
     await update_member_nickname(target, player.get("level", STARTING_LEVEL))
@@ -6416,7 +6457,7 @@ async def card_cmd(ctx, member: discord.Member = None):
 
 @bot.command(name="top")
 async def top_cmd(ctx):
-    # 🆕 إخفاء اللاعبين في البلاك ليست من اللوحة (بدل عرضهم)
+    # hide blacklisted players from the leaderboard (instead of showing them)
     blacklisted_ids = {b["user_id"] for b in db.get_blacklisted_players(ctx.guild.id)}
     lb = db.get_leaderboard(ctx.guild.id, 25)
     lb = [p for p in lb if p["user_id"] not in blacklisted_ids][:10]
@@ -6627,37 +6668,37 @@ async def matchinfo_cmd(ctx, lobby_id: int = None):
     await ctx.send(embed=embed)
 
 # ============================================================
-# 🛡️ RULES — مصدر واحد لنص القواعد
+# RULES - single source for the rules text
 # ============================================================
-# 🆕 اسم قناة القواعد الثابت — لو غيّرته، غيّره في كل مكان مرة واحدة
-RULES_CHANNEL_NAME = "🛡️・rules"
+# fixed name of the rules channel - if you change it, change it everywhere at once
+RULES_CHANNEL_NAME = "🛡️ Rules"
 
 def build_rules_embed(guild_name):
-    """🆕 يبني embed القواعد — يستخدمه  !!setup  و  !!autosetup  و  !!rules.
-    ✅ مصدر واحد للنص: أي تعديل على القواعد يتم هنا فقط بدل 3 نسخ مكرّرة."""
+    """🆕 embed — !!setup !!autosetup !!rules.
+✅ : 3 ."""
     embed = discord.Embed(
-        title="🛡️ قواعد السيرفر",
+        title="🛡️ Server Rules",
         description=(
-            f"مرحباً بك في **{guild_name}** 🔥\n"
-            "يرجى الالتزام بالقواعد التالية:"
+            f"**{guild_name}** 🔥\n"
+            "Please follow these rules:"
         ),
         color=COLORS["info"],
         timestamp=discord.utils.utcnow()
     )
-    embed.add_field(name="1️⃣ الاحترام المتبادل", value="• احترم جميع اللاعبين والأدمنز.\n• ممنوع السب، الشتم، أو الإساءة.", inline=False)
-    embed.add_field(name="2️⃣ قواعد اللعب", value=f"• ادخل غرفة انتظار قبل اللعب.\n• استخدم `{PREFIX}play 4v4` لبدء ماتش.\n• التزم بنتيجة التصويت.", inline=False)
-    embed.add_field(name="3️⃣ عدم الغش", value="• ممنوع التلاعب بالتصويت.\n• ممنوع مغادرة الماتش في المنتصف.", inline=False)
-    embed.add_field(name="4️⃣ استخدام الأوامر", value="• الأوامر تعمل فقط في قنوات play.", inline=False)
-    embed.add_field(name="5️⃣ العقوبات", value="• مخالفة القواعد = تحذير / كتم / طرد.\n• القرار النهائي للأدمن.", inline=False)
-    embed.add_field(name="💬 استفسار", value="لأي استفسار، تواصل مع الأدمن.", inline=False)
+    embed.add_field(name="1️⃣ Mutual Respect", value="• Treat every member with respect.\n• No insults, harassment or toxic behavior.", inline=False)
+    embed.add_field(name="2️⃣ Game Rules", value=f"• Only join a match you can finish.\n• Use `{PREFIX}play 4v4` to open a lobby.\n• Do not leave a match in progress.", inline=False)
+    embed.add_field(name="3️⃣ No Cheating", value="• Cheating of any kind is forbidden.\n• Report suspected cheaters with the report button.", inline=False)
+    embed.add_field(name="4️⃣ Use Commands Properly", value="• Use the `play` commands only in the play channels.", inline=False)
+    embed.add_field(name="5️⃣ Penalties", value="• Violations lead to a warning / blacklist / ban.\n• Repeated reports lead to an automatic ban.", inline=False)
+    embed.add_field(name="💬 Note", value="Admin decisions are final.", inline=False)
     embed.set_author(name="Server Rules")
     embed.set_footer(text=f"{BOT_FOOTER}  •  Read carefully")
     return embed
 
 async def ensure_rules_channel(guild, text_cat=None):
-    """🆕 ينشئ قناة القواعد لو ناقصة، ويبعت القواعد فيها.
-    ✅ idempotent: لو موجودة يرجّعها بدون ما يعيد الإنشاء.
-    ✅ كل خطأ يتسجّل في اللوق (ما في ابتلاع صامت)."""
+    """🆕 Creates rules channel if missing, and posts rules in it.
+✅ idempotent: .
+✅ ( )."""
     existing = discord.utils.get(guild.text_channels, name=RULES_CHANNEL_NAME)
     if existing:
         return existing, False
@@ -6679,7 +6720,7 @@ async def ensure_rules_channel(guild, text_cat=None):
         logger.error(f"❌ HTTP error creating rules channel in {guild.name}: {e}")
         return None, False
 
-    # ابعت رسالة القواعد (فشلت؟ القناة صارت موجودة على الأقل)
+    # send the rules message (failed? the channel at least exists now)
     try:
         await ch.send(embed=build_rules_embed(guild.name))
     except discord.Forbidden as e:
@@ -6700,26 +6741,26 @@ async def setup_cmd(ctx):
     if ctx.author.id == BOT_OWNER_ID:
         db.add_allowed_guild(guild.id, guild.name, ctx.author.id)
     
-    # 🆕 كاتيجوري منفصل للقنوات النصية
-    text_cat = discord.utils.get(guild.categories, name="🎮 FREE FIRE — TEXT")
+    # separate category for text channels
+    text_cat = discord.utils.get(guild.categories, name="🎮 Free Fire Text")
     if not text_cat:
-        text_cat = await guild.create_category("🎮 FREE FIRE — TEXT", overwrites={guild.default_role: discord.PermissionOverwrite(read_messages=True), guild.me: discord.PermissionOverwrite(manage_channels=True, manage_messages=True)})
-        created.append("🎮 FREE FIRE — TEXT")
+        text_cat = await guild.create_category("🎮 Free Fire Text", overwrites={guild.default_role: discord.PermissionOverwrite(read_messages=True), guild.me: discord.PermissionOverwrite(manage_channels=True, manage_messages=True)})
+        created.append("🎮 Free Fire Text")
     
-    # 🆕 كاتيجوري منفصل للقنوات الصوتية
-    voice_cat = discord.utils.get(guild.categories, name="🎮 FREE FIRE — VOICE")
+    # separate category for voice channels
+    voice_cat = discord.utils.get(guild.categories, name="🎮 Free Fire Voice")
     if not voice_cat:
-        voice_cat = await guild.create_category("🎮 FREE FIRE — VOICE", overwrites={guild.default_role: discord.PermissionOverwrite(read_messages=True), guild.me: discord.PermissionOverwrite(manage_channels=True, manage_messages=True)})
-        created.append("🎮 FREE FIRE — VOICE")
+        voice_cat = await guild.create_category("🎮 Free Fire Voice", overwrites={guild.default_role: discord.PermissionOverwrite(read_messages=True), guild.me: discord.PermissionOverwrite(manage_channels=True, manage_messages=True)})
+        created.append("🎮 Free Fire Voice")
 
-    # 🆕 قناة القواعد — تنشأ تلقائياً (idempotent: ما تتكرر لو موجودة)
+    # rules channel - created automatically (idempotent: not duplicated if it exists)
     rules_ch, rules_created = await ensure_rules_channel(guild, text_cat)
     if rules_created and rules_ch:
         created.append(RULES_CHANNEL_NAME)
     elif rules_ch:
-        logger.info(f"ℹ️ [setup] {guild.name}: قناة القواعد موجودة مسبقاً — تم تجاهل الإنشاء")
+        logger.info(f"ℹ️ [setup] {guild.name}: Rules channel already exists — skipping creation")
 
-    # 🆕 القنوات النصية في كاتيجوري النصي
+    # text channels in the text category
     for ch_name, topic in [("🎮・apostada-play", "Play"), ("🎮・highlight-play", "Play"), ("🎮・zelika-play", "Play"), ("📊・match-results", "Results"), ("🏆・leaderboard", "Leaderboard"), ("👤・profiles", "Profiles"), (BLACKLIST_CHANNEL_NAME, "Blacklist")]:
         if not discord.utils.get(guild.text_channels, name=ch_name):
             ch = await guild.create_text_channel(ch_name, category=text_cat, topic=topic)
@@ -6731,7 +6772,7 @@ async def setup_cmd(ctx):
                 db.set_guild_setting(guild.id, "blacklist_channel_id", ch.id)
             created.append(ch_name)
     
-    # 🆕 القنوات الصوتية في كاتيجوري الصوتي
+    # voice channels in the voice category
     for ch_name in ["⏳・Waiting 1", "⏳・Waiting 2", "⏳・Waiting 3", "⏳・Waiting 4", "⏳・Waiting 5", "🔒・Waiting Prv 1", "🔒・Waiting Prv 2", "🔒・Waiting Prv 3", "🔒・Waiting Staff"]:
         if not discord.utils.get(guild.voice_channels, name=ch_name):
             overwrites = {guild.me: discord.PermissionOverwrite(connect=True, manage_channels=True)}
@@ -6742,12 +6783,12 @@ async def setup_cmd(ctx):
             created.append(ch_name)
     try: await update_leaderboard_channel(guild)
     except: pass
-    # 🆕 حدّث قناة البلاك ليست في الـ setup
+    # update the blacklist channel during setup
     try:
         await update_blacklist_channel(guild)
     except Exception as e:
         logger.warning(f"setup blacklist channel update failed: {e}")
-    # 🆕 أنشئ الـ Roles الخاصة بالألقاب + حدّث صلاحيات Waiting Prv
+    # create the title roles + update Waiting Prv permissions
     try:
         await setup_rank_roles_permissions(guild)
         created.append("Rank Roles (Best/Goated/Skilled/Efficient)")
@@ -6758,14 +6799,14 @@ async def setup_cmd(ctx):
         created.append("Blacklist Role")
     except Exception as e:
         logger.warning(f"setup_blacklist_role failed: {e}")
-    # ✅ إصلاح: بناء embed النجاح كمتغير بشكل صحيح
+    # fix: build the success embed as a variable correctly
     setup_embed = discord.Embed(
         title="✅ Setup Complete!",
         description=f"Created `{len(created)}` channels successfully.",
         color=COLORS["success"],
         timestamp=discord.utils.utcnow()
     )
-    setup_embed.add_field(name="🛡️ Rules channel", value=f"`{RULES_CHANNEL_NAME}` — للقراءة فقط، وإن لم تُنشأ استخدم `{PREFIX}rules`", inline=False)
+    setup_embed.add_field(name="🛡️ Rules channel", value=f"`{RULES_CHANNEL_NAME}` — `{PREFIX}rules`", inline=False)
     setup_embed.add_field(name="🔇 Blacklist Role", value=f"`{BLACKLIST_ROLE_NAME}`", inline=False)
     setup_embed.add_field(name="🎮 Next", value=f"Use `{PREFIX}play4v4` in play channels to start.", inline=False)
     setup_embed.set_footer(text=f"{BOT_FOOTER}  •  Setup complete")
@@ -6775,14 +6816,14 @@ async def setup_cmd(ctx):
 @bot.command(name="autosetup", aliases=["autoset", "checksetup"])
 @commands.check(is_bot_owner_or_admin_check)
 async def autosetup_cmd(ctx):
-    """🔄 !!autosetup — فحص السيرفر وإصلاح أي شيء ناقص تلقائياً"""
-    # ✅ إصلاح: بناء الـ embed كمتغير، ثم set_footer، ثم apply_branding
+    """!!autosetup — auto-detect and register channels"""
+    # fix: build the embed as a variable, then set_footer, then apply_branding
     progress_embed = discord.Embed(
-        title="🔄 جارٍ فحص السيرفر...",
+        title="🔄 Scanning server...",
         description=(
-            "🔍 البحث عن القنوات والكاتيجوريات الناقصة...\n"
-            "🔧 إنشاء Roles + JAIL لو غير موجودة...\n"
-            "⏳ انتظر..."
+            "🔍 ...\n"
+            "🔧 Creating Roles + JAIL if not exist...\n"
+            "⏳ Please wait..."
         ),
         color=COLORS["warning"],
         timestamp=discord.utils.utcnow()
@@ -6793,19 +6834,19 @@ async def autosetup_cmd(ctx):
 
     try:
         await auto_setup_guild(ctx.guild)
-        # ✅ إصلاح: بناء embed النجاح كمتغير بشكل صحيح
+        # fix: build the success embed as a variable correctly
         success_embed = discord.Embed(
-            title="✅ تم الفحص والإصلاح!",
+            title="✅ Scan & Repair Complete!",
             description=(
-                "🔍 تم فحص السيرفر بالكامل\n"
-                "✅ كل القنوات الناقصة أُنشئت\n"
-                "✅ كل الكاتيجوريات مُحدثة (TEXT + VOICE منفصلين)\n"
-                "✅ Rank Roles مُحدثة\n"
-                "✅ نظام JAIL مُفعّل\n"
+                "🔍 \n"
+                "✅ All missing channels created\n"
+                "✅ All categories updated (TEXT + VOICE separated)\n"
+                "✅ Rank Roles updated\n"
+                "✅ JAIL system enabled\n"
                 f"✅ Blacklist Role `{BLACKLIST_ROLE_NAME}`\n"
-                "✅ Leaderboard مُحدث\n"
+                "✅ Leaderboard updated\n"
                 "\n"
-                "💡 لم تُمسح أي بيانات موجودة — النقاط والرانك والفويسات كما هي"
+                "💡 No existing data wiped — points, ranks and voices preserved"
             ),
             color=COLORS["success"],
             timestamp=discord.utils.utcnow()
@@ -6814,10 +6855,10 @@ async def autosetup_cmd(ctx):
         success_embed = apply_branding(success_embed, ctx.guild)
         await progress.edit(embed=success_embed)
     except Exception as e:
-        # ✅ إصلاح: بناء embed الخطأ كمتغير بشكل صحيح
+        # fix: build the error embed as a variable correctly
         error_embed = discord.Embed(
-            title="❌ فشل Auto-setup",
-            description=f"🐛 **الخطأ:** `{str(e)[:200]}`",
+            title="❌ Failed Auto-setup",
+            description=f"🐛 **Error:** `{str(e)[:200]}`",
             color=COLORS["error"],
             timestamp=discord.utils.utcnow()
         )
@@ -6846,10 +6887,10 @@ async def cleanup_cmd(ctx):
 @bot.command(name="scan")
 @commands.check(is_bot_owner_or_admin_check)
 async def scan_cmd(ctx, page: int = 1):
-    """🔍 !!scan [page] — سكان تفصيلي لكل كاتيجوريات السيرفر"""
+    """!!scan [page] — list server categories and channels"""
     guild = ctx.guild
     categories = sorted(guild.categories, key=lambda c: c.position)
-    per_page = 3  # 3 كاتيجوري لكل صفحة (لأن كل وحدة فيها تفاصيل كثيرة)
+    per_page = 3  # 3 categories per page (each one has a lot of detail)
     total_pages = max(1, (len(categories) + per_page - 1) // per_page)
     if page < 1: page = 1
     if page > total_pages: page = total_pages
@@ -6857,7 +6898,7 @@ async def scan_cmd(ctx, page: int = 1):
     end = start + per_page
     page_cats = categories[start:end]
 
-    # 🆕 اجمع كل القنوات بدون كاتيجوري
+    # collect all channels without a category
     no_cat_text = [ch for ch in guild.text_channels if ch.category is None]
     no_cat_voice = [ch for ch in guild.voice_channels if ch.category is None]
 
@@ -6871,7 +6912,7 @@ async def scan_cmd(ctx, page: int = 1):
     )
 
     for i, cat in enumerate(page_cats, start + 1):
-        # 🆕 تفاصيل كل قناة داخل الكاتيجوري
+        # details of each channel inside the category
         text_chs = sorted(cat.text_channels, key=lambda c: c.position)
         voice_chs = sorted(cat.voice_channels, key=lambda c: c.position)
 
@@ -6896,7 +6937,7 @@ async def scan_cmd(ctx, page: int = 1):
             inline=False
         )
 
-    # 🆕 اعرض القنوات بدون كاتيجوري (في الصفحة الأخيرة)
+    # show channels without a category (on the last page)
     if page == total_pages and (no_cat_text or no_cat_voice):
         detail = ""
         if no_cat_text:
@@ -6916,7 +6957,7 @@ async def scan_cmd(ctx, page: int = 1):
 @bot.command(name="deletecat", aliases=["delcat"])
 @commands.check(is_bot_owner_or_admin_check)
 async def deletecat_cmd(ctx, *, category_name: str = None):
-    """🗑️ !!deletecat <name> — حذف كاتيجوري بكل قنواتها"""
+    """!!deletecat <name> — request deletion of a category (asks for confirmation)"""
     if not category_name:
         await ctx.send(embed=discord.Embed(
             title="❌ Missing Name",
@@ -6930,7 +6971,7 @@ async def deletecat_cmd(ctx, *, category_name: str = None):
         return
 
     guild = ctx.guild
-    # ابحث عن الكاتيجوري بالاسم (تطابق كامل أو جزئي)
+    # look up the category by name (exact or partial match)
     target = None
     for cat in guild.categories:
         if cat.name.lower() == category_name.lower():
@@ -6953,7 +6994,7 @@ async def deletecat_cmd(ctx, *, category_name: str = None):
         ))
         return
 
-    # اعرض تأكيد قبل الحذف
+    # show a confirmation before deleting
     text_count = len(target.text_channels)
     voice_count = len(target.voice_channels)
     total_channels = text_count + voice_count
@@ -6973,7 +7014,7 @@ async def deletecat_cmd(ctx, *, category_name: str = None):
 @bot.command(name="confirmcat")
 @commands.check(is_bot_owner_or_admin_check)
 async def confirmcat_cmd(ctx, *, category_name: str = None):
-    """✅ !!confirmcat <name> — تأكيد حذف الكاتيجوري"""
+    """!!confirmcat <name> — confirm deletion of a category"""
     if not category_name:
         await ctx.send(embed=discord.Embed(
             title="❌ Missing Name",
@@ -6997,7 +7038,7 @@ async def confirmcat_cmd(ctx, *, category_name: str = None):
         ))
         return
 
-    # احذف كل القنوات داخل الكاتيجوري
+    # delete all channels inside the category
     deleted = 0
     errors = 0
     for ch in target.channels:
@@ -7010,7 +7051,7 @@ async def confirmcat_cmd(ctx, *, category_name: str = None):
             logger.warning(f"Failed to delete {ch.name}: {e}")
             errors += 1
 
-    # احذف الكاتيجوري نفسها
+    # delete the category itself
     cat_name = target.name
     try:
         await target.delete()
@@ -7061,7 +7102,7 @@ async def fixrankall_cmd(ctx):
 
 @bot.command(name="botinfo")
 async def botinfo_cmd(ctx):
-    # 🆕 FIX: member_count قد يكون None في السيرفرات الكبيرة → لا نكسر الأمر
+    # FIX: member_count can be None in large servers -> do not break the command
     total_members = sum((g.member_count or 0) for g in bot.guilds)
     total_text_channels = sum(len(g.text_channels) for g in bot.guilds)
     total_voice_channels = sum(len(g.voice_channels) for g in bot.guilds)
@@ -7069,7 +7110,7 @@ async def botinfo_cmd(ctx):
         title="🤖 Bot Info",
         description=(
             "🔥 **Free Fire Matchmaking Bot**\n"
-            "نظام ماتش ميكنج متكامل لإدارة مباريات Free Fire"
+            "Complete matchmaking system for Free Fire matches"
         ),
         color=COLORS["info"],
         timestamp=discord.utils.utcnow()
@@ -7123,97 +7164,97 @@ async def setleaderboard_cmd(ctx):
     ))
 
 # ============================================================
-# 🆕 REPORT & BAN COMMANDS — أوامر البلاغات والحظر
+# REPORT & BAN COMMANDS - report and ban commands
 # ============================================================
 
 @bot.command(name="report")
 async def report_cmd(ctx, member: discord.Member = None, *, reason: str = None):
-    """⚠️ !!report @user [reason] — بلّغ عن لاعب"""
+    """!!report @user [reason] — report a player"""
     if not member:
         await ctx.send(embed=discord.Embed(
             title="❌ Missing User",
             description=(
                 f"Usage: `{PREFIX}report @user [reason]`\n"
-                f"مثال: `{PREFIX}report @user يستخدم هاك`"
+                f": `{PREFIX}report @user `"
             ),
             color=COLORS["error"]
         ), delete_after=15)
         return
     if member.id == ctx.author.id:
         await ctx.send(embed=discord.Embed(
-            title="❌ لا يمكنك البلاغ عن نفسك",
+            title="❌ Cannot report yourself",
             color=COLORS["error"]
         ), delete_after=10)
         return
     if member.bot:
         await ctx.send(embed=discord.Embed(
-            title="❌ لا يمكنك البلاغ عن بوت",
+            title="❌ Cannot report a bot",
             color=COLORS["error"]
         ), delete_after=10)
         return
-    # 🔒 نظّف السبب قبل التخزين: يمنع mass-ping عبر <@&id> / @everyone
-    #    ويمنع كسر حد 1024 حرف في حقل الـ embed (HTTPException 400)
+    # sanitize the reason before storing: prevents mass-ping via <@&id> / @everyone
+    #    and prevents exceeding the 1024-character embed field limit (HTTPException 400)
     reason = sanitize_user_text(reason, max_length=200)
-    # سجل البلاغ
+    # record the report
     added, total = db.add_report(ctx.guild.id, ctx.author.id, member.id, reason=reason)
     if not added:
         await ctx.send(embed=discord.Embed(
-            title="⚠️ بلغت من قبل",
-            description=f"لقد بلّغت على {member.mention} سابقاً.",
+            title="⚠️ Already reported",
+            description=f"{member.mention} has already been reported by you.",
             color=COLORS["warning"]
         ), delete_after=10)
         return
     remaining = max(0, REPORT_THRESHOLD - total)
     report_embed = discord.Embed(
-        title="⚠️ تم تسجيل البلاغ",
+        title="⚠️ Report Registered",
         description=(
-            (f"⚠️ يتبقى `{remaining}` بلاغ للحظر التلقائي" if remaining > 0 else "⚠️ **وصل للحد!** سيتم الحظر تلقائياً")
+            (f"⚠️ `{remaining}`" if remaining > 0 else "⚠️ ** !**")
         ),
         color=COLORS["warning"] if remaining > 0 else COLORS["error"],
         timestamp=discord.utils.utcnow()
     )
-    report_embed.add_field(name="👤 المُبلَّغ عنه", value=f"{member.mention}", inline=True)
-    report_embed.add_field(name="👮 المُبلِّغ", value=f"{ctx.author.mention}", inline=True)
-    report_embed.add_field(name="📊 البلاغات", value=f"`{total}/{REPORT_THRESHOLD}`", inline=True)
+    report_embed.add_field(name="👤 Reported", value=f"{member.mention}", inline=True)
+    report_embed.add_field(name="👮 Reporter", value=f"{ctx.author.mention}", inline=True)
+    report_embed.add_field(name="📊 Reports", value=f"`{total}/{REPORT_THRESHOLD}`", inline=True)
     if reason:
-        report_embed.add_field(name="📝 السبب", value=f"{reason}", inline=False)
+        report_embed.add_field(name="📝 Reason", value=f"{reason}", inline=False)
     report_embed.set_footer(text=f"{BOT_FOOTER}  •  Report #{total}")
     report_embed = apply_branding(report_embed, ctx.guild)
     await ctx.send(embed=report_embed)
-    # 🆕 أرسل البلاغ للأدمنز مع السبب
+    # send the report to the admins with the reason
     await notify_admins(
         ctx.guild,
-        "⚠️  بلاغ جديد",
-        f"> 👤  **اللاعب المُبلَّغ عنه:**  {member.mention}\n"
-        f"> 👮  **الـمُبلِّغ:**  {ctx.author.mention}\n"
-        + (f"> 📝  **السبب:**  {reason}\n" if reason else "> 📝  **السبب:**  غير محدد\n")
-        + f"> 📊  **إجمالي البلاغات:**  `{total}/{REPORT_THRESHOLD}`",
+        "⚠️ New Player Report",
+        f"> 👤 **Reported:** {member.mention}\n"
+        f"> 👮  **Reporter:**  {ctx.author.mention}\n"
+        + (f"> 📝 **Reason:** {reason}\n" if reason else "> 📝 **Reason:** none\n")
+        + f"> 📊 **Total reports:** `{total}/{REPORT_THRESHOLD}`",
         color=COLORS["warning"] if remaining > 0 else COLORS["error"]
     )
-    # فحص الحظر التلقائي
+    # automatic ban check
     await check_and_apply_auto_ban(ctx.guild, member.id, total, ctx.author.id)
 
 @bot.command(name="reports")
 async def reports_cmd(ctx, member: discord.Member = None):
-    """📊 !!reports @user — عرض بلاغات لاعب"""
+    """!!reports @user — show reports against a player"""
     target = member or ctx.author
     reports = db.get_reports_for_player(ctx.guild.id, target.id)
     count = len(reports)
     embed = discord.Embed(
-        title=f"⚠️ بلاغات اللاعب — {target.display_name}",
+        title=f"⚠️ Player Reports — {target.display_name}",
         description=(
             f"👤 {target.mention}   ·   📊 `{count}/{REPORT_THRESHOLD}`\n"
-            + ("⚠️ **محظور تلقائياً**" if count >= REPORT_THRESHOLD else f"⚠️ **يتبقى:** `{REPORT_THRESHOLD - count}` بلاغ للحظر")
+            + ("⚠️ **Auto-ban threshold reached**" if count >= REPORT_THRESHOLD else f"⚠️ **Reports until auto-ban:** `{REPORT_THRESHOLD - count}`")
         ),
         color=COLORS["error"] if count >= REPORT_THRESHOLD else COLORS["warning"],
         timestamp=discord.utils.utcnow()
     )
     if reports:
-        # اعرض آخر 10 بلاغات
+        # show the last 10 reports
         for i, r in enumerate(reports[:10], 1):
             reporter = ctx.guild.get_member(r["reporter_id"])
             reporter_name = reporter.display_name if reporter else f"User#{r['reporter_id']}"
-            reason = r.get("reason") or "بدون سبب"
+            reason = r.get("reason") or ""
             timestamp = r.get("created_at", "N/A")[:19] if r.get("created_at") else "N/A"
             embed.add_field(
                 name=f"#{i} — {reporter_name}",
@@ -7221,29 +7262,29 @@ async def reports_cmd(ctx, member: discord.Member = None):
                 inline=False
             )
         if count > 10:
-            embed.set_footer(text=f"{BOT_FOOTER}  •  و {count - 10} بلاغ آخر")
+            embed.set_footer(text=f"{BOT_FOOTER} • +{count - 10} older reports")
     else:
-        embed.description = f"> ✅  لا توجد بلاغات على {target.mention}"
+        embed.description = f"> ✅ {target.mention}"
         embed.color = COLORS["success"]
     embed.set_author(name="Player Reports", icon_url=None)
-    # ✅ إصلاح: apply_branding يجب أن يطبّق دائماً، ليس فقط لو تجاوزت البلاغات 10
+    # fix: apply_branding must always be applied, not only when reports exceed 10
     embed = apply_branding(embed, ctx.guild)
     await ctx.send(embed=embed)
 
 @bot.command(name="banplayer", aliases=["ban"])
 @commands.check(is_admin_check)
 async def banplayer_cmd(ctx, target: Union[discord.Member, int] = None, *, reason: str = None):
-    """🚫 !!banplayer @user أو ID [reason] — حظر لاعب يدوياً"""
+    """!!banplayer @user|ID [reason] — ban a player from playing"""
     if not target:
         await ctx.send(embed=discord.Embed(
             title="❌ Missing User",
-            description=f"Usage: `{PREFIX}banplayer @user أو ID [reason]`",
+            description=f"Usage: `{PREFIX}banplayer @user ID [reason]`",
             color=COLORS["error"]
         ), delete_after=15)
         return
     user_id = target.id if isinstance(target, discord.Member) else target
     if user_id == ctx.author.id:
-        await ctx.send("❌ لا يمكنك حظر نفسك!", delete_after=10)
+        await ctx.send("❌ You cannot ban yourself!", delete_after=10)
         return
     report_count = db.get_reports_count(ctx.guild.id, user_id)
     db.ban_player(ctx.guild.id, user_id, reason=reason or "Manual ban by admin", banned_by=ctx.author.id, report_count=report_count)
@@ -7259,17 +7300,17 @@ async def banplayer_cmd(ctx, target: Union[discord.Member, int] = None, *, reaso
                 assigned_channel = ch
                 db.set_banned_voice(ctx.guild.id, user_id, ch.id)
     ban_embed = discord.Embed(
-        title="🚫 تم حظر اللاعب",
+        title="🚫 Player Banned",
         color=COLORS["error"],
         timestamp=discord.utils.utcnow()
     )
-    ban_embed.add_field(name="👤 اللاعب", value=f"<@{user_id}>", inline=True)
-    ban_embed.add_field(name="👮 حظره", value=f"{ctx.author.mention}", inline=True)
-    ban_embed.add_field(name="📊 البلاغات السابقة", value=f"`{report_count}`", inline=True)
+    ban_embed.add_field(name="👤 Player", value=f"<@{user_id}>", inline=True)
+    ban_embed.add_field(name="👮 Banned by", value=f"{ctx.author.mention}", inline=True)
+    ban_embed.add_field(name="📊 Reports", value=f"`{report_count}`", inline=True)
     if reason:
-        ban_embed.add_field(name="📝 السبب", value=f"`{reason}`", inline=False)
+        ban_embed.add_field(name="📝 Reason", value=f"`{reason}`", inline=False)
     if assigned_channel:
-        ban_embed.add_field(name="🔍 فويس التفتيش", value=f"{assigned_channel.mention}\n🔒 **مقيّد:** لا يمكنه مغادرة هذا الفويس", inline=False)
+        ban_embed.add_field(name="🔍 Investigation Voice", value=f"{assigned_channel.mention}\n🔒 Assigned voice", inline=False)
     ban_embed.set_footer(text=f"{BOT_FOOTER}  •  Banned")
     ban_embed = apply_branding(ban_embed, ctx.guild)
     await ctx.send(embed=ban_embed)
@@ -7277,11 +7318,11 @@ async def banplayer_cmd(ctx, target: Union[discord.Member, int] = None, *, reaso
 @bot.command(name="unbanplayer", aliases=["unban"])
 @commands.check(is_admin_check)
 async def unbanplayer_cmd(ctx, target: Union[discord.User, int] = None):
-    """✅ !!unbanplayer @user أو ID — فك حظر لاعب"""
+    """!!unbanplayer @user|ID — remove a player ban"""
     if not target:
         await ctx.send(embed=discord.Embed(
             title="❌ Missing User",
-            description=f"Usage: `{PREFIX}unbanplayer @user أو ID`",
+            description=f"Usage: `{PREFIX}unbanplayer @user ID`",
             color=COLORS["error"]
         ), delete_after=15)
         return
@@ -7289,24 +7330,24 @@ async def unbanplayer_cmd(ctx, target: Union[discord.User, int] = None):
     ban_info = db.is_player_banned(ctx.guild.id, user_id)
     if not ban_info:
         await ctx.send(embed=discord.Embed(
-            title="ℹ️ اللاعب غير محظور",
-            description=f"<@{user_id}> غير محظور أصلاً.",
+            title="ℹ️ Player is not banned",
+            description=f"<@{user_id}> is not banned.",
             color=COLORS["info"]
         ), delete_after=10)
         return
     db.unban_player(ctx.guild.id, user_id)
     db.clear_reports(ctx.guild.id, user_id)
     unban_embed = discord.Embed(
-        title="✅ تم فك الحظر",
+        title="✅ Player Unbanned",
         description=(
-            "📊 تم مسح كل البلاغات السابقة\n"
-            "🎮 اللاعب يستطيع اللعب الآن"
+            "📊 \n"
+            "🎮 Player can now play"
         ),
         color=COLORS["success"],
         timestamp=discord.utils.utcnow()
     )
-    unban_embed.add_field(name="👤 اللاعب", value=f"<@{user_id}>", inline=True)
-    unban_embed.add_field(name="👮 فك الحظر", value=f"{ctx.author.mention}", inline=True)
+    unban_embed.add_field(name="👤 Player", value=f"<@{user_id}>", inline=True)
+    unban_embed.add_field(name="👮 Unbanned by", value=f"{ctx.author.mention}", inline=True)
     unban_embed.set_footer(text=f"{BOT_FOOTER}  •  Unbanned")
     unban_embed = apply_branding(unban_embed, ctx.guild)
     await ctx.send(embed=unban_embed)
@@ -7314,23 +7355,23 @@ async def unbanplayer_cmd(ctx, target: Union[discord.User, int] = None):
 @bot.command(name="banned")
 @commands.check(is_admin_check)
 async def banned_cmd(ctx):
-    """📋 !!banned — قائمة اللاعبين المحظورين"""
+    """!!banned — list banned players"""
     banned = db.get_banned_players(ctx.guild.id)
     embed = discord.Embed(
-        title="📋 قائمة المحظورين",
-        description=f"📊 **إجمالي المحظورين:** `{len(banned)}`",
+        title="📋 Banned Players",
+        description=f"📊 **Total banned:** `{len(banned)}`",
         color=COLORS["error"] if banned else COLORS["success"],
         timestamp=discord.utils.utcnow()
     )
     embed.set_author(name="Banned Players", icon_url=None)
     if not banned:
-        embed.description = "> ✅  لا يوجد لاعبون محظورون"
+        embed.description = "> ✅"
     else:
         for i, b in enumerate(banned[:15], 1):
             member = ctx.guild.get_member(b["user_id"])
             name = member.display_name if member else f"User#{b['user_id']}"
             mention = member.mention if member else f"<@{b['user_id']}>"
-            reason = b.get("ban_reason") or "غير محدد"
+            reason = b.get("ban_reason") or ""
             report_count = b.get("report_count", 0)
             banned_at = b.get("banned_at", "N/A")[:19] if b.get("banned_at") else "N/A"
             embed.add_field(
@@ -7339,33 +7380,33 @@ async def banned_cmd(ctx):
                 inline=False
             )
         if len(banned) > 15:
-            embed.set_footer(text=f"{BOT_FOOTER}  •  و {len(banned) - 15} لاعب آخر")
-    # ✅ إصلاح: apply_branding يجب أن يطبّق دائمًا، ليس فقط لو تجاوز عدد المحظورين 15
+            embed.set_footer(text=f"{BOT_FOOTER} • +{len(banned) - 15} more")
+    # fix: apply_branding must always be applied, not only when banned players exceed 15
     embed = apply_branding(embed, ctx.guild)
     await ctx.send(embed=embed)
 
 @bot.command(name="setreportchannel", aliases=["setreportch", "addreportch"])
 @commands.check(is_admin_check)
 async def setreportchannel_cmd(ctx, channel: discord.VoiceChannel = None):
-    """🎤 !!setreportchannel #voice — إضافة فويس لقائمة فويسات التفتيش"""
+    """!!setreportchannel #voice — set an investigation voice channel"""
     if not channel:
         await ctx.send(embed=discord.Embed(
             title="❌ Missing Voice Channel",
             description=(
                 f"Usage: `{PREFIX}setreportchannel <#voice_channel>`\n"
-                f"مثال: `{PREFIX}setreportchannel #Investigation-Room`\n"
-                "💡 اذكر فويس صوتي (Voice Channel) موجود"
+                f": `{PREFIX}setreportchannel #Investigation-Room`\n"
+                "💡 Must be an existing Voice Channel"
             ),
             color=COLORS["error"]
         ), delete_after=15)
         return
-    # تأكد إنه فويس صوتي
+    # make sure it is a voice channel
     if not isinstance(channel, discord.VoiceChannel):
         await ctx.send(embed=discord.Embed(
             title="❌ Not a Voice Channel",
             description=(
-                f"{channel.mention} ليس فويس صوتي.\n"
-                "استخدم فويس صوتي (Voice Channel)."
+                f"{channel.mention} is not a voice channel.\n"
+                "Use a Voice Channel."
             ),
             color=COLORS["error"]
         ), delete_after=10)
@@ -7373,19 +7414,19 @@ async def setreportchannel_cmd(ctx, channel: discord.VoiceChannel = None):
     added = db.add_report_channel(ctx.guild.id, channel.id)
     all_channels = db.get_report_channels(ctx.guild.id)
     channels_list = "\n".join([
-        f"›  {ctx.guild.get_channel(cid).mention}  (`{cid}`)" if ctx.guild.get_channel(cid) else f"›  ~~`{cid}`~~  (محذوف)"
+        f"› {ctx.guild.get_channel(cid).mention} (`{cid}`)" if ctx.guild.get_channel(cid) else f"› ~~`{cid}`~~ (channel deleted)"
         for cid in all_channels
-    ]) or "> *لا توجد فويسات*"
+    ]) or "> *No voices set*"
     embed = discord.Embed(
-        title="🎤 فويسات التفتيش",
+        title="🎤 Investigation Voices",
         description=(
             f"🎤 {channel.mention}\n"
-            + ("✅ **تمت الإضافة** لقائمة فويسات التفتيش\n" if added else "⚠️ **موجود مسبقاً** في القائمة\n")
+            + ("✅ **Voice added**\n" if added else "⚠️ **Already in the list**\n")
             + "\n"
-            f"📊 **إجمالي الفويسات:** `{len(all_channels)}`\n"
+            f"📊 **Total voices:** `{len(all_channels)}`\n"
             f"{channels_list}\n"
             "\n"
-            "💡 اللاعبون المحظورون سيُنقلون لهذه الفويسات تلقائياً"
+            "💡 Banned players will be moved to these voices automatically"
         ),
         color=COLORS["success"] if added else COLORS["warning"],
         timestamp=discord.utils.utcnow()
@@ -7398,7 +7439,7 @@ async def setreportchannel_cmd(ctx, channel: discord.VoiceChannel = None):
 @bot.command(name="removereportchannel", aliases=["delreportch", "rmreportch"])
 @commands.check(is_admin_check)
 async def removereportchannel_cmd(ctx, channel: discord.VoiceChannel = None):
-    """🗑️ !!removereportchannel #voice — حذف فويس من قائمة التفتيش"""
+    """!!removereportchannel #voice — remove an investigation voice channel"""
     if not channel:
         await ctx.send(embed=discord.Embed(
             title="❌ Missing Voice Channel",
@@ -7409,16 +7450,16 @@ async def removereportchannel_cmd(ctx, channel: discord.VoiceChannel = None):
     removed = db.remove_report_channel(ctx.guild.id, channel.id)
     all_channels = db.get_report_channels(ctx.guild.id)
     channels_list = "\n".join([
-        f"›  {ctx.guild.get_channel(cid).mention}  (`{cid}`)" if ctx.guild.get_channel(cid) else f"›  ~~`{cid}`~~  (محذوف)"
+        f"› {ctx.guild.get_channel(cid).mention} (`{cid}`)" if ctx.guild.get_channel(cid) else f"› ~~`{cid}`~~ (channel deleted)"
         for cid in all_channels
-    ]) or "> *لا توجد فويسات — سيتم إنشاء فويسات تلقائية عند الحظر*"
+    ]) or "> *No voices left*"
     embed = discord.Embed(
-        title="🗑️ حذف فويس التفتيش",
+        title="🗑️ Remove Investigation Voice",
         description=(
             f"🎤 {channel.mention}\n"
-            + ("✅ **تم الحذف** من القائمة\n" if removed else "⚠️ **غير موجود** في القائمة\n")
+            + ("✅ **Voice removed**\n" if removed else "⚠️ **Not in the list**\n")
             + "\n"
-            f"📊 **الفويسات المتبقية:** `{len(all_channels)}`\n"
+            f"📊 **Remaining voices:** `{len(all_channels)}`\n"
             f"{channels_list}"
         ),
         color=COLORS["success"] if removed else COLORS["warning"],
@@ -7432,13 +7473,13 @@ async def removereportchannel_cmd(ctx, channel: discord.VoiceChannel = None):
 @bot.command(name="reportchannels", aliases=["reportch", "listreportch"])
 @commands.check(is_admin_check)
 async def reportchannels_cmd(ctx):
-    """📋 !!reportchannels — عرض كل فويسات التفتيش المحددة"""
+    """!!reportchannels — list investigation voice channels"""
     all_channels = db.get_report_channels(ctx.guild.id)
     embed = discord.Embed(
-        title="📋 فويسات التفتيش المحددة",
+        title="📋 Investigation Voice List",
         description=(
-            f"📊 **إجمالي الفويسات:** `{len(all_channels)}`\n"
-            + ("⚠️ **لا توجد فويسات محددة** — سيتم إنشاء فويسات تلقائية عند الحظر" if not all_channels else "")
+            f"📊 **Total voices:** `{len(all_channels)}`\n"
+            + (f"⚠️ **No voices set** — use `{PREFIX}setreportchannel #voice`" if not all_channels else "")
         ),
         color=COLORS["info"],
         timestamp=discord.utils.utcnow()
@@ -7456,8 +7497,8 @@ async def reportchannels_cmd(ctx):
                 )
             else:
                 embed.add_field(
-                    name=f"#{i} — ⚠️ محذوف",
-                    value=f"❌ Channel ID: `{cid}` غير موجود\n💡 Use `{PREFIX}removereportchannel` لتنظيف القائمة",
+                    name=f"#{i} — ⚠️ Deleted channel",
+                    value=f"❌ Channel ID: `{cid}` (deleted)\n💡 Use `{PREFIX}removereportchannel`",
                     inline=False
                 )
     embed.set_footer(text=f"{BOT_FOOTER}  •  Use !!setreportchannel to add")
@@ -7465,79 +7506,127 @@ async def reportchannels_cmd(ctx):
     await ctx.send(embed=embed)
 
 # ============================================================
-# 🆕 JAIL SYSTEM — نظام السجن للغشاشين
+# 🆕 JAIL SYSTEM — jail system for cheaters
 # ============================================================
-# 🆕 نظام JAIL — التعريفات في بداية الملف (السطر 87-91)
+# 🆕 JAIL system — definitions at the top of the file (lines 87-91)
 
-# ✅ FIX: cache لتسريع setup_jail_system — يمنع الفحص المتكرر لكل قناة في السيرفر
-# الـ cache يُعاد ضبطه عند تشغيل البوت أو عند انضمام لاعب جديد
+# ✅ FIX: cache to speed up setup_jail_system — prevents re-scanning every channel in the server
+# The cache is reset when the bot restarts or when the role goes missing
 _jail_setup_done = set()  # set of guild.id where jail system is already configured
-# تم نقلها ليعمل on_voice_state_update و on_message بشكل صحيح
+# Moved here so it works correctly with on_voice_state_update and on_message
 
 async def setup_jail_system(guild):
-    """🆕 ينشئ role الـ JAIL + كاتيجوري منفصل + قناتي السجن.
-    ✅ FIX: استخدم cache لتسريع الفحص — تجاوز الفحص لو النظام جاهز بالفعل.
-    ✅ FIX v2: cache يتحقق من role + category + channels (وليس role فقط)."""
-    # ✅ FIX v2: تحقق من كل العناصر، ليس فقط الـ role
+    """Creates the JAIL role + a separate category + the two jail channels.
+    FIX v2: the cache validates role + category + both channels (not just the role)."""
     if guild.id in _jail_setup_done:
         jail_role = discord.utils.get(guild.roles, name=JAIL_ROLE_NAME)
         jail_cat = discord.utils.get(guild.categories, name=JAIL_CATEGORY_NAME)
         jail_chat = discord.utils.get(guild.text_channels, name=JAIL_CHAT_NAME)
         jail_prouves = discord.utils.get(guild.text_channels, name=JAIL_PROUVES_NAME)
-        # لو كل شيء موجود، ارجع مبكراً
         if jail_role and jail_cat and jail_chat and jail_prouves:
             return jail_role
-        # لو أي عنصر مفقود، نعيد الإعداد
         _jail_setup_done.discard(guild.id)
-    
+
     jail_role = discord.utils.get(guild.roles, name=JAIL_ROLE_NAME)
     if not jail_role:
         try:
-            jail_role = await guild.create_role(name=JAIL_ROLE_NAME, color=discord.Color(0x36393F), permissions=discord.Permissions(view_channel=True, send_messages=True, read_messages=True, read_message_history=True, attach_files=True, embed_links=True), reason="Free Fire Bot — JAIL system")
+            jail_role = await guild.create_role(
+                name=JAIL_ROLE_NAME,
+                color=discord.Color(0x36393F),
+                permissions=discord.Permissions(
+                    view_channel=True, send_messages=True,
+                    read_messages=True, read_message_history=True,
+                    attach_files=True, embed_links=True
+                ),
+                reason="Free Fire Bot — JAIL system"
+            )
         except Exception as e:
             logger.warning(f"⚠️ JAIL role creation failed in {guild.name}: {e}")
             return None
+
     jail_cat = discord.utils.get(guild.categories, name=JAIL_CATEGORY_NAME)
     if not jail_cat:
         try:
-            overwrites = {guild.default_role: discord.PermissionOverwrite(view_channel=False), guild.me: discord.PermissionOverwrite(view_channel=True, manage_channels=True, manage_messages=True, move_members=True, connect=True), jail_role: discord.PermissionOverwrite(view_channel=True)}
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(view_channel=False),
+                guild.me: discord.PermissionOverwrite(
+                    view_channel=True, manage_channels=True,
+                    manage_messages=True, move_members=True, connect=True
+                ),
+                jail_role: discord.PermissionOverwrite(view_channel=True)
+            }
             for role in guild.roles:
                 if role.permissions.administrator or role.permissions.manage_guild:
-                    overwrites[role] = discord.PermissionOverwrite(view_channel=True, manage_channels=True, manage_messages=True, move_members=True, connect=True)
-            jail_cat = await guild.create_category(JAIL_CATEGORY_NAME, overwrites=overwrites, reason="JAIL system")
+                    overwrites[role] = discord.PermissionOverwrite(
+                        view_channel=True, manage_channels=True,
+                        manage_messages=True, move_members=True, connect=True
+                    )
+            jail_cat = await guild.create_category(
+                JAIL_CATEGORY_NAME, overwrites=overwrites, reason="JAIL system"
+            )
             logger.info(f"🔒 Created JAIL category in {guild.name}")
         except Exception as e:
             logger.warning(f"⚠️ JAIL category creation failed in {guild.name}: {e}")
-            # ✅ FIX v2: لا نسقط لكاتيجوري خاطئ — نرجع None بدلاً من ذلك
-            jail_cat = None
-    # ✅ FIX v2: لو الكاتيجوري فشل، لا نحاول إنشاء القنوات (ستفشل أيضاً)
+            jail_cat = None  # no fallback to an unrelated category
+
     if jail_cat is None:
-        logger.warning(f"⚠️ Skipping JAIL channel creation in {guild.name} — no category available")
+        logger.warning(f"⚠️ Skipping JAIL channel creation in {guild.name} — no category")
     else:
         for ch_name, perms in [(JAIL_CHAT_NAME, True), (JAIL_PROUVES_NAME, True)]:
             if not discord.utils.get(guild.text_channels, name=ch_name):
                 try:
-                    overwrites = {guild.default_role: discord.PermissionOverwrite(view_channel=False), guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_messages=True), jail_role: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, attach_files=perms)}
+                    overwrites = {
+                        guild.default_role: discord.PermissionOverwrite(view_channel=False),
+                        guild.me: discord.PermissionOverwrite(
+                            view_channel=True, send_messages=True, manage_messages=True
+                        ),
+                        jail_role: discord.PermissionOverwrite(
+                            view_channel=True, send_messages=True,
+                            read_message_history=True, attach_files=perms
+                        )
+                    }
                     for role in guild.roles:
                         if role.permissions.administrator or role.permissions.manage_guild:
-                            overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_messages=True)
-                    await guild.create_text_channel(ch_name, category=jail_cat, topic=f"JAIL — {ch_name}", overwrites=overwrites)
+                            overwrites[role] = discord.PermissionOverwrite(
+                                view_channel=True, send_messages=True, manage_messages=True
+                            )
+                    await guild.create_text_channel(
+                        ch_name, category=jail_cat,
+                        topic=f"JAIL — {ch_name}", overwrites=overwrites
+                    )
                     logger.info(f"🔒 Created JAIL channel #{ch_name} in {guild.name}")
                 except Exception as e:
                     logger.warning(f"⚠️ Failed to create JAIL channel #{ch_name} in {guild.name}: {e}")
+
     for ch in guild.text_channels:
-        if ch.name in [JAIL_CHAT_NAME, JAIL_PROUVES_NAME] or ch.name == "🛡️・rules": continue
+        if ch.name in [JAIL_CHAT_NAME, JAIL_PROUVES_NAME] or ch.name == "🛡️ Rules":
+            continue
         try:
-            overwrite = ch.overwrites_for(jail_role); overwrite.view_channel = False; overwrite.send_messages = False
+            overwrite = ch.overwrites_for(jail_role)
+            overwrite.view_channel = False
+            overwrite.send_messages = False
             await ch.set_permissions(jail_role, overwrite=overwrite, reason="JAIL system")
-        except: pass
+        except Exception:
+            pass
+
     for ch in guild.voice_channels:
-        if ch.category and ch.category.name == JAIL_CATEGORY_NAME: continue
+        if ch.category and ch.category.name == JAIL_CATEGORY_NAME:
+            continue
         try:
-            overwrite = ch.overwrites_for(jail_role); overwrite.view_channel = False; overwrite.connect = False; overwrite.speak = False
+            overwrite = ch.overwrites_for(jail_role)
+            overwrite.view_channel = False
+            overwrite.connect = False
+            overwrite.speak = False
             await ch.set_permissions(jail_role, overwrite=overwrite, reason="JAIL system")
-        except: pass
-    # ✅ FIX: ضع علامة في الـ cache — النظام جاهز، لن نعيد الفحص مرة أخرى
+        except Exception:
+            pass
+
+    # Persist the "setup done" marker (skips heavy re-setup on later calls)
+    try:
+        db.set_guild_setting(guild.id, "jail_setup_done", 1)
+        logger.info(f"✅ setup_jail_system: marked done for guild {guild.id}")
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to mark jail_setup_done: {e}")
     _jail_setup_done.add(guild.id)
     return jail_role
 
@@ -7562,27 +7651,27 @@ async def delete_jail_voice_for_player(guild, member):
 @bot.command(name="jail", aliases=["sendtojail", "cheater"])
 @commands.check(is_admin_check)
 async def jail_cmd(ctx, target: Union[discord.Member, int] = None, *, reason: str = None):
-    """🔒 !!jail <@user أو ID> [سبب] — إرسال لاعب للسجن"""
+    """!!jail <@user|ID> [reason] — send a player to JAIL (role + jail channels)"""
     if not target:
         await ctx.send(embed=discord.Embed(
             title="❌ Missing User",
-            description=f"Usage: `{PREFIX}jail <@user أو ID> [سبب]`",
+            description=f"Usage: `{PREFIX}jail <@user|ID> [reason]`",
             color=COLORS["error"]
         ), delete_after=15); return
     user_id = target.id if isinstance(target, discord.Member) else target
     member = target if isinstance(target, discord.Member) else ctx.guild.get_member(user_id)
     if not member:
         await ctx.send(embed=discord.Embed(
-            title="❌ اللاعب غير موجود في السيرفر",
-            description=f"<@{user_id}> ليس عضو في هذا السيرفر.",
+            title="❌ Player not in server",
+            description=f"<@{user_id}> is not a member of this server.",
             color=COLORS["error"]
         ), delete_after=10)
         return
-    if member.bot: await ctx.send("❌ لا يمكنك سجن بوت!", delete_after=10); return
+    if member.bot: await ctx.send("❌ Cannot jail a bot!", delete_after=10); return
     jail_role = await setup_jail_system(ctx.guild)
-    if not jail_role: await ctx.send("❌ لم أستطع إنشاء نظام السجن!", delete_after=10); return
+    if not jail_role: await ctx.send("❌ Failed to create jail system!", delete_after=10); return
     try: await member.add_roles(jail_role, reason=f"Jailed by {ctx.author.name}: {reason or 'No reason'}")
-    except Exception as e: await ctx.send(f"❌ لم أستطع إعطاء الـ role! ({e})", delete_after=15); return
+    except Exception as e: await ctx.send(f"❌ Failed to assign role! ({e})", delete_after=15); return
     jail_cat = discord.utils.get(ctx.guild.categories, name=JAIL_CATEGORY_NAME)
     jail_voice = None
     if jail_cat:
@@ -7591,20 +7680,20 @@ async def jail_cmd(ctx, target: Union[discord.Member, int] = None, *, reason: st
             try: await member.move_to(jail_voice)
             except: pass
     jail_embed = discord.Embed(
-        title="🔒 تم إرسال اللاعب للسجن",
+        title="🔒 Player sent to jail",
         description=(
-            "🔒 اللاعب الآن في السجن\n"
-            f"💬 يمكنه الكتابة في `{JAIL_CHAT_NAME}` و `{JAIL_PROUVES_NAME}`\n"
-            + (f"🎤 فويس السجن: `{jail_voice.name}`\n" if jail_voice else "")
-            + f"✅ لفك السجن: `{PREFIX}unjail @user`"
+            "🔒 Player is now in jail\n"
+            f"💬 Can chat in `{JAIL_CHAT_NAME}` and `{JAIL_PROUVES_NAME}`\n"
+            + (f"🎤 Jail voice: `{jail_voice.name}`\n" if jail_voice else "")
+            + f"✅ To release: `{PREFIX}unjail @user`"
         ),
         color=COLORS["error"],
         timestamp=discord.utils.utcnow()
     )
-    jail_embed.add_field(name="👤 اللاعب", value=f"{member.mention}", inline=True)
-    jail_embed.add_field(name="👮 الأدمن", value=f"{ctx.author.mention}", inline=True)
+    jail_embed.add_field(name="👤 Player", value=f"{member.mention}", inline=True)
+    jail_embed.add_field(name="👮 Jailed by", value=f"{ctx.author.mention}", inline=True)
     if reason:
-        jail_embed.add_field(name="📝 السبب", value=f"`{reason}`", inline=False)
+        jail_embed.add_field(name="📝 Reason", value=f"`{reason}`", inline=False)
     jail_embed.set_author(name="JAIL System")
     jail_embed.set_footer(text=f"{BOT_FOOTER}  •  Jailed")
     jail_embed = apply_branding(jail_embed, ctx.guild)
@@ -7613,14 +7702,14 @@ async def jail_cmd(ctx, target: Union[discord.Member, int] = None, *, reason: st
     if jail_chat:
         try:
             welcome = discord.Embed(
-                title="🔒 مرحباً بك في السجن",
+                title="🔒 Welcome to jail",
                 description=(
-                    f"{member.mention} تم إرسالك للسجن\n"
-                    + (f"📝 **السبب:** {reason}\n" if reason else "")
+                    f"{member.mention} you have been jailed.\n"
+                    + (f"📝 **Reason:** {reason}\n" if reason else "")
                     + "\n"
-                    "💬 يمكنك الكلام هنا فقط\n"
-                    f"📸 ارفع أدلتك في `#{JAIL_PROUVES_NAME}`\n"
-                    "⏳ انتظر قرار الأدمن"
+                    "💬 You can only chat here\n"
+                    f"📸 Upload your proofs in `#{JAIL_PROUVES_NAME}`\n"
+                    "⏳ Wait for admin decision"
                 ),
                 color=COLORS["warning"],
                 timestamp=discord.utils.utcnow()
@@ -7632,46 +7721,47 @@ async def jail_cmd(ctx, target: Union[discord.Member, int] = None, *, reason: st
 @bot.command(name="unjail", aliases=["release", "free"])
 @commands.check(is_admin_check)
 async def unjail_cmd(ctx, target: Union[discord.Member, int] = None):
-    """✅ !!unjail <@user أو ID> — فك سجن لاعب"""
+    """!!unjail <@user|ID> — release a player from JAIL"""
     if not target:
         await ctx.send(embed=discord.Embed(
             title="❌ Missing User",
-            description=f"Usage: `{PREFIX}unjail <@user أو ID>`",
+            description=f"Usage: `{PREFIX}unjail <@user ID>`",
             color=COLORS["error"]
         ), delete_after=15); return
     user_id = target.id if isinstance(target, discord.Member) else target
     member = target if isinstance(target, discord.Member) else ctx.guild.get_member(user_id)
     if not member:
         await ctx.send(embed=discord.Embed(
-            title="ℹ️ اللاعب غير موجود",
-            description=f"<@{user_id}> ليس في السيرفر.",
+            title="ℹ️ Player not found",
+            description=f"<@{user_id}> is not in the server.",
             color=COLORS["info"]
         ), delete_after=10); return
     jail_role = discord.utils.get(ctx.guild.roles, name=JAIL_ROLE_NAME)
-    if not jail_role: await ctx.send("❌ نظام السجن غير مُفعّل!", delete_after=10); return
-    if jail_role not in member.roles: await ctx.send(f"ℹ️ {member.mention} ليس في السجن!", delete_after=10); return
+    if not jail_role: await ctx.send("❌ Jail system not enabled!", delete_after=10); return
+    if jail_role not in member.roles: await ctx.send(f"ℹ️ {member.mention} is not in jail!", delete_after=10); return
     try: await member.remove_roles(jail_role, reason=f"Unjailed by {ctx.author.name}")
-    except Exception as e: await ctx.send(f"❌ لم أستطع إزالة الـ role! ({e})", delete_after=15); return
+    except Exception as e: await ctx.send(f"❌ role! ({e})", delete_after=15); return
     await delete_jail_voice_for_player(ctx.guild, member)
     unjail_embed = discord.Embed(
-        title="✅ تم فك السجن",
-        description="🎮 اللاعب حر الآن",
+        title="✅ Released from jail",
+        description="🎮 Player is now free",
         color=COLORS["success"],
         timestamp=discord.utils.utcnow()
     )
-    unjail_embed.add_field(name="👤 اللاعب", value=f"{member.mention}", inline=True)
-    unjail_embed.add_field(name="👮 الأدمن", value=f"{ctx.author.mention}", inline=True)
+    unjail_embed.add_field(name="👤 Player", value=f"{member.mention}", inline=True)
+    unjail_embed.add_field(name="👮 Released by", value=f"{ctx.author.mention}", inline=True)
     unjail_embed.set_author(name="JAIL System")
     unjail_embed.set_footer(text=f"{BOT_FOOTER}  •  Released")
     unjail_embed = apply_branding(unjail_embed, ctx.guild)
     await ctx.send(embed=unjail_embed)
 
 # ============================================================
-# 🆕 BLACKLIST SYSTEM — نظام البلاك ليست
+# 🆕 BLACKLIST SYSTEM — Blacklist System
 # ============================================================
 
 async def setup_blacklist_role(guild):
-    """🆕 ينشئ role البلاك ليست لو غير موجود."""
+    """🆕 Creates blacklist role if it doesn't exist.
+✅ P1: guild_permissions.cache ( )."""
     role = discord.utils.get(guild.roles, name=BLACKLIST_ROLE_NAME)
     if not role:
         try:
@@ -7680,19 +7770,24 @@ async def setup_blacklist_role(guild):
                 color=discord.Color(0x2C3E50),
                 reason="Free Fire Bot — Blacklist system"
             )
+            # P1: record that the role was created (for quick reuse)
+            try:
+                db.set_guild_setting(guild.id, "blacklist_setup_done", 1)
+            except Exception:
+                pass
         except:
             return None
     return role
 
 async def apply_blacklist(guild, member, reason=None):
-    """🆕 يطبق البلاك ليست على لاعب: يعطيه role + يسجل في DB + يبدأ مؤقت 5 دقائق.
-    ✅ P1: يصفّر tracking أيضًا (لو استُدعي يدويًا عبر !!blacklist)."""
+    """🆕 Applies blacklist to player: gives role + logs in DB + starts 5-min timer.
+✅ P1: tracking ( !!blacklist)."""
     if not member or member.bot:
         return False
     role = await setup_blacklist_role(guild)
     if not role:
         return False
-    # خلّص أي مؤقت قديم لهذا اللاعب
+    # clear any old timer for this player
     old_timer = _blacklist_auto_remove_timers.get(guild.id, {}).pop(member.id, None)
     if old_timer and not old_timer.done():
         old_timer.cancel()
@@ -7703,7 +7798,7 @@ async def apply_blacklist(guild, member, reason=None):
     expires_ts = db.blacklist_player(guild.id, member.id, reason=reason)
     if not expires_ts:
         return False
-    # ابدأ مؤقت للإزالة التلقائية بعد BLACKLIST_DURATION ثانية
+    # start a timer for automatic removal after BLACKLIST_DURATION seconds
     async def auto_remove_blacklist():
         try:
             await asyncio.sleep(BLACKLIST_DURATION)
@@ -7714,11 +7809,11 @@ async def apply_blacklist(guild, member, reason=None):
         _blacklist_auto_remove_timers[guild.id] = {}
     task = asyncio.ensure_future(auto_remove_blacklist())
     _blacklist_auto_remove_timers[guild.id][member.id] = task
-    # ✅ P1: صفّر tracking لهذا اللاعب (يحل مشكلة !!blacklist يدوي لا يلمس tracking)
+    # P1: reset tracking for this player (fixes the manual !!blacklist not touching tracking)
     try:
         track = _blacklist_voice_tracking.get(guild.id, {})
         if member.id in track:
-            # ألغِ reset_task المعلّق
+            # cancel the pending reset_task
             reset_task = track[member.id].get("reset_task")
             if reset_task and not reset_task.done():
                 reset_task.cancel()
@@ -7726,17 +7821,17 @@ async def apply_blacklist(guild, member, reason=None):
             logger.info(f"🔇 BLACKLIST: cleared tracking for {member.display_name} (manual or auto)")
     except Exception:
         pass
-    # أبلغ الأدمن
+    # notify the admin
     await notify_admins(
         guild,
-        "🔇  Blacklist Applied",
-        f"> 👤  **اللاعب:**  {member.mention}\n"
-        f"> 📝  **السبب:**  {reason or 'غير محدد'}\n"
-        f"> ⏱️  **المدة:**  5 دقائق\n"
-        f"> 🔇  لا يمكنه استخدام البوت لمدة 5 دقائق",
+        "🔇 Blacklist Applied",
+        f"> 👤 **Player:** {member.mention}\n"
+        f"> 📝  **Reason:**  {reason or 'N/A'}\n"
+        f"> ⏱️  **Duration:**  5 minutes\n"
+        f"> 🔇  Bot access blocked for 5 minutes",
         color=COLORS["warning"]
     )
-    # 🆕 حدّث قناة البلاك ليست بعد التطبيق
+    # update the blacklist channel after applying
     try:
         await update_blacklist_channel(guild)
     except Exception as e:
@@ -7744,7 +7839,7 @@ async def apply_blacklist(guild, member, reason=None):
     return True
 
 async def remove_blacklist(guild, member):
-    """🆕 يزيل البلاك ليست عن لاعب: يسحب role + يحذف من DB + يلغي المؤقت."""
+    """🆕 Removes blacklist from player: removes role + deletes from DB + cancels timer."""
     if not member or member.bot:
         return
     role = discord.utils.get(guild.roles, name=BLACKLIST_ROLE_NAME)
@@ -7754,19 +7849,19 @@ async def remove_blacklist(guild, member):
         except:
             pass
     db.remove_blacklist(guild.id, member.id)
-    # ألغِ المؤقت إن وجد
+    # cancel the timer if it exists
     timers = _blacklist_auto_remove_timers.get(guild.id, {})
     timer = timers.pop(member.id, None)
     if timer and not timer.done():
         timer.cancel()
-    # 🆕 حدّث قناة البلاك ليست بعد الإزالة
+    # update the blacklist channel after removal
     try:
         await update_blacklist_channel(guild)
     except Exception as e:
         logger.warning(f"update_blacklist_channel (remove) failed: {e}")
 
 def is_blacklisted_check(ctx):
-    """🆕 فحص البلاك ليست — يمنع اللاعب من استخدام البوت."""
+    """🆕 — ."""
     if ctx.author.id == BOT_OWNER_ID:
         return True
     if ctx.author.guild_permissions.administrator:
@@ -7778,21 +7873,21 @@ def is_blacklisted_check(ctx):
 @bot.command(name="blacklist", aliases=["bl"])
 @commands.check(is_admin_check)
 async def blacklist_cmd(ctx, target: Union[discord.Member, int] = None, *, reason: str = None):
-    """🔇 !!blacklist @user أو ID [سبب] — إضافة لاعب للبلاك ليست يدوياً"""
+    """!!blacklist @user|ID [reason] — manually blacklist a player"""
     if not target:
         await ctx.send(embed=discord.Embed(
             title="❌ Missing User",
-            description=f"Usage: `{PREFIX}blacklist @user أو ID [reason]`",
+            description=f"Usage: `{PREFIX}blacklist @user ID [reason]`",
             color=COLORS["error"]
         ), delete_after=15)
         return
     user_id = target.id if isinstance(target, discord.Member) else target
     if user_id == ctx.author.id:
-        await ctx.send("❌ لا يمكنك بلاك ليست نفسك!", delete_after=10)
+        await ctx.send("❌ You cannot blacklist yourself!", delete_after=10)
         return
     member = target if isinstance(target, discord.Member) else ctx.guild.get_member(user_id)
     if member and member.bot:
-        await ctx.send("❌ لا يمكنك بلاك ليست بوت!", delete_after=10)
+        await ctx.send("❌ You cannot blacklist a bot!", delete_after=10)
         return
     if member:
         success = await apply_blacklist(ctx.guild, member, reason=reason)
@@ -7801,25 +7896,25 @@ async def blacklist_cmd(ctx, target: Union[discord.Member, int] = None, *, reaso
         success = True
     if not success:
         await ctx.send(embed=discord.Embed(
-            title="❌ فشل",
-            description="لم أستطع تطبيق البلاك ليست.",
+            title="❌ Failed",
+            description="Could not apply the blacklist.",
             color=COLORS["error"]
         ), delete_after=10)
         return
     embed = discord.Embed(
-        title="🔇 تمت إضافة اللاعب للبلاك ليست",
+        title="🔇 Player added to blacklist",
         color=COLORS["warning"],
         timestamp=discord.utils.utcnow()
     )
-    embed.add_field(name="👤 اللاعب", value=f"<@{user_id}>", inline=True)
-    embed.add_field(name="👮 بواسطة", value=f"{ctx.author.mention}", inline=True)
-    embed.add_field(name="⏱️ المدة", value="10 دقائق", inline=True)
+    embed.add_field(name="👤 Player", value=f"<@{user_id}>", inline=True)
+    embed.add_field(name="👮 By", value=f"{ctx.author.mention}", inline=True)
+    embed.add_field(name="⏱️ Duration", value=f"`{BLACKLIST_DURATION // 60}` minutes", inline=True)
     if reason:
-        embed.add_field(name="📝 السبب", value=f"`{reason}`", inline=False)
+        embed.add_field(name="📝 Reason", value=f"`{reason}`", inline=False)
     embed.set_footer(text=f"{BOT_FOOTER}  •  Blacklisted")
     embed = apply_branding(embed, ctx.guild)
     await ctx.send(embed=embed)
-    # 🆕 حدّث القائمة في قناة البلاك ليست
+    # update the list in the blacklist channel
     try:
         await update_blacklist_channel(ctx.guild)
     except Exception as e:
@@ -7828,11 +7923,11 @@ async def blacklist_cmd(ctx, target: Union[discord.Member, int] = None, *, reaso
 @bot.command(name="unblacklist", aliases=["ubl", "removebl"])
 @commands.check(is_admin_check)
 async def unblacklist_cmd(ctx, target: Union[discord.User, int] = None):
-    """✅ !!unblacklist @user أو ID — إزالة لاعب من البلاك ليست"""
+    """!!unblacklist @user|ID — remove a player from the blacklist"""
     if not target:
         await ctx.send(embed=discord.Embed(
             title="❌ Missing User",
-            description=f"Usage: `{PREFIX}unblacklist @user أو ID`",
+            description=f"Usage: `{PREFIX}unblacklist @user ID`",
             color=COLORS["error"]
         ), delete_after=15)
         return
@@ -7843,17 +7938,17 @@ async def unblacklist_cmd(ctx, target: Union[discord.User, int] = None):
     else:
         db.remove_blacklist(ctx.guild.id, user_id)
     embed = discord.Embed(
-        title="✅ تمت إزالة البلاك ليست",
-        description="🎮 يمكنه استخدام البوت الآن",
+        title="✅ Blacklist removed",
+        description="🎮 The player can use the bot again.",
         color=COLORS["success"],
         timestamp=discord.utils.utcnow()
     )
-    embed.add_field(name="👤 اللاعب", value=f"<@{user_id}>", inline=True)
-    embed.add_field(name="👮 بواسطة", value=f"{ctx.author.mention}", inline=True)
+    embed.add_field(name="👤 Player", value=f"<@{user_id}>", inline=True)
+    embed.add_field(name="👮 By", value=f"{ctx.author.mention}", inline=True)
     embed.set_footer(text=f"{BOT_FOOTER}  •  Unblacklisted")
     embed = apply_branding(embed, ctx.guild)
     await ctx.send(embed=embed)
-    # 🆕 حدّث القائمة في قناة البلاك ليست
+    # update the list in the blacklist channel
     try:
         await update_blacklist_channel(ctx.guild)
     except Exception as e:
@@ -7862,45 +7957,45 @@ async def unblacklist_cmd(ctx, target: Union[discord.User, int] = None):
 @bot.command(name="blacklisted", aliases=["bllist", "blacklistlist"])
 @commands.check(is_admin_check)
 async def blacklisted_cmd(ctx):
-    """📋 !!blacklisted — قائمة اللاعبين في البلاك ليست"""
+    """!!blacklisted — list currently blacklisted players"""
     blacklisted = db.get_blacklisted_players(ctx.guild.id)
     embed = discord.Embed(
-        title="📋 قائمة البلاك ليست",
-        description=f"📊 **إجمالي:** `{len(blacklisted)}`",
+        title="📋 Blacklist List",
+        description=f"📊 **Total:** `{len(blacklisted)}`",
         color=COLORS["warning"] if blacklisted else COLORS["success"],
         timestamp=discord.utils.utcnow()
     )
     embed.set_author(name="Blacklisted Players")
     if not blacklisted:
-        embed.description = "> ✅  لا يوجد لاعبون في البلاك ليست"
+        embed.description = "> ✅"
     else:
         for i, b in enumerate(blacklisted[:15], 1):
             member = ctx.guild.get_member(b["user_id"])
             name = member.display_name if member else f"User#{b['user_id']}"
             mention = member.mention if member else f"<@{b['user_id']}>"
-            reason = b.get("reason") or "غير محدد"
+            reason = b.get("reason") or ""
             expires = b.get("expires_at", "N/A")[:19] if b.get("expires_at") else "N/A"
             embed.add_field(
                 name=f"#{i} — {name}",
-                value=f"👤 {mention}\n📝 `{reason}`\n⏱️ ينتهي: `{expires}`",
+                value=f"👤 {mention}\n📝 `{reason}`\n⏱️ Expires: `{expires}`",
                 inline=False
             )
         if len(blacklisted) > 15:
-            embed.set_footer(text=f"{BOT_FOOTER}  •  و {len(blacklisted) - 15} لاعب آخر")
+            embed.set_footer(text=f"{BOT_FOOTER} • +{len(blacklisted) - 15} more")
     embed = apply_branding(embed, ctx.guild)
     await ctx.send(embed=embed)
 
 @bot.command(name="rules")
 async def rules_cmd(ctx):
-    """🛡️ !!rules — عرض قواعد السيرفر"""
-    # ✅ نفس الدالة المستخدمة في  !!setup  و  !!autosetup  — مصدر واحد للنص
+    """!!rules — post the server rules"""
+    # same function used in  !!setup  and  !!autosetup  - single source for the text
     rules_embed = build_rules_embed(ctx.guild.name)
     await ctx.send(embed=rules_embed)
 
 @bot.command(name="w")
 @commands.check(is_admin_check)
 async def winner_mvp_cmd(ctx, lobby_id: int = None, target: Union[discord.User, int] = None):
-    """🏆 !!w <lobby_id> <@user/ID> — تعيين MVP WINNER يدوياً"""
+    """🏆 !!w <lobby_id> <@user/ID> — MVP WINNER"""
     if lobby_id is None or target is None:
         await ctx.send(embed=discord.Embed(
             title="❌ Missing",
@@ -7913,15 +8008,15 @@ async def winner_mvp_cmd(ctx, lobby_id: int = None, target: Union[discord.User, 
     if not lobby or lobby["status"] not in ("voting", "started"):
         await ctx.send(embed=discord.Embed(
             title="❌ Lobby not active",
-            description=f"Lobby `#{lobby_id}` ليس في حالة تصويت.",
+            description=f"Lobby `#{lobby_id}` is not in a started or voting state.",
             color=COLORS["error"]
         ))
         return
     all_players = lobby["team1_players"] + lobby["team2_players"]
     if user_id not in all_players:
         await ctx.send(embed=discord.Embed(
-            title="❌ لاعب غير موجود في الماتش",
-            description=f"<@{user_id}> ليس من لاعبي هذا الماتش.",
+            title="❌ Player not in this match",
+            description=f"<@{user_id}> is not a player in this match.",
             color=COLORS["error"]
         ))
         return
@@ -7929,21 +8024,21 @@ async def winner_mvp_cmd(ctx, lobby_id: int = None, target: Union[discord.User, 
         _admin_mvp_results[lobby_id] = {}
     _admin_mvp_results[lobby_id]["winner"] = user_id
     await ctx.send(embed=discord.Embed(
-        title="✅ تم تعيين MVP WINNER",
+        title="✅ MVP WINNER set",
         description=(
             f"🏆 **MVP WINNER:** <@{user_id}>\n"
             f"📌 **Lobby:** `#{lobby_id}`"
         ),
         color=COLORS["success"]
     ))
-    # لو الـ loser محدد مسبقاً — طبق النتيجة
+    # if the loser is already set - apply the result
     if _admin_mvp_results[lobby_id].get("loser"):
         await _apply_admin_mvp(ctx, lobby_id)
 
 @bot.command(name="l")
 @commands.check(is_admin_check)
 async def loser_mvp_cmd(ctx, lobby_id: int = None, target: Union[discord.User, int] = None):
-    """✦ !!l <lobby_id> <@user/ID> — تعيين MVP LOSER يدوياً"""
+    """✦ !!l <lobby_id> <@user/ID> — MVP LOSER"""
     if lobby_id is None or target is None:
         await ctx.send(embed=discord.Embed(
             title="❌ Missing",
@@ -7956,15 +8051,15 @@ async def loser_mvp_cmd(ctx, lobby_id: int = None, target: Union[discord.User, i
     if not lobby or lobby["status"] not in ("voting", "started"):
         await ctx.send(embed=discord.Embed(
             title="❌ Lobby not active",
-            description=f"Lobby `#{lobby_id}` ليس في حالة تصويت.",
+            description=f"Lobby `#{lobby_id}` is not in a started or voting state.",
             color=COLORS["error"]
         ))
         return
     all_players = lobby["team1_players"] + lobby["team2_players"]
     if user_id not in all_players:
         await ctx.send(embed=discord.Embed(
-            title="❌ لاعب غير موجود في الماتش",
-            description=f"<@{user_id}> ليس من لاعبي هذا الماتش.",
+            title="❌ Player not in this match",
+            description=f"<@{user_id}> is not a player in this match.",
             color=COLORS["error"]
         ))
         return
@@ -7972,20 +8067,20 @@ async def loser_mvp_cmd(ctx, lobby_id: int = None, target: Union[discord.User, i
         _admin_mvp_results[lobby_id] = {}
     _admin_mvp_results[lobby_id]["loser"] = user_id
     await ctx.send(embed=discord.Embed(
-        title="✅ تم تعيين MVP LOSER",
+        title="✅ MVP LOSER set",
         description=(
             f"✦ **MVP LOSER:** <@{user_id}>\n"
             f"📌 **Lobby:** `#{lobby_id}`"
         ),
         color=COLORS["success"]
     ))
-    # لو الـ winner محدد مسبقاً — طبق النتيجة
+    # if the winner is already set - apply the result
     if _admin_mvp_results[lobby_id].get("winner"):
         await _apply_admin_mvp(ctx, lobby_id)
 
 async def _apply_admin_mvp(ctx, lobby_id):
-    """تطبق النتيجة من !!w و !!l بعد تعيين الاثنين.
-    ✅ إصلاح: لا يحدّث الحالة قبل process_match_result_with_mvps."""
+    """Applies result from !!w and !!l after both are set.
+✅ : Doesn't update status before process_match_result_with_mvps."""
     data = _admin_mvp_results.get(lobby_id)
     if not data or not data.get("winner") or not data.get("loser"):
         return
@@ -7994,19 +8089,19 @@ async def _apply_admin_mvp(ctx, lobby_id):
     lobby = db.get_lobby(lobby_id)
     if not lobby:
         return
-    # تحقق من أنهم ليسوا من نفس الفريق
+    # check that they are not on the same team
     w_team = "team1" if winner_id in lobby["team1_players"] else "team2"
     l_team = "team1" if loser_id in lobby["team1_players"] else "team2"
     if w_team == l_team:
         await ctx.send(embed=discord.Embed(
-            title="❌ MVP من نفس الفريق!",
-            description="MVP WINNER و MVP LOSER يجب أن يكونا من فريقين مختلفين.",
+            title="❌ MVP from same team!",
+            description="The MVP WINNER and the MVP LOSER must come from different teams.",
             color=COLORS["error"]
         ))
         _admin_mvp_results.pop(lobby_id, None)
         return
     await ctx.send(embed=discord.Embed(
-        title="⚙️ جارٍ تطبيق النقاط...",
+        title="⚙️ Applying points...",
         description=(
             f"🏆 **Winner Team:** {w_team}\n"
             f"🔱 **MVP WINNER:** <@{winner_id}>\n"
@@ -8015,8 +8110,8 @@ async def _apply_admin_mvp(ctx, lobby_id):
         color=COLORS["warning"]
     ))
     guild = ctx.guild
-    # ✅ إصلاح: لا تحدّث الحالة هنا — process_match_result_with_mvps يفعل ذلك
-    # لو حدّثناها هنا، process_match_result_with_mvps سيرى "completed" ويرجع!
+    # fix: do not update the state here - process_match_result_with_mvps does that
+    # if we updated it here, process_match_result_with_mvps would see "completed" and return!
     _admin_mvp_results.pop(lobby_id, None)
     try:
         await process_match_result_with_mvps(
@@ -8026,7 +8121,7 @@ async def _apply_admin_mvp(ctx, lobby_id):
         )
     except Exception as e:
         logger.exception(f"❌ _apply_admin_mvp failed: {e}")
-        # ✅ حتى لو فشل — أنهِ الماتش
+        # so that even on failure - the match ends
         try:
             db.update_lobby_status(lobby_id, "completed")
             _original_voice_channels.pop(lobby_id, None)
@@ -8035,10 +8130,10 @@ async def _apply_admin_mvp(ctx, lobby_id):
         except:
             pass
         await ctx.send(embed=discord.Embed(
-            title="❌ فشل تطبيق النقاط",
+            title="❌ Failed",
             description=(
-                f"🐛 **الخطأ:** `{str(e)[:200]}`\n"
-                "✅ تم إنهاء الماتش وحذف القنوات"
+                f"🐛 **Error:** `{str(e)[:200]}`\n"
+                "✅ Match ended and channels deleted"
             ),
             color=COLORS["error"]
         ))
@@ -8046,10 +8141,10 @@ async def _apply_admin_mvp(ctx, lobby_id):
 @bot.command(name="startvote", aliases=["forcevote", "sv"])
 @commands.check(is_admin_check)
 async def startvote_cmd(ctx, lobby_id: int = None):
-    """🗳️ !!startvote <lobby_id> — بدء التصويت فوراً (Admin only)
-    يتجاوز cooldown الـ 10 دقائق."""
+    """🗳️ !!startvote <lobby_id> — Start vote immediately (Admin only)
+bypasses cooldown 10 minutes."""
     if lobby_id is None:
-        # ابحث عن أحدث ماتش نشط
+        # look for the player's active match
         lobby = db.get_active_lobby_by_guild(ctx.guild.id)
         if lobby:
             lobby_id = lobby["id"]
@@ -8058,8 +8153,8 @@ async def startvote_cmd(ctx, lobby_id: int = None):
                 title="❌ Missing Lobby ID",
                 description=(
                     f"Usage: `{PREFIX}startvote <lobby_id>`\n"
-                    f"أو استخدم `{PREFIX}startvote` لو فيه ماتش نشط\n"
-                    f"💡 Use `{PREFIX}matches` لعرض الماتشات النشطة"
+                    f"`{PREFIX}startvote` \n"
+                    f"💡 Use `{PREFIX}matches`"
                 ),
                 color=COLORS["error"]
             ), delete_after=15)
@@ -8068,7 +8163,7 @@ async def startvote_cmd(ctx, lobby_id: int = None):
     if not lobby:
         await ctx.send(embed=discord.Embed(
             title="❌ Not Found",
-            description=f"اللوبي `#{lobby_id}` غير موجود",
+            description=f"Lobby `#{lobby_id}` was not found.",
             color=COLORS["error"]
         ), delete_after=10)
         return
@@ -8076,19 +8171,19 @@ async def startvote_cmd(ctx, lobby_id: int = None):
         await ctx.send(embed=discord.Embed(
             title="❌ Not Active",
             description=(
-                f"اللوبي `#{lobby_id}` حالته: `{lobby['status']}`\n"
-                "يجب أن يكون `started`"
+                f"Lobby `#{lobby_id}` status: `{lobby['status']}`\n"
+                "Must be `started`"
             ),
             color=COLORS["error"]
         ), delete_after=10)
         return
     guild = ctx.guild
-    # ✅ ابدأ التصويت فوراً بدون cooldown
+    # start the vote immediately without a cooldown
     embed = discord.Embed(
-        title="🗳️ تم بدء التصويت!",
+        title="🗳️ Vote started!",
         description=(
-            "⚡ تم تجاوز cooldown الـ 10 دقائق\n"
-            "🗳️ الهوست وأول داخل يصوتان الآن!"
+            "⚡ Started without the 10-minute cooldown\n"
+            "🗳️ Host and first joiner can now vote!"
         ),
         color=COLORS["success"],
         timestamp=discord.utils.utcnow()
@@ -8143,7 +8238,7 @@ async def resetstats_cmd(ctx, target: Union[discord.User, int] = None):
     if not target:
         await ctx.send(embed=discord.Embed(
             title="❌ Missing User",
-            description=f"Usage: `{PREFIX}resetstats @user أو ID`",
+            description=f"Usage: `{PREFIX}resetstats @user ID`",
             color=COLORS["error"]
         ))
         return
@@ -8161,24 +8256,24 @@ async def resetstats_cmd(ctx, target: Union[discord.User, int] = None):
         color=COLORS["success"]
     ))
 
-# 🆕 إعادة تعيين الرانك + النقاط لكل أعضاء السيرفر إلى الصفر
+# reset ranks + points of all server members to zero
 @bot.command(name="resetrankall", aliases=["forceresetrankall", "resetallranks"])
 @commands.check(is_admin_check)
 async def resetrankall_cmd(ctx):
-    """🏅 !!resetrankall — تصفير النقاط والرانك لكل أعضاء السيرفر"""
+    """!!resetrankall — reset ranks and points of all members"""
     guild = ctx.guild
-    # ✅ إصلاح: بناء embed التقدّم كمتغير بشكل صحيح
+    # fix: build the progress embed as a variable correctly
     progress_embed = discord.Embed(
-        title="🚀 جارٍ تصفير النقاط والرانك...",
+        title="🚀 Resetting points and ranks...",
         description=(
-            "💰 **سيتم تصفير:** النقاط + الرانك\n"
-            f"🏅 **الرانك المستهدف:** `#{STARTING_LEVEL}` (نقاط = 0)\n"
-            "⏳ **انتظر...**"
+            "💰 **Points:** reset to `0`\n"
+            f"🏅 **Rank:** `#{STARTING_LEVEL}` (points = 0)\n"
+            "⏳ **Please wait...**"
         ),
         color=COLORS["warning"],
         timestamp=discord.utils.utcnow()
     )
-    progress_embed.add_field(name="📊 عدد الأعضاء", value=f"`{len(guild.members)}`", inline=False)
+    progress_embed.add_field(name="📊 Members", value=f"`{len(guild.members)}`", inline=False)
     progress_embed.set_footer(text=f"{BOT_FOOTER}  •  Server-wide reset")
     progress_embed = apply_branding(progress_embed, ctx.guild)
     progress = await ctx.send(embed=progress_embed)
@@ -8190,9 +8285,9 @@ async def resetrankall_cmd(ctx):
             skipped_bots += 1
             continue
         try:
-            # أنشئ اللاعب إن لم يكن موجوداً
+            # create the player if they do not exist
             db.get_or_create_player(member.id, guild.id, member.display_name)
-            # 🆕 صفّر النقاط + الرانك معاً
+            # reset points + ranks together
             db.update_player_stats(
                 member.id, guild.id,
                 points=0,
@@ -8207,29 +8302,29 @@ async def resetrankall_cmd(ctx):
                 lose_streak=0,
                 max_win_streak=0
             )
-            # حدّث النك نيم
+            # update the nickname
             await update_member_nickname(member, STARTING_LEVEL)
             reset_count += 1
             await asyncio.sleep(0.3)
         except Exception as e:
             logger.warning(f"resetrankall: failed for {member.id}: {e}")
             failed += 1
-    # ✅ إصلاح: بناء embed النجاح كمتغير بشكل صحيح
+    # fix: build the success embed as a variable correctly
     success_embed = discord.Embed(
-        title="✅ تم تصفير كل البيانات!",
+        title="✅ All data reset!",
         description=(
-            f"🏅 كل الأعضاء تم تصفيرهم إلى `RANK #{STARTING_LEVEL}` (نقاط = 0)\n"
-            "💡 كل الستاتس (نقاط/فوز/خسارة/MVPs) صفرت أيضاً"
+            f"🏅 `RANK #{STARTING_LEVEL}` ( = 0)\n"
+            "💡 All stats (points/wins/losses/MVPs) also reset"
         ),
         color=COLORS["success"],
         timestamp=discord.utils.utcnow()
     )
-    success_embed.add_field(name="✅ تم التصفير", value=f"`{reset_count}`", inline=True)
-    success_embed.add_field(name="🤖 تم تخطي البوتات", value=f"`{skipped_bots}`", inline=True)
-    success_embed.add_field(name="⚠️ فشل", value=f"`{failed}`", inline=True)
+    success_embed.add_field(name="✅ Players reset", value=f"`{reset_count}`", inline=True)
+    success_embed.add_field(name="🤖 Bots skipped", value=f"`{skipped_bots}`", inline=True)
+    success_embed.add_field(name="⚠️ Failed", value=f"`{failed}`", inline=True)
     success_embed.set_footer(text=f"{BOT_FOOTER}  •  Reset complete")
     success_embed = apply_branding(success_embed, ctx.guild)
-    # ✅ إصلاح V5:زامن الـ Roles بعد التصفير (كانت تتأخر حتى الـ periodic sync)
+    # V5 fix: remove the roles after the reset (they used to lag until the periodic sync)
     try:
         db.recalculate_ranks(guild.id)
         await sync_all_players_roles(guild)
@@ -8245,7 +8340,7 @@ async def setlevel_cmd(ctx, target: Union[discord.User, int] = None, level: int 
     if not target or level is None:
         await ctx.send(embed=discord.Embed(
             title="❌ Missing",
-            description=f"Usage: `{PREFIX}setlevel @user أو ID <level>`",
+            description=f"Usage: `{PREFIX}setlevel @user ID <level>`",
             color=COLORS["error"]
         ))
         return
@@ -8263,7 +8358,7 @@ async def setlevel_cmd(ctx, target: Union[discord.User, int] = None, level: int 
     db.update_player_stats(user_id, ctx.guild.id, level=level)
     if member:
         await update_member_nickname(member, level)
-        # ✅ إصلاح V5: زامن الـ Role بعد تعيين الرانك يدوياً
+        # V5 fix: remove the role after setting ranks manually
         try:
             await sync_player_role(ctx.guild, member, level)
         except Exception as e:
@@ -8280,7 +8375,7 @@ async def setpoints_cmd(ctx, target: Union[discord.User, int] = None, points: in
     if not target or points is None:
         await ctx.send(embed=discord.Embed(
             title="❌ Missing",
-            description=f"Usage: `{PREFIX}setpoints @user أو ID <points>`",
+            description=f"Usage: `{PREFIX}setpoints @user ID <points>`",
             color=COLORS["error"]
         ))
         return
@@ -8327,24 +8422,24 @@ async def syncnicknames_cmd(ctx):
 @bot.command(name="syncroles", aliases=["syncranks", "updateroles"])
 @commands.check(is_admin_check)
 async def syncroles_cmd(ctx):
-    """🔄 !!syncroles — مزامنة الـ Roles لكل اللاعبين حسب ترتيبهم"""
+    """🔄 !!syncroles — Roles"""
     progress = await ctx.send(embed=discord.Embed(
-        title="🔄 جارٍ مزامنة الـ Roles...",
+        title="🔄 Syncing roles...",
         description=(
-            "📊 جاري تحديث ألقاب كل اللاعبين حسب ترتيبهم...\n"
-            "⏳ انتظر..."
+            "📊 ...\n"
+            "⏳ Please wait..."
         ),
         color=COLORS["warning"],
         timestamp=discord.utils.utcnow()
     ))
-    # أعِد حساب الرانكات أولاً
+    # recalculate ranks first
     db.recalculate_ranks(ctx.guild.id)
-    # يزامن الـ Roles
+    # removes the roles
     await sync_all_players_roles(ctx.guild)
-    # ✅ إصلاح: بناء embed النجاح كمتغير بشكل صحيح
+    # fix: build the success embed as a variable correctly
     synced_embed = discord.Embed(
-        title="✅ تمت مزامنة الـ Roles!",
-        description="🔄 كل اللاعبين تم تحديث ألقابهم حسب ترتيبهم.",
+        title="✅ Roles synced!",
+        description="🔄 All player roles have been updated.",
         color=COLORS["success"],
         timestamp=discord.utils.utcnow()
     )
@@ -8364,60 +8459,60 @@ async def general_cmd(ctx):
         description=f"📌 **Prefix:** `{PREFIX}`",
         color=COLORS["play"]
     )
-    embed.add_field(name="🚀 Play", value=f"• `{PREFIX}play 4v4` أو `{PREFIX}play4v4` — 4v4 (الافتراضي)\n• `{PREFIX}play 2v2` أو `{PREFIX}play2v2` — 2v2\n• `{PREFIX}play 3v3` أو `{PREFIX}play3v3` — 3v3\n• `{PREFIX}play 1v1` أو `{PREFIX}play1v1` 🔒 (للـ roles العالية)\n• ⚠️ `{PREFIX}play` بدون مود → رسالة خطأ", inline=False)
-    embed.add_field(name="📊 Stats", value=f"• `{PREFIX}p` — Profile (full stats)\n• `{PREFIX}points` — 💰 نقاطك + تقدم الرانك\n• `{PREFIX}card` — Card (zelika-play)\n• `{PREFIX}top` — Leaderboard (Top 10)\n• `{PREFIX}mylevel` — Your rank\n• `{PREFIX}matches` — Active lobbies", inline=False)
+    embed.add_field(name="🚀 Play", value=f"• `{PREFIX}play 4v4` `{PREFIX}play4v4` — 4v4 (default)\n• `{PREFIX}play 2v2` `{PREFIX}play2v2` — 2v2\n• `{PREFIX}play 3v3` `{PREFIX}play3v3` — 3v3\n• `{PREFIX}play 1v1` `{PREFIX}play1v1` 🔒 (high roles only)\n• ⚠️ `{PREFIX}play` → shows the mode list", inline=False)
+    embed.add_field(name="📊 Stats", value=f"• `{PREFIX}p` — Profile (full stats)\n• `{PREFIX}points` — 💰 Points + progress to #1\n• `{PREFIX}card` — Card (zelika-play)\n• `{PREFIX}top` — Leaderboard (Top 10)\n• `{PREFIX}mylevel` — Your rank\n• `{PREFIX}matches` — Active lobbies", inline=False)
     embed.add_field(name="🎮 Control", value=f"• `{PREFIX}leave` — Leave lobby\n• `{PREFIX}fixrank` — Apply rank", inline=False)
-    embed.add_field(name="🤖 How to Play", value=f"1️⃣ Join a ⏳ waiting room\n2️⃣ `{PREFIX}play 4v4` in a play channel (حدد المود!)\n3️⃣ Press **Create Lobby** → Enter Room Info\n4️⃣ Players press **Join Team 1 / 2**\n5️⃣ Lobby fills → Match starts\n6️⃣ Host presses **Start Vote** (or **Cancel Match** to abort)\n7️⃣ Vote → Result → Points + RANK updates\n8️⃣ Players return to waiting rooms", inline=False)
-    embed.add_field(name="💰 نظام النقاط", value="🔱 Winner MVP: `+80` pts\n✅ Winners: `+30` pts\n✦ Loser MVP: `+30` pts\n☠️ Losers: `-30` pts\n📈 كل `50` نقطة = `+1` رانك", inline=False)
+    embed.add_field(name="🤖 How to Play", value=f"1️⃣ Join a ⏳ waiting room\n2️⃣ `{PREFIX}play 4v4` in a play channel (you become the host)\n3️⃣ Press **Create Lobby** → Enter Room Info\n4️⃣ Players press **Join Team 1 / 2**\n5️⃣ Lobby fills → Match starts\n6️⃣ Host presses **Start Vote** (or **Cancel Match** to abort)\n7️⃣ Vote → Result → Points + RANK updates\n8️⃣ Players return to waiting rooms", inline=False)
+    embed.add_field(name="💰 Points System", value="🔱 Winner MVP: `+80` pts\n✅ Winners: `+30` pts\n✦ Loser MVP: `+30` pts\n☠️ Losers: `-30` pts\n📈 Every `50` pts = `+1` rank", inline=False)
     embed.set_footer(text=f"{BOT_FOOTER}  •  v4.0  ·  {PREFIX}help (admin)")
     embed = apply_branding(embed, ctx.guild)
     await ctx.send(embed=embed)
 
 @bot.command(name="help")
 async def help_cmd(ctx):
-    # 📄 رسالة 1: أوامر اللاعبين
+    # 📄 Message 1: Player Commands
     embed1 = discord.Embed(
-        title="🔥 Free Fire Bot v4.0 — أوامر اللاعبين",
+        title="🔥 Free Fire Bot v4.0 — Player Commands",
         description=(
             f"📌 **Prefix:** `{PREFIX}`\n"
-            "🎮 جميع الأوامر تعمل في قنوات play"
+            "🎮 All commands work in play channels"
         ),
         color=COLORS["play"],
         timestamp=discord.utils.utcnow()
     )
-    embed1.add_field(name="🎮 اللعب (9 أوامر)", value=f"• `{PREFIX}play 4v4` أو `{PREFIX}play4v4` — 4v4\n• `{PREFIX}play 3v3` أو `{PREFIX}play3v3` — 3v3\n• `{PREFIX}play 2v2` أو `{PREFIX}play2v2` — 2v2\n• `{PREFIX}play 1v1` أو `{PREFIX}play1v1` 🔒 (للـ roles العالية)\n• `{PREFIX}play` — رسالة خطأ (حدد المود)\n• `{PREFIX}leave` — مغادرة اللوبي\n• `{PREFIX}matches` — الماتشات النشطة\n• `{PREFIX}matchinfo <id>` — تفاصيل ماتش", inline=False)
-    embed1.add_field(name="📊 الإحصائيات (7 أوامر)", value=f"• `{PREFIX}p` أو `{PREFIX}p @user` — البروفايل\n• `{PREFIX}points` أو `{PREFIX}points @user` — النقاط + تقدم الرانك\n• `{PREFIX}card` أو `{PREFIX}card @user` — بطاقة اللاعب\n• `{PREFIX}top` — Leaderboard Top 10\n• `{PREFIX}mylevel` أو `{PREFIX}mylevel @user` — الرانك\n• `{PREFIX}myrank` — النك نيم المستهدف\n• `{PREFIX}fixrank` أو `{PREFIX}fixrank @user` — تطبيق الرانك", inline=False)
-    embed1.add_field(name="⚠️ البلاغات (3 أوامر)", value=f"• `{PREFIX}report @user [سبب]` — بلّغ عن لاعب (6 = حظر)\n• `{PREFIX}reports` أو `{PREFIX}reports @user` — عرض البلاغات\n• ⚠️ زر البلاغ متاح داخل كل ماتش", inline=False)
-    embed1.add_field(name="🛡️ المساعدة (4 أوامر)", value=f"• `{PREFIX}rules` — عرض قواعد السيرفر (بدون قناة مخصصة)\n• `{PREFIX}general` — دليل اللاعب\n• `{PREFIX}help` — هذه القائمة\n• `{PREFIX}botinfo` — معلومات البوت", inline=False)
-    embed1.set_footer(text=f"{BOT_FOOTER}  •  صفحة 1/2  ·  أوامر الأدمن في الصفحة التالية")
+    embed1.add_field(name="🎮 Play (9 commands)", value=f"• `{PREFIX}play 4v4` `{PREFIX}play4v4` — 4v4\n• `{PREFIX}play 3v3` `{PREFIX}play3v3` — 3v3\n• `{PREFIX}play 2v2` `{PREFIX}play2v2` — 2v2\n• `{PREFIX}play 1v1` `{PREFIX}play1v1` 🔒 (high roles only)\n• `{PREFIX}play` — shows the mode list\n• `{PREFIX}leave` — leave your lobby\n• `{PREFIX}matches` — list active lobbies\n• `{PREFIX}matchinfo <id>` — lobby details", inline=False)
+    embed1.add_field(name="📊 Stats (7 commands)", value=f"• `{PREFIX}p` `{PREFIX}p @user` — full profile\n• `{PREFIX}points` `{PREFIX}points @user` — points + progress to #1\n• `{PREFIX}card` `{PREFIX}card @user` — profile card\n• `{PREFIX}top` — Leaderboard Top 10\n• `{PREFIX}mylevel` `{PREFIX}mylevel @user` — rank level\n• `{PREFIX}myrank` — rank position\n• `{PREFIX}fixrank` `{PREFIX}fixrank @user` — fix rank role and nickname", inline=False)
+    embed1.add_field(name="⚠️ Reports (3 commands)", value=f"• `{PREFIX}report @user [reason]` — report a player (6 reports = auto-ban)\n• `{PREFIX}reports` `{PREFIX}reports @user` — show reports against a player\n• ⚠️ Use the Report button inside a match", inline=False)
+    embed1.add_field(name="🛡️ Info (4 commands)", value=f"• `{PREFIX}rules` — server rules (read-only)\n• `{PREFIX}general` — player command list\n• `{PREFIX}help` — all commands\n• `{PREFIX}botinfo` — bot information", inline=False)
+    embed1.set_footer(text=f"{BOT_FOOTER} • 1/2 · Player commands")
     embed1 = apply_branding(embed1, ctx.guild)
     await ctx.send(embed=embed1)
 
-    # 📄 رسالة 2: أوامر الأدمن
+    # 📄 Message 2: Admin Commands
     embed2 = discord.Embed(
-        title="🔧 Free Fire Bot v4.0 — أوامر الأدمن",
+        title="🔧 Free Fire Bot v4.0 — Admin Commands",
         description=(
             f"📌 **Prefix:** `{PREFIX}`\n"
-            "🔒 جميع الأوامر التالية للأدمن فقط"
+            "🔒 All following commands are admin-only"
         ),
         color=COLORS["admin"],
         timestamp=discord.utils.utcnow()
     )
-    embed2.add_field(name="🔧 القنوات والـ Setup (8 أوامر)", value=f"• `{PREFIX}setup` — إنشاء كل القنوات + Roles + JAIL\n• `{PREFIX}autosetup` — فحص وإصلاح الناقص تلقائياً (آمن على البيانات)\n• `{PREFIX}cleanup` — حذف كاتيجوريات الماتش المنتهية\n• `{PREFIX}scan [page]` — عرض كل القنوات\n• `{PREFIX}deletecat <name>` — تحديد كاتيجوري للحذف\n• `{PREFIX}confirmcat <name>` — تأكيد حذف كاتيجوري\n• `{PREFIX}setcommandschannel #ch` — إضافة/إزالة قناة أوامر\n• `{PREFIX}setleaderboard` — تعيين قناة Leaderboard", inline=False)
-    embed2.add_field(name="🏅 الرانك والنقاط والـ Roles (8 أوامر)", value=f"• `{PREFIX}fixrankall` — تطبيق الرانك على كل الأعضاء\n• `{PREFIX}syncnicknames` — مزامنة كل النكات\n• `{PREFIX}syncroles` — مزامنة الـ Roles حسب الترتيب\n• `{PREFIX}setlevel @user/ID <n>` — تعيين رانك لاعب\n• `{PREFIX}setpoints @user/ID <n>` — تعيين نقاط لاعب (يُحدّث الرانك تلقائياً)\n• `{PREFIX}resetstats @user/ID` — تصفير ستاتس لاعب\n• `{PREFIX}resetrankall` — تصفير كل البيانات لكل السيرفر", inline=False)
-    embed2.add_field(name="⚠️ البلاغات والحظر (5 أوامر)", value=f"• `{PREFIX}banplayer @user/ID [سبب]` — حظر لاعب + نقله لفويس التفتيش\n• `{PREFIX}unbanplayer @user/ID` — فك حظر لاعب\n• `{PREFIX}banned` — قائمة المحظورين\n• `{PREFIX}setreportchannel #voice` — إضافة فويس تفتيش\n• `{PREFIX}removereportchannel #voice` — حذف فويس تفتيش", inline=False)
-    embed2.add_field(name="🔒 نظام السجن JAIL (2 أمر)", value=f"• `{PREFIX}jail @user/ID [سبب]` — إرسال لاعب للسجن + فويس خاص\n• `{PREFIX}unjail @user/ID` — فك السجن", inline=False)
-    embed2.add_field(name="🔇 نظام البلاك ليست (3 أوامر)", value=f"• `{PREFIX}blacklist @user/ID [سبب]` — إضافة لاعب للبلاك ليست\n• `{PREFIX}unblacklist @user/ID` — إزالة لاعب من البلاك ليست\n• `{PREFIX}blacklisted` — قائمة البلاك ليست", inline=False)
-    embed2.add_field(name="📋 معلومات إضافية (6 أوامر)", value=f"• `{PREFIX}reportchannels` — عرض فويسات التفتيش\n• `{PREFIX}startvote [id]` — 🗳️ بدء التصويت فوراً (يتجاوز cooldown 10 دقائق)\n• `{PREFIX}resolve <id> <team1|team2>` — حل نزاع التصويت\n• `{PREFIX}w <id> <@user/ID>` — تعيين MVP WINNER يدوياً\n• `{PREFIX}l <id> <@user/ID>` — تعيين MVP LOSER يدوياً\n• `{PREFIX}botinfo` — معلومات البوت", inline=False)
-    embed2.add_field(name="💡 معلومات النظام", value=f"💰 **النقاط:** +80 MVP · +30 فائز · +30 MVP خاسر · -30 خاسر\n🏅 **الرانك:** ترتيب اللوحة (1 = الأفضل)\n🗳️ **التصويت:** كل اللاعبين · 50%+1 · صوت من كل فريق\n🚨 **نزاع:** زر \"تاغ الأدمن\" ينقله فورًا\n🏆 **Roles:** Best · Goated · Skilled · Efficient\n⚠️ **6 بلاغات = حظر تلقائي**\n🔒 **JAIL:** فويس + شات خاص\n🔇 **Blacklist:** 5د غياب / 8 مغادرات = 5د حظر\n🛡️ **Rules:** `{RULES_CHANNEL_NAME}` (للقراءة)", inline=False)
-    embed2.set_footer(text=f"{BOT_FOOTER}  •  صفحة 2/2  ·  v4.0  ·  51 أمر إجمالي")
+    embed2.add_field(name="🔧 Setup (8 commands)", value=f"• `{PREFIX}setup` — create channels + Roles + JAIL\n• `{PREFIX}autosetup` — auto-detect existing channels\n• `{PREFIX}cleanup` — delete leftover match categories\n• `{PREFIX}scan [page]` — list categories and channels\n• `{PREFIX}deletecat <name>` — request category deletion\n• `{PREFIX}confirmcat <name>` — confirm category deletion\n• `{PREFIX}setcommandschannel #ch` — add/remove a commands channel\n• `{PREFIX}setleaderboard` — set the Leaderboard channel", inline=False)
+    embed2.add_field(name="🏅 Roles (8 commands)", value=f"• `{PREFIX}fixrankall` — apply ranks to all members\n• `{PREFIX}syncnicknames` — sync nicknames\n• `{PREFIX}syncroles` — sync rank Roles\n• `{PREFIX}setlevel @user/ID <n>` — set a player's rank level\n• `{PREFIX}setpoints @user/ID <n>` — set a player's points\n• `{PREFIX}resetstats @user/ID` — reset a player's stats\n• `{PREFIX}resetrankall` — reset ranks and points for everyone", inline=False)
+    embed2.add_field(name="⚠️ Reports & Bans (5 commands)", value=f"• `{PREFIX}banplayer @user/ID [reason]` — ban + investigation voice\n• `{PREFIX}unbanplayer @user/ID` — remove a ban\n• `{PREFIX}banned` — list banned players\n• `{PREFIX}setreportchannel #voice` — add an investigation voice\n• `{PREFIX}removereportchannel #voice` — remove an investigation voice", inline=False)
+    embed2.add_field(name="🔒 JAIL System (2 commands)", value=f"• `{PREFIX}jail @user/ID [reason]` — role + private voice + chat\n• `{PREFIX}unjail @user/ID` — release a player", inline=False)
+    embed2.add_field(name="🔇 Blacklist System (3 commands)", value=f"• `{PREFIX}blacklist @user/ID [reason]` — blacklist a player\n• `{PREFIX}unblacklist @user/ID` — remove from the blacklist\n• `{PREFIX}blacklisted` — list blacklisted players", inline=False)
+    embed2.add_field(name="📋 Additional Info (6 commands)", value=f"• `{PREFIX}reportchannels` — list investigation voices\n• `{PREFIX}startvote [id]` — 🗳️ start the vote now (skips the 10-minute cooldown)\n• `{PREFIX}resolve <id> <team1|team2>` — decide the winner manually\n• `{PREFIX}w <id> <@user/ID>` — set MVP WINNER\n• `{PREFIX}l <id> <@user/ID>` — set MVP LOSER\n• `{PREFIX}botinfo` — bot information", inline=False)
+    embed2.add_field(name="💡 System Info", value=f"💰 **Points:** +80 MVP · +30 Winner · +30 MVP Loser · -30 Loser\n🏅 **Rank:** Leaderboard order (1 = best)\n🗳️ **Vote:** All players · 50%+1 · Vote from each team\n🚨 **Disputes:** no consensus → an admin is tagged\n🏆 **Roles:** Best · Goated · Skilled · Efficient\n⚠️ **6 reports = auto-ban**\n🔒 **JAIL:** Private voice + chat\n🔇 **Blacklist:** 5min leave / 8 leaves = 5min ban\n🛡️ **Rules:** `{RULES_CHANNEL_NAME}` (read-only)", inline=False)
+    embed2.set_footer(text=f"{BOT_FOOTER} • 2/2 · v4.0 · 55 commands")
     embed2 = apply_branding(embed2, ctx.guild)
     await ctx.send(embed=embed2)
 
 @bot.command(name="cloudbackup")
 @commands.is_owner()
 async def cloudbackup_cmd(ctx):
-    """☁️ نسخ احتياطي كامل للسحابة."""
+    """Cloud command (owner/admin): see cloud_backup.py."""
     if not _CLOUD_AVAILABLE or not is_cloud_enabled():
         embed = discord.Embed(
             title="☁️ Cloud Backup",
@@ -8445,7 +8540,7 @@ async def cloudbackup_cmd(ctx):
 @bot.command(name="cloudrestore")
 @commands.is_owner()
 async def cloudrestore_cmd(ctx):
-    """☁️ استرجاع كامل من السحابة (يحذف البيانات المحلية)."""
+    """Restore the local database from the cloud (owner only)."""
     if not _CLOUD_AVAILABLE or not is_cloud_enabled():
         embed = discord.Embed(
             title="☁️ Cloud Restore",
@@ -8497,7 +8592,7 @@ async def cloudrestore_cmd(ctx):
 
 @bot.command(name="cloudstatus")
 async def cloudstatus_cmd(ctx):
-    """☁️ حالة الاتصال بالسحابة."""
+    """Cloud command (owner/admin): see cloud_backup.py."""
     if not _CLOUD_AVAILABLE:
         status = "❌ cloud_backup.py not found"
     elif not is_cloud_enabled():
@@ -8525,53 +8620,53 @@ async def cloudstatus_cmd(ctx):
 
 @bot.command(name="serverleave")
 async def serverleave_cmd(ctx):
-    """🔒 أمر خاص بصاحب البوت — يجعل البوت يغادر سيرفر معين (DM فقط)."""
-    # فقط في الـ DM
+    """!!serverleave — owner-only: list servers and leave one (works in DM)."""
+    # only in the DM
     if ctx.guild is not None:
-        await ctx.send("❌ هذا الأمر يعمل في الـ DM فقط!")
+        await ctx.send("❌ This command works in DMs only!")
         return
-    # فقط صاحب البوت
+    # bot owner only
     if ctx.author.id != BOT_OWNER_ID:
-        await ctx.send("❌ هذا الأمر لصاحب البوت فقط!")
+        await ctx.send("❌ This command is for the bot owner only!")
         return
-    # فحص المعاملات
+    # check permissions
     args = ctx.message.content.split()
     if len(args) < 2:
-        # عرض قائمة السيرفرات
+        # show the list of servers
         if not bot.guilds:
-            await ctx.send("البوت لا يوجد في أي سيرفر.")
+            await ctx.send("The bot is not in any server.")
             return
-        msg = "**السيرفرات الحالية:**\n\n"
+        msg = "**Servers the bot is in:**\n\n"
         for i, g in enumerate(bot.guilds, 1):
-            msg += f"`{i}`. **{g.name}** (ID: `{g.id}`) — {g.member_count} عضو\n"
-        msg += f"\nاستخدم: `!!serverleave <ID>` لترك سيرفر معين."
+            msg += f"`{i}`. **{g.name}** (ID: `{g.id}`) — {g.member_count} members\n"
+        msg += f"\nTo leave a server: `!!serverleave <ID>`."
         await ctx.send(msg)
         return
-    # محاولة ترك السيرفر
+    # try to leave the server
     try:
         guild_id = int(args[1])
     except ValueError:
-        await ctx.send("❌ ID غير صحيح. استخدم رقم ID السيرفر.")
+        await ctx.send("❌ Invalid ID. Enter the numeric server ID.")
         return
     guild = bot.get_guild(guild_id)
     if not guild:
-        await ctx.send(f"❌ السيرفر `{guild_id}` غير موجود.")
+        await ctx.send(f"❌ No server found with ID `{guild_id}`.")
         return
     try:
         await guild.leave()
-        await ctx.send(f"✅ تم مغادرة السيرفر **{guild.name}** بنجاح!")
+        await ctx.send(f"✅ Left **{guild.name}** successfully!")
         logger.info(f"🔓 Owner left server: {guild.name} ({guild.id})")
     except Exception as e:
-        await ctx.send(f"❌ فشل مغادرة السيرفر: {e}")
+        await ctx.send(f"❌ Failed to leave the server: {e}")
 
 # ============================================================
 # RUN
 # ============================================================
 def _start_health_server():
-    """🆕 FIX (Railway/Render): البوت ليس خدمة ويب، لكن Procfile يقول `web:` —
-    فبعض المنصّات تتوقّع فتح منفذ PORT وتعيد تشغيل الحاوية كل حين إذا لم يُفتح
-    (سبب شائع أيضاً لـ «autosetup كل عدة دقائق» لأنه يعيد on_ready). نفتح سيرفر
-    صحّة بسيط يستجيب 200 على أي مسار. يُفعَّل فقط إذا كان PORT موجوداً."""
+    """🆕 FIX (Railway/Render): Bot is not a web service, but Procfile says `web:` —
+PORT
+( «autosetup » on_ready).
+200 . PORT ."""
     port = os.getenv("PORT")
     if not port:
         return
@@ -8613,9 +8708,7 @@ def _start_health_server():
     threading.Thread(target=_serve, name="health-server", daemon=True).start()
 
 if __name__ == "__main__":
-    # ⚠️ تحذير أمني: التوكن مكتوب كـ fallback للراحة.
-    # للحصول على أمان أعلى، يُفضّل استخدام متغير البيئة DISCORD_TOKEN فقط
-    # وحذف التوكن من هنا نهائياً.
+    # The token is read only from the DISCORD_TOKEN environment variable (never hard-code it).
     TOKEN = os.getenv("DISCORD_TOKEN")
     if not TOKEN:
         raise RuntimeError("❌ DISCORD_TOKEN environment variable is required! Set it on Railway/Render.")

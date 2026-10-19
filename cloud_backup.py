@@ -290,7 +290,9 @@ def restore_channels_from_cloud(guild_id: int, channel_type: str) -> list:
 # ============================================================
 
 def sync_bans_to_cloud(guild_id: int, banned_players: list):
-    """حفظ قائمة المحظورين في السحابة."""
+    """حفظ قائمة المحظورين في السحابة.
+    ✅ P1: الآن تستدعى من ban_player و unban_player و blacklist_player.
+    """
     if not is_cloud_enabled():
         return
     
@@ -299,12 +301,23 @@ def sync_bans_to_cloud(guild_id: int, banned_players: list):
         return
     
     try:
-        # احذف القديم واحفظ الجديد
+        # احذف القديم واحفظ الجديد (sync كامل)
         col.delete_many({"guild_id": guild_id})
         if banned_players:
+            docs = []
             for p in banned_players:
-                p.pop("_id", None) if "_id" in p else None
-            col.insert_many(banned_players)
+                doc = {}
+                for k, v in p.items():
+                    if v is None:
+                        doc[k] = None
+                    elif isinstance(v, (int, float, str, bool)):
+                        doc[k] = v
+                    else:
+                        doc[k] = str(v)
+                doc["_cloud_updated"] = datetime.utcnow().isoformat()
+                docs.append(doc)
+            if docs:
+                col.insert_many(docs)
     except Exception as e:
         logger.warning(f"☁️ Failed to sync bans: {e}")
 
@@ -322,6 +335,7 @@ def restore_bans_from_cloud(guild_id: int) -> list:
         data = list(col.find({"guild_id": guild_id}))
         for d in data:
             d.pop("_id", None)
+            d.pop("_cloud_updated", None)
         return data
     except Exception as e:
         logger.warning(f"☁️ Failed to restore bans: {e}")
@@ -329,12 +343,129 @@ def restore_bans_from_cloud(guild_id: int) -> list:
 
 
 # ============================================================
-# AUTO-RESTORE ON STARTUP
+# 🆕 BLACKLIST — البلاك ليست (مزامنة + استرجاع)
+# ============================================================
+
+def sync_blacklist_to_cloud(guild_id: int, blacklisted_players: list):
+    """حفظ قائمة البلاك ليست في السحابة.
+    ✅ P1: تستدعى من blacklist_player و remove_blacklist.
+    """
+    if not is_cloud_enabled():
+        return
+    
+    col = _get_collection("blacklist_log")
+    if col is None:
+        return
+    
+    try:
+        col.delete_many({"guild_id": guild_id})
+        if blacklisted_players:
+            docs = []
+            for p in blacklisted_players:
+                doc = {}
+                for k, v in p.items():
+                    if v is None:
+                        doc[k] = None
+                    elif isinstance(v, (int, float, str, bool)):
+                        doc[k] = v
+                    else:
+                        doc[k] = str(v)
+                doc["_cloud_updated"] = datetime.utcnow().isoformat()
+                docs.append(doc)
+            if docs:
+                col.insert_many(docs)
+    except Exception as e:
+        logger.warning(f"☁️ Failed to sync blacklist: {e}")
+
+
+def restore_blacklist_from_cloud(guild_id: int) -> list:
+    """يرجع قائمة البلاك ليست من السحابة."""
+    if not is_cloud_enabled():
+        return []
+    
+    col = _get_collection("blacklist_log")
+    if col is None:
+        return []
+    
+    try:
+        data = list(col.find({"guild_id": guild_id}))
+        for d in data:
+            d.pop("_id", None)
+            d.pop("_cloud_updated", None)
+        return data
+    except Exception as e:
+        logger.warning(f"☁️ Failed to restore blacklist: {e}")
+        return []
+
+
+# ============================================================
+# 🆕 REPORTS — البلاغات (مزامنة + استرجاع)
+# ============================================================
+
+def sync_reports_to_cloud(guild_id: int, reports: list):
+    """حفظ قائمة البلاغات في السحابة.
+    ✅ P1: تستدعى من add_report و clear_reports.
+    """
+    if not is_cloud_enabled():
+        return
+    
+    col = _get_collection("player_reports")
+    if col is None:
+        return
+    
+    try:
+        col.delete_many({"guild_id": guild_id})
+        if reports:
+            docs = []
+            for p in reports:
+                doc = {}
+                for k, v in p.items():
+                    if v is None:
+                        doc[k] = None
+                    elif isinstance(v, (int, float, str, bool)):
+                        doc[k] = v
+                    else:
+                        doc[k] = str(v)
+                doc["_cloud_updated"] = datetime.utcnow().isoformat()
+                docs.append(doc)
+            if docs:
+                col.insert_many(docs)
+    except Exception as e:
+        logger.warning(f"☁️ Failed to sync reports: {e}")
+
+
+def restore_reports_from_cloud(guild_id: int) -> list:
+    """يرجع قائمة البلاغات من السحابة."""
+    if not is_cloud_enabled():
+        return []
+    
+    col = _get_collection("player_reports")
+    if col is None:
+        return []
+    
+    try:
+        data = list(col.find({"guild_id": guild_id}))
+        for d in data:
+            d.pop("_id", None)
+            d.pop("_cloud_updated", None)
+        return data
+    except Exception as e:
+        logger.warning(f"☁️ Failed to restore reports: {e}")
+        return []
+
+
+# ============================================================
+# AUTO-RESTORE ON STARTUP (محسّن — يسترجع كل البيانات)
 # ============================================================
 
 def auto_restore_database(local_db):
     """يُستدعى عند بدء التشغيل.
-    لو الـ DB المحلي فاضي والسحابة فيها بيانات → يرجعها.
+    ✅ P1: الآن يسترجع كل البيانات، لا اللاعبين فقط:
+    - players ✅
+    - banned_players ✅
+    - blacklist_log ✅ (جديد)
+    - guild_settings ✅ (جديد)
+    - player_reports ✅ (جديد)
     """
     if not is_cloud_enabled():
         logger.info("☁️ Cloud backup disabled (no MONGODB_URI)")
@@ -352,6 +483,11 @@ def auto_restore_database(local_db):
         return
     
     restored_total = 0
+    restored_bans = 0
+    restored_blacklist = 0
+    restored_settings = 0
+    restored_reports = 0
+    
     for gid in cloud_guilds:
         # تحقق هل السيرفر لديه لاعبين محلياً
         try:
@@ -363,51 +499,46 @@ def auto_restore_database(local_db):
             local_count = 0
         
         if local_count > 0:
-            logger.info(f"☁️ Guild {gid}: {local_count} local players — skipping restore")
-            continue
+            logger.info(f"☁️ Guild {gid}: {local_count} local players — skipping players restore")
+        else:
+            # أرجع اللاعبين من السحابة
+            players = restore_players_from_cloud(gid)
+            if players:
+                try:
+                    conn = local_db.conn()
+                    for p in players:
+                        user_id = p["user_id"]
+                        guild_id = p["guild_id"]
+                        username = p.get("username", "Unknown")
+                        points = p.get("points", 0)
+                        level = p.get("level", 1000)
+                        wins = p.get("wins", 0)
+                        losses = p.get("losses", 0)
+                        kills = p.get("kills", 0)
+                        mvps = p.get("mvps", 0)
+                        matches_played = p.get("matches_played", 0)
+                        win_streak = p.get("win_streak", 0)
+                        lose_streak = p.get("lose_streak", 0)
+                        max_win_streak = p.get("max_win_streak", 0)
+                        original_nickname = p.get("original_nickname")
+                        last_active = p.get("last_active")
+                        
+                        conn.execute("""
+                            INSERT OR REPLACE INTO players
+                            (user_id, guild_id, username, points, level, wins, losses,
+                             kills, mvps, matches_played, win_streak, lose_streak,
+                             max_win_streak, original_nickname, last_active)
+                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                        """, (user_id, guild_id, username, points, level, wins, losses,
+                              kills, mvps, matches_played, win_streak, lose_streak,
+                              max_win_streak, original_nickname, last_active))
+                    conn.commit()
+                    restored_total += len(players)
+                    logger.info(f"☁️ Restored {len(players)} players for guild {gid}")
+                except Exception as e:
+                    logger.warning(f"☁️ Failed to restore players for guild {gid}: {e}")
         
-        # أرجع اللاعبين من السحابة
-        players = restore_players_from_cloud(gid)
-        if not players:
-            continue
-        
-        # أدخلهم في SQLite المحلي
-        try:
-            conn = local_db.conn()
-            for p in players:
-                user_id = p["user_id"]
-                guild_id = p["guild_id"]
-                username = p.get("username", "Unknown")
-                points = p.get("points", 0)
-                level = p.get("level", 1000)
-                wins = p.get("wins", 0)
-                losses = p.get("losses", 0)
-                kills = p.get("kills", 0)
-                mvps = p.get("mvps", 0)
-                matches_played = p.get("matches_played", 0)
-                win_streak = p.get("win_streak", 0)
-                lose_streak = p.get("lose_streak", 0)
-                max_win_streak = p.get("max_win_streak", 0)
-                original_nickname = p.get("original_nickname")
-                last_active = p.get("last_active")
-                
-                conn.execute("""
-                    INSERT OR REPLACE INTO players
-                    (user_id, guild_id, username, points, level, wins, losses,
-                     kills, mvps, matches_played, win_streak, lose_streak,
-                     max_win_streak, original_nickname, last_active)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                """, (user_id, guild_id, username, points, level, wins, losses,
-                      kills, mvps, matches_played, win_streak, lose_streak,
-                      max_win_streak, original_nickname, last_active))
-            conn.commit()
-            restored_total += len(players)
-            logger.info(f"☁️ Restored {len(players)} players for guild {gid}")
-        except Exception as e:
-            logger.warning(f"☁️ Failed to restore guild {gid}: {e}")
-    
-    # أرجع المحظورين
-    for gid in cloud_guilds:
+        # 🆕 استرجع المحظورين
         bans = restore_bans_from_cloud(gid)
         if bans:
             try:
@@ -418,15 +549,87 @@ def auto_restore_database(local_db):
                         (guild_id, user_id, ban_reason, report_count, banned_by, assigned_voice_id)
                         VALUES (?,?,?,?,?,?)
                     """, (
-                        b.get("guild_id"), b.get("user_id"), b.get("ban_reason"),
+                        b.get("guild_id", gid), b.get("user_id"), b.get("ban_reason"),
                         b.get("report_count", 0), b.get("banned_by"), b.get("assigned_voice_id")
                     ))
                 conn.commit()
+                restored_bans += len(bans)
+                logger.info(f"☁️ Restored {len(bans)} bans for guild {gid}")
             except Exception as e:
                 logger.warning(f"☁️ Failed to restore bans for guild {gid}: {e}")
+        
+        # 🆕 استرجع البلاك ليست
+        blacklist = restore_blacklist_from_cloud(gid)
+        if blacklist:
+            try:
+                conn = local_db.conn()
+                for b in blacklist:
+                    conn.execute("""
+                        INSERT OR REPLACE INTO blacklist_log
+                        (guild_id, user_id, expires_at, reason)
+                        VALUES (?,?,?,?)
+                    """, (
+                        b.get("guild_id", gid), b.get("user_id"),
+                        b.get("expires_at"), b.get("reason")
+                    ))
+                conn.commit()
+                restored_blacklist += len(blacklist)
+                logger.info(f"☁️ Restored {len(blacklist)} blacklist entries for guild {gid}")
+            except Exception as e:
+                logger.warning(f"☁️ Failed to restore blacklist for guild {gid}: {e}")
+        
+        # 🆕 استرجع إعدادات السيرفر
+        settings = restore_guild_settings_from_cloud(gid)
+        if settings:
+            try:
+                conn = local_db.conn()
+                # حدّث الإعدادات المحلية بما في السحابة (إن لم توجد محليًا)
+                for k, v in settings.items():
+                    if k in ("_id", "_cloud_updated", "guild_id"):
+                        continue
+                    try:
+                        # تأكد أن صف guild_settings موجود
+                        conn.execute("INSERT OR IGNORE INTO guild_settings(guild_id) VALUES(?)", (gid,))
+                        conn.execute(f"UPDATE guild_settings SET {k}=? WHERE guild_id=?", (v, gid))
+                    except Exception:
+                        pass
+                conn.commit()
+                restored_settings += 1
+                logger.info(f"☁️ Restored guild settings for guild {gid}")
+            except Exception as e:
+                logger.warning(f"☁️ Failed to restore guild settings for guild {gid}: {e}")
+        
+        # 🆕 استرجع البلاغات
+        reports = restore_reports_from_cloud(gid)
+        if reports:
+            try:
+                conn = local_db.conn()
+                for r in reports:
+                    try:
+                        conn.execute("""
+                            INSERT OR REPLACE INTO player_reports
+                            (guild_id, reporter_id, reported_id, lobby_id, reason, created_at)
+                            VALUES (?,?,?,?,?,?)
+                        """, (
+                            r.get("guild_id", gid), r.get("reporter_id"),
+                            r.get("reported_id"), r.get("lobby_id"),
+                            r.get("reason"), r.get("created_at")
+                        ))
+                    except Exception:
+                        pass  # قد يفشل لو UNIQUE constraint انتهك
+                conn.commit()
+                restored_reports += len(reports)
+                logger.info(f"☁️ Restored {len(reports)} reports for guild {gid}")
+            except Exception as e:
+                logger.warning(f"☁️ Failed to restore reports for guild {gid}: {e}")
     
-    if restored_total > 0:
-        logger.info(f"☁️ ========== CLOUD RESTORE COMPLETE: {restored_total} players ==========")
+    if restored_total + restored_bans + restored_blacklist + restored_settings + restored_reports > 0:
+        logger.info(
+            f"☁️ ========== CLOUD RESTORE COMPLETE: "
+            f"{restored_total} players, {restored_bans} bans, "
+            f"{restored_blacklist} blacklist, {restored_settings} settings, "
+            f"{restored_reports} reports =========="
+        )
 
 
 # ============================================================
@@ -435,7 +638,7 @@ def auto_restore_database(local_db):
 
 async def full_backup_to_cloud(local_db):
     """نسخ احتياطي كامل لكل البيانات إلى السحابة.
-    يُستدعى من أمر !!cloudbackup.
+    ✅ P1: الآن يرفع كل البيانات (players + bans + blacklist + settings + reports).
     """
     if not is_cloud_enabled():
         return False, "Cloud backup not enabled (no MONGODB_URI)"
@@ -445,27 +648,73 @@ async def full_backup_to_cloud(local_db):
         return False, "Could not connect to MongoDB Atlas"
     
     total_players = 0
+    total_bans = 0
+    total_blacklist = 0
+    total_settings = 0
+    total_reports = 0
     total_guilds = 0
     
     try:
-        # اجلب كل السيرفرات من الـ DB المحلي
+        # اجلب كل السيرفرات من الـ DB المحلي (من كل الجداول)
         conn = local_db.conn()
         guilds = conn.execute("SELECT DISTINCT guild_id FROM players").fetchall()
+        guilds_bans = conn.execute("SELECT DISTINCT guild_id FROM banned_players").fetchall()
+        guilds_settings = conn.execute("SELECT guild_id FROM guild_settings").fetchall()
+        all_guilds = set(g["guild_id"] for g in guilds) | set(g["guild_id"] for g in guilds_bans) | set(g["guild_id"] for g in guilds_settings)
         
-        for g in guilds:
-            gid = g["guild_id"]
+        for gid in all_guilds:
+            total_guilds += 1
+            # 1. Players
             players = local_db.get_leaderboard(gid, limit=None)
             if players:
                 sync_guild_players_to_cloud(gid, players)
                 total_players += len(players)
-                total_guilds += 1
             
-            # sync bans
+            # 2. Bans
             bans = local_db.get_banned_players(gid)
             if bans:
                 sync_bans_to_cloud(gid, bans)
+                total_bans += len(bans)
+            
+            # 3. Blacklist
+            try:
+                blacklisted = local_db.get_blacklisted_players(gid)
+                if blacklisted:
+                    sync_blacklist_to_cloud(gid, blacklisted)
+                    total_blacklist += len(blacklisted)
+            except Exception:
+                pass
+            
+            # 4. Guild settings
+            try:
+                settings = local_db.get_guild_settings(gid)
+                if settings:
+                    sync_guild_settings_to_cloud(gid, settings)
+                    total_settings += 1
+            except Exception:
+                pass
+            
+            # 5. Reports
+            try:
+                # نحتاج طريقة لجلب كل البلاغات في السيرفر
+                # لا توجد دالة مباشرة، نقرأها من SQL
+                reports = conn.execute(
+                    "SELECT * FROM player_reports WHERE guild_id=?",
+                    (gid,)
+                ).fetchall()
+                if reports:
+                    reports_list = [dict(r) for r in reports]
+                    sync_reports_to_cloud(gid, reports_list)
+                    total_reports += len(reports_list)
+            except Exception:
+                pass
         
-        return True, f"Backed up {total_players} players from {total_guilds} guilds"
+        msg = (
+            f"Backed up {total_players} players, {total_bans} bans, "
+            f"{total_blacklist} blacklist, {total_settings} settings, "
+            f"{total_reports} reports from {total_guilds} guilds"
+        )
+        return True, msg
     except Exception as e:
         return False, f"Backup failed: {e}"
 
@@ -482,9 +731,11 @@ async def full_restore_from_cloud(local_db):
         return False, "Could not connect to MongoDB Atlas"
     
     try:
-        # مسح اللاعبين المحليين
+        # مسح اللاعبين المحليين (لا بلاغات/إعدادات — قد تتعارض)
         conn = local_db.conn()
         conn.execute("DELETE FROM players")
+        conn.execute("DELETE FROM banned_players")
+        conn.execute("DELETE FROM blacklist_log")
         conn.commit()
         
         # استرجاع من السحابة
@@ -496,6 +747,6 @@ async def full_restore_from_cloud(local_db):
             count = conn.execute("SELECT COUNT(*) FROM players WHERE guild_id=?", (gid,)).fetchone()[0]
             total += count
         
-        return True, f"Restored {total} players from cloud"
+        return True, f"Restored {total} players from cloud (plus bans, blacklist, settings, reports)"
     except Exception as e:
         return False, f"Restore failed: {e}"
