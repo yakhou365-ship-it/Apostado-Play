@@ -890,6 +890,7 @@ class Database:
                     rank_pos INTEGER DEFAULT 1, wins INTEGER DEFAULT 0,
                     losses INTEGER DEFAULT 0, kills INTEGER DEFAULT 0,
                     mvps INTEGER DEFAULT 0, matches_played INTEGER DEFAULT 0,
+                    matches_hosted INTEGER DEFAULT 0,
                     level INTEGER DEFAULT 100,
                     win_streak INTEGER DEFAULT 0, lose_streak INTEGER DEFAULT 0,
                     max_win_streak INTEGER DEFAULT 0,
@@ -980,6 +981,7 @@ class Database:
                 ("players", "lose_streak", "INTEGER DEFAULT 0"),
                 ("players", "max_win_streak", "INTEGER DEFAULT 0"),
                 ("players", "original_nickname", "TEXT DEFAULT NULL"),
+                ("players", "matches_hosted", "INTEGER DEFAULT 0"),
                 ("lobbies", "private_key", "TEXT DEFAULT NULL"),
                 ("lobbies", "first_joiner_id", "INTEGER DEFAULT NULL"),
                 # 🆕 FIX: store the StartVote button message_id so the
@@ -1198,7 +1200,7 @@ class Database:
             pass  # thread-local connection
 
     def update_player_stats(self, uid, gid, **kw):
-        ALLOWED = {"points","rank_pos","wins","losses","kills","mvps","matches_played","level","username","original_nickname","win_streak","lose_streak","max_win_streak"}
+        ALLOWED = {"points","rank_pos","wins","losses","kills","mvps","matches_played","matches_hosted","level","username","original_nickname","win_streak","lose_streak","max_win_streak"}
         safe = {k: v for k, v in kw.items() if k in ALLOWED}
         if not safe:
             return
@@ -1242,6 +1244,8 @@ class Database:
         conn = self.conn()
         try:
             cur = conn.execute("INSERT INTO lobbies(guild_id,creator_id,channel_id,game_mode,team1_players) VALUES(?,?,?,?,?)", (gid, creator, chan, mode, json.dumps([creator])))
+            # ✅ FIX: increment matches_hosted counter for the creator
+            conn.execute("UPDATE players SET matches_hosted = matches_hosted + 1 WHERE user_id=? AND guild_id=?", (creator, gid))
             conn.commit(); return cur.lastrowid
         finally:
             pass  # thread-local connection
@@ -2154,14 +2158,14 @@ def create_profile_embed(player, member=None, gid=None):
         timestamp=discord.utils.utcnow()
     )
 
-    # V1: 3×2 stats grid
+    # V1: 3×2 stats grid (with matches_hosted)
     embed.add_field(name="🏆 Wins",    value=f"`{player['wins']}`", inline=True)
     embed.add_field(name="☠️ Losses",  value=f"`{player['losses']}`", inline=True)
     embed.add_field(name="⚖️ W/L",     value=f"`{kd_sign}{kd_diff}`", inline=True)
 
     embed.add_field(name="🎮 Matches", value=f"`{player['matches_played']}`", inline=True)
+    embed.add_field(name="👑 Hosted",  value=f"`{player.get('matches_hosted', 0)}`", inline=True)
     embed.add_field(name="🔱 MVPs",    value=f"`{mvps}`", inline=True)
-    embed.add_field(name="🔪 Kills",   value=f"`{player['kills']}`", inline=True)
 
     # V1: Win rate bar
     wr_status = "🔥 God Tier" if wr >= 70 else ("⭐ Pro" if wr >= 50 else ("🌱 Rising" if wr >= 30 else "☠️ Struggling"))
@@ -5505,11 +5509,16 @@ async def auto_setup_guild(guild):
     # 1) فحص كل القنوات النصية وتسجيلها تلقائياً
     # ============================================================
     # أنماط البحث لكل نوع قناة — مطابقة مرنة
+    # ✅ FIX: removed "match", "lobby", "top", "player" — these caused false positives
+    # "match" matched "match-results" channel → would register it as play channel
+    # "lobby" matched any channel containing "lobby"
+    # "top" matched "stop-spam", "topic" etc.
+    # "player" matched "multiplayer", "replay" etc.
     TEXT_PATTERNS = {
-        "play": ["play", "apostada", "highlight", "zelika", "match", "lobby"],
+        "play": ["play", "apostada", "highlight", "zelika"],
         "results": ["result", "match-result", "results"],
-        "leaderboard": ["leaderboard", "top", "ranking"],
-        "profiles": ["profile", "player", "profiles"],
+        "leaderboard": ["leaderboard", "ranking"],
+        "profiles": ["profile", "profiles"],
         "rules": ["rules", "قوانين", "reglement"],
     }
 
@@ -5519,15 +5528,17 @@ async def auto_setup_guild(guild):
         name_lower = ch.name.lower()
         for channel_type, patterns in TEXT_PATTERNS.items():
             for pattern in patterns:
-                if pattern in name_lower:
+                # ✅ FIX: skip empty patterns + word-boundary-ish check
+                if pattern and pattern in name_lower:
                     detected_text_channels[channel_type].append(ch)
                     break
 
     # سجل كل القنوات النصية المكتشفة في DB
+    # ✅ FIX: لا نسجل "results" كـ play channel — فقط "play" و"leaderboard" و"profiles"
     for channel_type, channels in detected_text_channels.items():
         for ch in channels:
             db.add_commands_channel(guild.id, ch.id)
-            if channel_type in ["play", "results", "leaderboard", "profiles"]:
+            if channel_type in ["play", "leaderboard", "profiles"]:
                 db.add_play_channel(guild.id, ch.id)
             if channel_type == "leaderboard":
                 db.set_guild_setting(guild.id, "leaderboard_channel_id", ch.id)
@@ -5549,7 +5560,8 @@ async def auto_setup_guild(guild):
         name_lower = ch.name.lower()
         for voice_type, patterns in VOICE_PATTERNS.items():
             for pattern in patterns:
-                if pattern in name_lower:
+                # ✅ FIX: skip empty patterns (caused EVERY channel to be detected as waiting)
+                if pattern and pattern in name_lower:
                     detected_voice_channels[voice_type].append(ch)
                     break
 
@@ -7456,10 +7468,23 @@ async def reportchannels_cmd(ctx):
 # 🆕 JAIL SYSTEM — نظام السجن للغشاشين
 # ============================================================
 # 🆕 نظام JAIL — التعريفات في بداية الملف (السطر 87-91)
+
+# ✅ FIX: cache لتسريع setup_jail_system — يمنع الفحص المتكرر لكل قناة في السيرفر
+# الـ cache يُعاد ضبطه عند تشغيل البوت أو عند انضمام لاعب جديد
+_jail_setup_done = set()  # set of guild.id where jail system is already configured
 # تم نقلها ليعمل on_voice_state_update و on_message بشكل صحيح
 
 async def setup_jail_system(guild):
-    """🆕 ينشئ role الـ JAIL + كاتيجوري منفصل + قناتي السجن."""
+    """🆕 ينشئ role الـ JAIL + كاتيجوري منفصل + قناتي السجن.
+    ✅ FIX: استخدم cache لتسريع الفحص — تجاوز الفحص لو النظام جاهز بالفعل."""
+    # ✅ FIX: لو النظام جاهز، تحقق فقط من وجود الـ role (تحقق سريع) ثم ارجع
+    if guild.id in _jail_setup_done:
+        jail_role = discord.utils.get(guild.roles, name=JAIL_ROLE_NAME)
+        if jail_role:
+            return jail_role
+        # لو الـ role اختفى، نعيد الإعداد
+        _jail_setup_done.discard(guild.id)
+    
     jail_role = discord.utils.get(guild.roles, name=JAIL_ROLE_NAME)
     if not jail_role:
         try:
@@ -7495,6 +7520,8 @@ async def setup_jail_system(guild):
             overwrite = ch.overwrites_for(jail_role); overwrite.view_channel = False; overwrite.connect = False; overwrite.speak = False
             await ch.set_permissions(jail_role, overwrite=overwrite, reason="JAIL system")
         except: pass
+    # ✅ FIX: ضع علامة في الـ cache — النظام جاهز، لن نعيد الفحص مرة أخرى
+    _jail_setup_done.add(guild.id)
     return jail_role
 
 async def create_jail_voice_for_player(guild, member, jail_role, jail_cat):
