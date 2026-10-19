@@ -7476,20 +7476,27 @@ _jail_setup_done = set()  # set of guild.id where jail system is already configu
 
 async def setup_jail_system(guild):
     """🆕 ينشئ role الـ JAIL + كاتيجوري منفصل + قناتي السجن.
-    ✅ FIX: استخدم cache لتسريع الفحص — تجاوز الفحص لو النظام جاهز بالفعل."""
-    # ✅ FIX: لو النظام جاهز، تحقق فقط من وجود الـ role (تحقق سريع) ثم ارجع
+    ✅ FIX: استخدم cache لتسريع الفحص — تجاوز الفحص لو النظام جاهز بالفعل.
+    ✅ FIX v2: cache يتحقق من role + category + channels (وليس role فقط)."""
+    # ✅ FIX v2: تحقق من كل العناصر، ليس فقط الـ role
     if guild.id in _jail_setup_done:
         jail_role = discord.utils.get(guild.roles, name=JAIL_ROLE_NAME)
-        if jail_role:
+        jail_cat = discord.utils.get(guild.categories, name=JAIL_CATEGORY_NAME)
+        jail_chat = discord.utils.get(guild.text_channels, name=JAIL_CHAT_NAME)
+        jail_prouves = discord.utils.get(guild.text_channels, name=JAIL_PROUVES_NAME)
+        # لو كل شيء موجود، ارجع مبكراً
+        if jail_role and jail_cat and jail_chat and jail_prouves:
             return jail_role
-        # لو الـ role اختفى، نعيد الإعداد
+        # لو أي عنصر مفقود، نعيد الإعداد
         _jail_setup_done.discard(guild.id)
     
     jail_role = discord.utils.get(guild.roles, name=JAIL_ROLE_NAME)
     if not jail_role:
         try:
             jail_role = await guild.create_role(name=JAIL_ROLE_NAME, color=discord.Color(0x36393F), permissions=discord.Permissions(view_channel=True, send_messages=True, read_messages=True, read_message_history=True, attach_files=True, embed_links=True), reason="Free Fire Bot — JAIL system")
-        except: return None
+        except Exception as e:
+            logger.warning(f"⚠️ JAIL role creation failed in {guild.name}: {e}")
+            return None
     jail_cat = discord.utils.get(guild.categories, name=JAIL_CATEGORY_NAME)
     if not jail_cat:
         try:
@@ -7498,16 +7505,26 @@ async def setup_jail_system(guild):
                 if role.permissions.administrator or role.permissions.manage_guild:
                     overwrites[role] = discord.PermissionOverwrite(view_channel=True, manage_channels=True, manage_messages=True, move_members=True, connect=True)
             jail_cat = await guild.create_category(JAIL_CATEGORY_NAME, overwrites=overwrites, reason="JAIL system")
-        except: jail_cat = discord.utils.get(guild.categories, name="🎮 FREE FIRE — TEXT")
-    for ch_name, perms in [(JAIL_CHAT_NAME, True), (JAIL_PROUVES_NAME, True)]:
-        if not discord.utils.get(guild.text_channels, name=ch_name):
-            try:
-                overwrites = {guild.default_role: discord.PermissionOverwrite(view_channel=False), guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_messages=True), jail_role: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, attach_files=perms)}
-                for role in guild.roles:
-                    if role.permissions.administrator or role.permissions.manage_guild:
-                        overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_messages=True)
-                await guild.create_text_channel(ch_name, category=jail_cat, topic=f"JAIL — {ch_name}", overwrites=overwrites)
-            except: pass
+            logger.info(f"🔒 Created JAIL category in {guild.name}")
+        except Exception as e:
+            logger.warning(f"⚠️ JAIL category creation failed in {guild.name}: {e}")
+            # ✅ FIX v2: لا نسقط لكاتيجوري خاطئ — نرجع None بدلاً من ذلك
+            jail_cat = None
+    # ✅ FIX v2: لو الكاتيجوري فشل، لا نحاول إنشاء القنوات (ستفشل أيضاً)
+    if jail_cat is None:
+        logger.warning(f"⚠️ Skipping JAIL channel creation in {guild.name} — no category available")
+    else:
+        for ch_name, perms in [(JAIL_CHAT_NAME, True), (JAIL_PROUVES_NAME, True)]:
+            if not discord.utils.get(guild.text_channels, name=ch_name):
+                try:
+                    overwrites = {guild.default_role: discord.PermissionOverwrite(view_channel=False), guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_messages=True), jail_role: discord.PermissionOverwrite(view_channel=True, send_messages=True, read_message_history=True, attach_files=perms)}
+                    for role in guild.roles:
+                        if role.permissions.administrator or role.permissions.manage_guild:
+                            overwrites[role] = discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_messages=True)
+                    await guild.create_text_channel(ch_name, category=jail_cat, topic=f"JAIL — {ch_name}", overwrites=overwrites)
+                    logger.info(f"🔒 Created JAIL channel #{ch_name} in {guild.name}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Failed to create JAIL channel #{ch_name} in {guild.name}: {e}")
     for ch in guild.text_channels:
         if ch.name in [JAIL_CHAT_NAME, JAIL_PROUVES_NAME] or ch.name == "🛡️・rules": continue
         try:
